@@ -1,0 +1,215 @@
+.fleet-dashboard {
+  animation: fadeIn var(--dur-med) ease-out;
+}
+
+/* STATS BENTO SECTION */
+.stats-bento {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+@media (max-width: 1200px) {
+  .stats-bento { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .stats-bento { grid-template-columns: 1fr; }
+}
+
+.stat-card {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 160px;
+  background: var(--theme-surface-glass);
+  border-radius: 24px;
+  border: 1px solid var(--theme-border-light);
+  box-shadow: var(--shadow-luxe-md);
+  transition: all 0.4s var(--ease-spring);
+}
+
+.stat-card:hover {
+  transform: translateY(-8px);
+  background: var(--theme-surface);
+  box-shadow: var(--shadow-luxe-lg);
+  border-color: var(--theme-accent-border);
+}
+
+.stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.stat-header h3 {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--theme-text-muted);
+}
+
+.stat-value {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  color: var(--theme-text-main);
+  margin-top: 12px;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--theme-text-muted);
+  margin-top: 4px;
+}
+
+.unit-label {
+  font-size: 1rem;
+  color: var(--theme-text-muted);
+  font-weight: 500;
+}
+
+/* CHART PANELS */
+.fleet-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+.fleet-chart-panel {
+  grid-column: span 12;
+  padding: var(--space-lg);
+}
+
+.fleet-chart-panel.medium { grid-column: span 8; }
+.fleet-chart-panel.small { grid-column: span 4; }
+
+@media (max-width: 1024px) {
+  .fleet-chart-panel.medium, .fleet-chart-panel.small { grid-column: span 12; }
+}
+
+.chart-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chart-title svg {
+  color: var(--theme-accent);
+  width: 18px;
+  height: 18px;
+}
+
+.chart-container {
+  width: 100%;
+  margin-top: var(--space-md);
+}
+
+/* ACTIVITY FEED */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.feed-item {
+  display: flex;
+  gap: 20px;
+  padding: 16px;
+  background: var(--theme-surface-pearl);
+  border-radius: 16px;
+  border: 1px solid var(--theme-border);
+  transition: all 0.3s var(--ease-spring);
+}
+
+.feed-item:hover {
+  background: var(--theme-surface);
+  transform: translateX(4px);
+  border-color: var(--theme-accent-border);
+  box-shadow: var(--shadow-luxe-sm);
+}
+
+.feed-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--theme-accent);
+  font-weight: 800;
+  padding: 4px 8px;
+  background: var(--theme-accent-glow);
+  border-radius: 6px;
+}
+
+.feed-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed-plate {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--theme-text-main);
+}
+
+.feed-dist {
+  font-size: 0.7rem;
+  color: var(--theme-text-muted);
+}
+
+/* RISK PANEL */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-lg);
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.panel-subtitle {
+  font-size: 0.8rem;
+  color: var(--theme-text-muted);
+  margin-top: 4px;
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  color: var(--theme-text-muted);
+  font-weight: 600;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot.safe { background: #10b981; }
+.dot.caution { background: #f59e0b; }
+.dot.risk { background: #ef4444; }
+
+/* RECHARTS */
+.recharts-cartesian-grid-horizontal line {
+  stroke-opacity: 0.5;
+}
+
+.recharts-tooltip-wrapper {
+  outline: none;
+}
+

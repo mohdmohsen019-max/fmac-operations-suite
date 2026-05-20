@@ -1,0 +1,557 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
+
+.report-page,
+.report-page *,
+.report-page ::before,
+.report-page ::after {
+  font-family: 'Cairo', sans-serif !important;
+  direction: rtl;
+  text-align: right;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1, "clig" 1, "dlig" 1;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
+  letter-spacing: 0 !important;
+}
+
+.report-page {
+  width: 794px;
+  height: 1122px;
+  background: white;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* ── Running header (pages 2+) ──────────────────────────────────── */
+
+.rpt-running-header {
+  width: 100%;
+  height: 48px;
+  background: #0f1729;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  box-sizing: border-box;
+  direction: rtl;
+  flex-shrink: 0;
+}
+
+.rpt-running-header img {
+  height: 28px;
+  object-fit: contain;
+}
+
+.rpt-running-header-title {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  direction: rtl;
+}
+
+.rpt-header-gold-line {
+  height: 3px;
+  background: #c9a84c;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+/* ── Running footer ──────────────────────────────────────────────── */
+
+.rpt-running-footer {
+  height: 36px;
+  flex-shrink: 0;
+  border-top: 1px solid #e0e0e8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  box-sizing: border-box;
+  direction: rtl;
+  font-family: 'Cairo', sans-serif;
+  font-size: 11px;
+  color: #888;
+}
+
+/* ── Cover page ──────────────────────────────────────────────────── */
+
+.cover-page {
+  background: #0f1729;
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.cover-top-bar {
+  height: 8px;
+  background: #c9a84c;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.cover-bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: #c9a84c;
+}
+
+.cover-left-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background: #c9a84c;
+}
+
+.cover-right-accent {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background: #c9a84c;
+}
+
+.cover-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 32px 80px 48px;
+  text-align: center;
+  direction: rtl;
+}
+
+.cover-logo {
+  height: 72px;
+  object-fit: contain;
+}
+
+.cover-gold-line {
+  width: 60%;
+  height: 2px;
+  background: #c9a84c;
+  flex-shrink: 0;
+}
+
+.cover-gold-line-thin {
+  width: 40%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.cover-main-title {
+  font-family: 'Cairo', sans-serif !important;
+  font-size: 40px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.2;
+  text-align: center;
+  letter-spacing: 0 !important;
+  word-spacing: normal !important;
+  font-feature-settings: "kern" 1, "liga" 1, "clig" 1;
+}
+
+.cover-subtitle {
+  font-family: 'Cairo', sans-serif;
+  font-size: 17px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0;
+  text-align: center;
+}
+
+.cover-month {
+  font-family: 'Cairo', sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  color: #c9a84c;
+  margin: 0;
+  text-align: center;
+}
+
+.cover-meta {
+  margin-top: 16px;
+  text-align: center;
+  direction: rtl;
+}
+
+.cover-meta p {
+  font-family: 'Cairo', sans-serif;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.65);
+  margin: 5px 0;
+}
+
+.cover-confidential {
+  font-size: 11px !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+  margin-top: 10px !important;
+  letter-spacing: 0.5px;
+}
+
+/* ── TOC page ────────────────────────────────────────────────────── */
+
+.toc-page-body {
+  flex: 1;
+  padding: 28px 40px 20px;
+  direction: rtl;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.toc-page-title {
+  font-family: 'Cairo', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f1729;
+  margin: 0 0 8px 0;
+  direction: rtl;
+}
+
+.toc-gold-rule {
+  height: 3px;
+  background: #c9a84c;
+  margin-bottom: 24px;
+}
+
+.toc-row {
+  display: flex;
+  align-items: center;
+  direction: rtl;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-family: 'Cairo', sans-serif;
+}
+
+.toc-row:nth-child(even) {
+  background: #f8f8fc;
+}
+
+.toc-num {
+  font-size: 14px;
+  font-weight: 800;
+  color: #c9a84c;
+  min-width: 36px;
+  text-align: center;
+  margin-left: 16px;
+}
+
+.toc-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f1729;
+  flex: 1;
+}
+
+.toc-dots {
+  flex: 1;
+  border-bottom: 2px dotted #ccc;
+  margin: 0 12px;
+  height: 1px;
+  align-self: center;
+}
+
+.toc-page-num {
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a4a6a;
+  min-width: 28px;
+  text-align: center;
+}
+
+/* ── Section pages ───────────────────────────────────────────────── */
+
+/* Continuation page header — slimmer than the first-page bar */
+.section-cont-bar {
+  width: 100%;
+  background: #1a2540;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 32px;
+  box-sizing: border-box;
+  direction: rtl;
+  flex-shrink: 0;
+}
+
+.section-cont-name {
+  font-family: 'Cairo', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.section-cont-num {
+  font-family: 'Cairo', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #c9a84c;
+  opacity: 0.55;
+}
+
+.section-page-body {
+  flex: 1;
+  padding: 20px 40px 20px;
+  direction: rtl;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.section-header-bar {
+  width: 100%;
+  background: #0f1729;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 32px;
+  box-sizing: border-box;
+  direction: rtl;
+  flex-shrink: 0;
+}
+
+.section-header-left-accent {
+  position: absolute;
+  left: 0;
+  width: 6px;
+  background: #c9a84c;
+}
+
+.section-header-name {
+  font-family: 'Cairo', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: white;
+}
+
+.section-header-num {
+  font-family: 'Cairo', sans-serif;
+  font-size: 36px;
+  font-weight: 800;
+  color: #c9a84c;
+  opacity: 0.55;
+}
+
+.section-gold-rule {
+  height: 3px;
+  background: #c9a84c;
+  flex-shrink: 0;
+}
+
+/* Section subheadings */
+.section-subheading {
+  font-family: 'Cairo', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f1729;
+  margin: 0 0 4px 0;
+  padding-bottom: 4px;
+  border-bottom: 1.5px solid #c9a84c;
+  direction: rtl;
+}
+
+/* Summary text */
+.section-summary-text {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  color: #1a1a2e;
+  line-height: 1.75;
+  direction: rtl;
+  margin: 0;
+}
+
+/* Key points */
+.section-keypoints {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  direction: rtl;
+}
+
+.section-keypoints li {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  color: #1a1a2e;
+  line-height: 1.7;
+  padding: 2px 0;
+  direction: rtl;
+}
+
+.section-keypoints li::before {
+  content: '•';
+  color: #c9a84c;
+  font-weight: 800;
+  margin-left: 8px;
+}
+
+/* KPI cards */
+.kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  direction: rtl;
+}
+
+.kpi-card {
+  flex: 1 1 calc(33.33% - 7px);
+  max-width: calc(33.33% - 7px);
+  min-width: 120px;
+  background: #f0f0f7;
+  border-radius: 6px;
+  padding: 10px 14px;
+  text-align: right;
+  direction: rtl;
+  border-top: 3px solid #c9a84c;
+  box-sizing: border-box;
+}
+
+.kpi-value {
+  font-family: 'Cairo', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f1729;
+  margin: 0;
+  direction: rtl;
+  line-height: 1.2;
+}
+
+.kpi-unit {
+  font-size: 12px;
+  font-weight: 400;
+  margin-right: 4px;
+  color: #4a4a6a;
+}
+
+.kpi-label {
+  font-family: 'Cairo', sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  color: #4a4a6a;
+  margin: 3px 0 0 0;
+  direction: rtl;
+  line-height: 1.3;
+}
+
+/* Data table */
+.section-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Cairo', sans-serif;
+  font-size: 12px;
+  direction: rtl;
+}
+
+.section-table th {
+  background: #0f1729;
+  color: white;
+  font-weight: 700;
+  padding: 8px 12px;
+  text-align: right;
+  border: 1px solid #2a2a4a;
+}
+
+.section-table td {
+  padding: 7px 12px;
+  text-align: right;
+  border: 1px solid #e0e0e8;
+  color: #1a1a2e;
+}
+
+.section-table tr:nth-child(even) td {
+  background: #f8f8fc;
+}
+
+/* Attachment note */
+.section-attachment-note {
+  font-family: 'Cairo', sans-serif;
+  font-size: 11px;
+  color: #888;
+  direction: rtl;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid #e0e0e8;
+}
+
+/* ── Closing page ────────────────────────────────────────────────── */
+
+.closing-page-body {
+  flex: 1;
+  padding: 28px 40px 20px;
+  direction: rtl;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.closing-notes-text {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  color: #1a1a2e;
+  line-height: 1.9;
+  direction: rtl;
+  white-space: pre-wrap;
+  flex: 1;
+}
+
+.closing-signature-area {
+  margin-top: auto;
+  text-align: right;
+  direction: rtl;
+}
+
+.closing-sig-line {
+  border-top: 1px solid #4a4a6a;
+  width: 50%;
+  margin-right: 0;
+  margin-bottom: 8px;
+  margin-top: 40px;
+}
+
+.closing-sig-title {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f1729;
+  margin: 0 0 4px 0;
+}
+
+.closing-sig-name {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  color: #1a1a2e;
+  margin: 0 0 4px 0;
+}
+
+.closing-sig-date {
+  font-family: 'Cairo', sans-serif;
+  font-size: 12px;
+  color: #4a4a6a;
+  margin: 0;
+}
+
+.closing-club-footer {
+  font-family: 'Cairo', sans-serif;
+  font-size: 11px;
+  color: #aaa;
+  text-align: center;
+  direction: rtl;
+  margin-top: auto;
+}

@@ -69,7 +69,6 @@ try {
       sports: sportsArray,
       classTiming,
       coach,
-      status: 'absent',
       source: 'v2'
     };
   });

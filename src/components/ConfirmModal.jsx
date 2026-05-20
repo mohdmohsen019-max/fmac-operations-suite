@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import './ConfirmModal.css';
+import { useLanguage } from '../contexts/LanguageContext';
 
 /**
  * A reusable confirmation modal with glassmorphism styling and optional passcode security.
@@ -27,6 +28,7 @@ export default function ConfirmModal({
   isDanger = false,
   requiredPasscode = ""
 }) {
+  const { t } = useLanguage();
   const [passcodeInput, setPasscodeInput] = useState("");
   const [error, setError] = useState(false);
 
@@ -64,7 +66,7 @@ export default function ConfirmModal({
           
           {requiredPasscode && (
             <div className="passcode-field-wrapper">
-              <label className="passcode-label">Admin Passcode Required</label>
+              <label className="passcode-label">{t('Admin Passcode Required', 'كلمة مرور المسؤول مطلوبة')}</label>
               <input 
                 type="password" 
                 className={`confirm-passcode-input ${error ? 'error' : ''}`}
@@ -76,7 +78,7 @@ export default function ConfirmModal({
                 }}
                 autoFocus
               />
-              {error && <span className="passcode-error-msg">❌ Incorrect passcode</span>}
+              {error && <span className="passcode-error-msg">❌ {t('Incorrect passcode', 'كلمة المرور غير صحيحة')}</span>}
             </div>
           )}
         </div>

@@ -1,70 +1,68 @@
 .confirm-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--theme-fog);
+  backdrop-filter: blur(24px) saturate(180%);
   z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
 }
 
 .confirm-modal {
   width: 100%;
-  max-width: 420px;
-  background: var(--secondary-bg);
-  border-radius: 20px;
-  box-shadow: var(--shadow-float);
+  max-width: 440px;
+  background: var(--theme-surface);
+  border-radius: 24px;
+  box-shadow: var(--shadow-luxe-lg);
   overflow: hidden;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--theme-border-light);
 }
 
 .confirm-modal-header {
-  padding: 32px 32px 16px;
+  padding: 40px 40px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 16px;
+  gap: 20px;
 }
 
 .confirm-icon-circle {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: rgba(164, 44, 52, 0.1);
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: var(--theme-accent-glow);
+  color: var(--theme-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
+  font-size: 2.25rem;
 }
 
 .confirm-icon-circle.danger {
-  background: rgba(220, 38, 38, 0.1);
-  color: #DC2626;
-  animation: pulse-red 2s infinite;
+  background: var(--status-risk-glow);
+  color: var(--status-risk);
+  animation: pulse-red 2s infinite var(--ease-spring);
 }
 
 @keyframes pulse-red {
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.2); }
-  70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+  0% { transform: scale(1); box-shadow: 0 0 0 0 var(--status-risk-glow); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(225, 29, 72, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
 }
 
 .confirm-modal-header h3 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 800;
-  color: var(--text-main);
-  letter-spacing: -0.02em;
+  color: var(--theme-text-main);
+  letter-spacing: -0.04em;
 }
 
 .confirm-modal-body {
-  padding: 0 32px 32px;
+  padding: 0 40px 40px;
   text-align: center;
 }
 
@@ -72,7 +70,8 @@
   margin: 0;
   font-size: 1rem;
   line-height: 1.6;
-  color: var(--text-muted);
+  color: var(--theme-text-muted);
+  font-weight: 500;
 }
 
 .passcode-field-wrapper {
@@ -85,40 +84,42 @@
 
 .passcode-label {
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
+  color: var(--theme-text-ghost);
+  letter-spacing: 0.12em;
   padding-left: 4px;
 }
 
 .confirm-passcode-input {
   width: 100%;
-  padding: 14px 16px;
-  background: white;
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  font-family: inherit;
-  font-size: 1.1rem;
-  letter-spacing: 0.2em;
-  transition: all var(--dur-fast) var(--ease-spring);
+  padding: 16px 20px;
+  background: var(--theme-surface-pearl);
+  color: var(--theme-text-main);
+  border: 1px solid var(--theme-border);
+  border-radius: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.25rem;
+  letter-spacing: 0.25em;
+  transition: all 0.3s var(--ease-spring);
 }
 
 .confirm-passcode-input:focus {
   outline: none;
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 4px rgba(164, 44, 52, 0.1);
+  border-color: var(--theme-accent);
+  background: var(--theme-surface);
+  box-shadow: 0 0 0 4px var(--theme-accent-glow);
 }
 
 .confirm-passcode-input.error {
-  border-color: #DC2626;
-  background: #FFF5F5;
+  border-color: var(--status-risk);
+  background: var(--status-risk-bg);
   animation: shake 0.4s ease;
 }
 
 .passcode-error-msg {
   font-size: 0.8rem;
-  color: #DC2626;
+  color: var(--status-risk);
   font-weight: 600;
   padding-left: 4px;
 }
@@ -131,57 +132,59 @@
 }
 
 .confirm-modal-footer {
-  padding: 24px 32px 32px;
+  padding: 32px 40px 40px;
   display: flex;
-  gap: 12px;
-  background: rgba(0, 0, 0, 0.02);
+  gap: 16px;
+  background: var(--theme-surface-pearl);
+  border-top: 1px solid var(--theme-border-light);
 }
 
 .confirm-btn-cancel {
   flex: 1;
-  padding: 14px;
-  border: 1px solid var(--glass-border);
-  background: white;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 0.95rem;
+  padding: 16px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-surface);
+  border-radius: 16px;
+  font-weight: 700;
+  font-size: 1rem;
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-spring);
-  color: var(--text-muted);
+  transition: all 0.3s var(--ease-spring);
+  color: var(--theme-text-muted);
 }
 
 .confirm-btn-cancel:hover {
-  background: #f8f8f8;
-  border-color: var(--text-muted);
-  color: var(--text-main);
+  background: var(--theme-surface-hover);
+  border-color: var(--theme-text-muted);
+  color: var(--theme-text-main);
 }
 
 .confirm-btn-action {
   flex: 2;
-  padding: 14px;
+  padding: 16px;
   border: none;
-  background: var(--button-bg);
+  background: var(--theme-accent);
   color: white;
-  border-radius: 12px;
-  font-weight: 700;
-  font-size: 0.95rem;
+  border-radius: 16px;
+  font-weight: 800;
+  font-size: 1rem;
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-spring);
-  box-shadow: 0 4px 12px var(--shadow-sm);
+  transition: all 0.3s var(--ease-spring);
+  box-shadow: 0 8px 24px var(--theme-accent-glow);
 }
 
 .confirm-btn-action.danger {
-  background: #DC2626;
+  background: var(--status-risk);
+  box-shadow: 0 8px 24px var(--status-risk-glow);
 }
 
 .confirm-btn-action:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.1);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+  transform: translateY(-4px);
+  filter: brightness(1.05);
+  box-shadow: 0 12px 32px var(--theme-accent-glow);
 }
 
-.confirm-btn-action:active {
-  transform: translateY(0);
+.confirm-btn-action.danger:hover {
+  box-shadow: 0 12px 32px var(--status-risk-glow);
 }
 
 /* Reusing animations from global */

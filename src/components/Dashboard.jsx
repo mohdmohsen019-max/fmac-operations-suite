@@ -1,445 +1,310 @@
+// Requires VITE_RESET_PASSCODE in environment
 import { useState, useMemo, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { db } from '../firebase';
-import { collection, onSnapshot, query, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useLanguage } from '../contexts/LanguageContext';
+import { usePermissions } from '../hooks/usePermissions';
+import { collection, query, doc, writeBatch, getDoc, getDocs, serverTimestamp, where } from 'firebase/firestore';
 import AttendanceTable from './AttendanceTable';
+import CustomSelect from './CustomSelect';
+import CustomDateInput from './CustomDateInput';
 import ConfirmModal from './ConfirmModal';
-import { resetDailyAttendanceStatus } from '../utils/systemUtils';
 import './Dashboard.css';
 
+const CLASS_TIMINGS = [
+  '04:30 PM - 05:30 PM',
+  '05:30 PM - 07:00 PM',
+  '07:00 PM - 09:00 PM'
+];
+
 export default function Dashboard() {
+  const { t } = useLanguage();
+  const { can } = usePermissions();
+  const canEdit = can('logistics', 'edit');
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSport, setFilterSport] = useState('All');
-  const [filterTiming, setFilterTiming] = useState('All');
+  
+  // Scoped Session State
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
+  const [selectedTiming, setSelectedTiming] = useState(CLASS_TIMINGS[0]);
+  const [sessionData, setSessionData] = useState({}); // { [playerId]: { status, transportation } }
+  const [sessionExists, setSessionExists] = useState(false);
+  const [lastSavedBy, setLastSavedBy] = useState('');
+
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [missingTransportModal, setMissingTransportModal] = useState({ isOpen: false, players: [] });
-  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [overwriteModalOpen, setOverwriteModalOpen] = useState(false);
 
-  const handleDailyReset = async () => {
-    setIsSaving(true);
-    setSaveMessage('Syncing Logistics Hub...');
-    try {
-      await resetDailyAttendanceStatus();
-      setSaveMessage('✅ Logistics Hub Reset Successfully!');
-      setTimeout(() => setSaveMessage(''), 5000);
-    } catch (e) {
-      console.error(e);
-      setSaveMessage('❌ Reset Failed');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // TEMP SCRIPT TO FORCE UPDATE CLASS TIMINGS FROM EXCEL
-  const syncExcelDB = async () => {
-    if (!window.confirm("WARNING: This will overwrite ALL class timings in the live players_v2 database matching the new Excel payload. Proceed?")) return;
-    setIsSaving(true);
-    setSaveMessage('Downloading schema...');
-    try {
-      const res = await fetch('/cleaned_players.json');
-      const newPlayers = await res.json();
-      setSaveMessage(`Loaded ${newPlayers.length} records. Syncing...`);
-      
-      let updatedCount = 0;
-      for (const p of players) {
-        const match = newPlayers.find(n => n['Name'] === p.name);
-        if (match && match['Training From Time'] && match['Training To Time']) {
-          const newTiming = `${match['Training From Time']} - ${match['Training To Time']}`;
-          if (newTiming !== p.classTiming) {
-            await updateDoc(doc(db, "players_v2", p.firestoreId), {
-              classTiming: newTiming
-            });
-            updatedCount++;
-          }
-        }
-      }
-      setSaveMessage(`✅ Synchronized ${updatedCount} players!`);
-      setTimeout(() => setSaveMessage(''), 5000);
-    } catch (e) {
-      console.error(e);
-      setSaveMessage('Error Syncing DB');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
+  // 1. Fetch Players and Session Data
   useEffect(() => {
-    console.log("Dashboard: Initializing Firebase listener for players_v2...");
-    setLoading(true);
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch players for this timing
+        const pQuery = query(collection(db, "players_v2"), where("classTiming", "==", selectedTiming));
+        const pSnapshot = await getDocs(pQuery);
+        const playersList = pSnapshot.docs.map(d => ({
+          ...d.data(),
+          firestoreId: d.id
+        }));
+        setPlayers(playersList);
 
-    const qNew = query(collection(db, "players_v2"));
-    const unsubscribeNew = onSnapshot(qNew, (querySnapshot) => {
-      const playersData = [];
-      const today = new Date().toLocaleDateString('en-CA');
-      
-      querySnapshot.forEach((docSnapshot) => {
-        const data = docSnapshot.data();
-        let status = data.status || 'absent';
-        
-        if (status === 'present' && data.lastActionDate !== today) {
-          status = 'absent';
-          updateDoc(docSnapshot.ref, { status: 'absent' }).catch(console.error);
+        // Fetch existing session
+        const sessionId = `${selectedDate}_${selectedTiming.replace(/\s+/g, '')}`;
+        const sessionRef = doc(db, "sessions", sessionId);
+        const sessionSnap = await getDoc(sessionRef);
+
+        if (sessionSnap.exists()) {
+          setSessionExists(true);
+          setLastSavedBy(sessionSnap.data().recordedBy || 'Coach');
+          
+          const attQuery = collection(db, "sessions", sessionId, "attendance");
+          const attSnapshot = await getDocs(attQuery);
+          const attMap = {};
+          attSnapshot.forEach(d => {
+            attMap[d.id] = d.data();
+          });
+          setSessionData(attMap);
+        } else {
+          setSessionExists(false);
+          setLastSavedBy('');
+          setSessionData({});
         }
-        
-        playersData.push({ 
-          ...data, 
-          firestoreId: docSnapshot.id, 
-          status, 
-          source: 'v2' 
-        });
-      });
-      
-      console.log(`Dashboard: Fetched ${playersData.length} active players from players_v2.`);
-      setPlayers(playersData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching players_v2:", error);
-      setLoading(false);
+      } catch (err) {
+        console.error("Error fetching data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [selectedDate, selectedTiming]);
+
+  const handleToggleStatus = (playerId) => {
+    setSessionData(prev => {
+      const current = prev[playerId] || { status: 'absent', transportation: '' };
+      const newStatus = current.status === 'present' ? 'absent' : 'present';
+      return {
+        ...prev,
+        [playerId]: {
+          ...current,
+          status: newStatus,
+          transportation: newStatus === 'absent' ? '' : current.transportation
+        }
+      };
     });
-
-    return () => unsubscribeNew();
-  }, []);
-
-  const handleToggleStatus = async (firestoreId) => {
-    const player = players.find(p => p.firestoreId === firestoreId);
-    if (!player) return;
-
-    const newStatus = player.status === 'present' ? 'absent' : 'present';
-    const playerRef = doc(db, "players_v2", firestoreId);
-    const today = new Date().toLocaleDateString('en-CA');
-    const newTransport = newStatus === 'absent' ? '' : (player.transportation || '');
-    
-    try {
-      await updateDoc(playerRef, { 
-        status: newStatus, 
-        transportation: newTransport,
-        lastActionDate: today 
-      });
-    } catch (error) {
-      console.error("Error updating player status:", error);
-      alert("Failed to update status. Please check your internet connection.");
-    }
   };
 
-  const handleChangeTransport = async (firestoreId, newTransport) => {
-    const playerRef = doc(db, "players_v2", firestoreId);
-    try {
-      await updateDoc(playerRef, { transportation: newTransport });
-    } catch (error) {
-      console.error("Error updating transport:", error);
-    }
+  const handleChangeTransport = (playerId, newTransport) => {
+    setSessionData(prev => ({
+      ...prev,
+      [playerId]: {
+        ...(prev[playerId] || { status: 'absent' }),
+        transportation: newTransport
+      }
+    }));
   };
 
   const handleSaveAttendance = async () => {
-    if (filteredPlayers.length === 0) {
-      alert("No players to save.");
+    // Validate transport
+    const presentPlayers = players.filter(p => sessionData[p.firestoreId]?.status === 'present');
+    const invalid = presentPlayers.filter(p => !sessionData[p.firestoreId]?.transportation);
+    
+    if (invalid.length > 0) {
+      setMissingTransportModal({ isOpen: true, players: invalid });
       return;
     }
 
-    const invalidPlayers = filteredPlayers.filter(p => p.status === 'present' && !p.transportation);
-    if (invalidPlayers.length > 0) {
-      setMissingTransportModal({ isOpen: true, players: invalidPlayers });
-      return;
+    if (sessionExists) {
+      setOverwriteModalOpen(true);
+    } else {
+      performSave();
     }
+  };
 
+  const performSave = async () => {
     setIsSaving(true);
-    setSaveMessage('Syncing Ops Snapshot...');
+    setSaveMessage(t('Saving session...', 'جارٍ حفظ الجلسة...'));
+    setOverwriteModalOpen(false);
 
     try {
-      await addDoc(collection(db, "attendance_logs"), {
-        date: new Date().toLocaleDateString('en-CA'),
-        day: new Date().toLocaleDateString('en-US', { weekday: 'long' }),
-        timing: filterTiming === 'All' ? 'Custom Filter' : filterTiming,
-        sport: filterSport,
-        presentCount: stats.present,
-        absentCount: stats.absent,
-        totalCount: stats.total,
-        attendance: filteredPlayers.map(p => ({
-          id: p.id,
-          name: p.name,
-          status: p.status,
-          transportation: p.transportation || ''
-        })),
-        timestamp: serverTimestamp()
+      const sessionId = `${selectedDate}_${selectedTiming.replace(/\s+/g, '')}`;
+      const batch = writeBatch(db);
+
+      // 1. Create/Update main session doc
+      const sessionRef = doc(db, "sessions", sessionId);
+      batch.set(sessionRef, {
+        date: selectedDate,
+        classTiming: selectedTiming,
+        createdAt: serverTimestamp(),
+        recordedBy: "Operations Coach", // Placeholder for auth context
+        presentCount: presentPlayersCount,
+        totalPlayers: players.length
       });
-      
-      setSaveMessage(`✅ Sync Complete: ${stats.present} present!`);
+
+      // 2. Save attendance subcollection
+      players.forEach(p => {
+        const data = sessionData[p.firestoreId] || { status: 'absent', transportation: '' };
+        const attRef = doc(db, "sessions", sessionId, "attendance", p.firestoreId);
+        batch.set(attRef, {
+          playerId: p.id,
+          playerName: p.name,
+          status: data.status,
+          transportation: data.transportation || '',
+          coach: p.coach,
+          sport: p.sports?.[0] || p.sport || 'N/A'
+        });
+      });
+
+      await batch.commit();
+      setSessionExists(true);
+      setSaveMessage(t('✅ Session Saved Successfully!', '✅ تم حفظ الجلسة بنجاح!'));
       setTimeout(() => setSaveMessage(''), 4000);
-    } catch (error) {
-      console.error("Error saving log:", error);
-      setSaveMessage('Failed to log.');
+    } catch (err) {
+      console.error(err);
+      setSaveMessage(t('❌ Error saving session', '❌ خطأ في حفظ الجلسة'));
     } finally {
       setIsSaving(false);
     }
   };
 
+  // UI Derived State
   const sports = useMemo(() => {
-    const allSports = new Set();
+    const s = new Set();
     players.forEach(p => {
-      if (p.sports && p.sports.length > 0) {
-        p.sports.forEach(s => allSports.add(s));
-      } else if (p.sport && p.sport !== 'N/A') {
-        const parts = p.sport.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
-        parts.forEach(s => allSports.add(s));
-      }
+      if (p.sports) p.sports.forEach(x => s.add(x));
+      else if (p.sport) s.add(p.sport);
     });
-    return ['All', ...Array.from(allSports).sort()];
-  }, [players]);
-
-  const timings = useMemo(() => {
-    const allTimings = new Set();
-    let hasNA = false;
-    players.forEach(p => {
-      if (p.classTiming && p.classTiming.trim() !== 'N/A') {
-        allTimings.add(p.classTiming.trim());
-      } else {
-        hasNA = true;
-      }
-    });
-    const sortedTimings = Array.from(allTimings).sort();
-    return hasNA ? ['All', ...sortedTimings, 'N/A'] : ['All', ...sortedTimings];
+    return ['All', ...Array.from(s).sort()];
   }, [players]);
 
   const filteredPlayers = useMemo(() => {
     return players.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            p.coach.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      let matchesSport = false;
-      if (filterSport === 'All') {
-        matchesSport = true;
-      } else if (p.sports && p.sports.length > 0) {
-        matchesSport = p.sports.map(s => s.toLowerCase()).includes(filterSport.toLowerCase());
-      }
-      
-      const pTiming = (p.classTiming && p.classTiming.trim() !== '') ? p.classTiming.trim() : 'N/A';
-      const matchesTiming = filterTiming === 'All' || pTiming === filterTiming;
-
-      return matchesSearch && matchesSport && matchesTiming;
+      const matchesSearch = (p.name || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSport = filterSport === 'All' || (p.sports ? p.sports.includes(filterSport) : p.sport === filterSport);
+      return matchesSearch && matchesSport;
     });
-  }, [players, searchQuery, filterSport, filterTiming]);
+  }, [players, searchQuery, filterSport]);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 50;
+  const playersWithStatus = useMemo(() => {
+    return filteredPlayers.map(p => ({
+      ...p,
+      status: sessionData[p.firestoreId]?.status || 'absent',
+      transportation: sessionData[p.firestoreId]?.transportation || ''
+    }));
+  }, [filteredPlayers, sessionData]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, filterSport, filterTiming]);
-
-  const totalPages = Math.ceil(filteredPlayers.length / itemsPerPage);
-  const paginatedPlayers = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredPlayers.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredPlayers, currentPage]);
-
-  const stats = useMemo(() => {
-    const total = players.length;
-    const present = players.filter(p => p.status === 'present').length;
-    const rate = total === 0 ? 0 : Math.round((present / total) * 100);
-    return { total, present, absent: total - present, rate };
-  }, [players]);  const presentPct = stats.total > 0 ? (stats.present / stats.total) * 100 : 0;
-  const absentPct = stats.total > 0 ? (stats.absent / stats.total) * 100 : 0;
+  const presentPlayersCount = useMemo(() => {
+    return Object.values(sessionData).filter(s => s.status === 'present').length;
+  }, [sessionData]);
 
   return (
     <div className="dashboard-container">
-      <div className="dashboard-top">
+      <div className="dashboard-grid">
         <div className="stats-bento">
-        <div className="stat-card glass-panel animate-fade-in" style={{animationDelay: '0.1s'}}>
-          <div className="stat-header">
-            <h3>Total Active</h3>
+          <div className="stat-card glass-panel animate-fade-in" style={{animationDelay: '0.1s'}}>
+            <div className="stat-header"><h3>{t('Session Roster', 'قائمة الجلسة')}</h3></div>
+            <div className="stat-value">{players.length}</div>
+            <p className="stat-label">{t('Operatives', 'المشغّلون')}</p>
           </div>
-          <div className="stat-value">{stats.total}</div>
-          <p className="stat-label">Registered Players</p>
-        </div>
-        
-        <div className="stat-card glass-panel animate-fade-in" style={{animationDelay: '0.2s'}}>
-          <div className="stat-header">
-            <h3>Present</h3>
+
+          <div className="stat-card glass-panel animate-fade-in" style={{animationDelay: '0.2s'}}>
+            <div className="stat-header"><h3>{t('Present', 'الحاضرون')}</h3></div>
+            <div className="stat-value text-present">{presentPlayersCount}</div>
+            <p className="stat-label">{t('Active Field', 'في الميدان')}</p>
           </div>
-          <div className="stat-value text-present">{stats.present}</div>
-          <p className="stat-label">Checked in</p>
+
+          <div className="stat-card glass-panel animate-fade-in" style={{animationDelay: '0.3s'}}>
+            <div className="stat-header"><h3>{t('Absent', 'الغائبون')}</h3></div>
+            <div className="stat-value text-absent">{players.length - presentPlayersCount}</div>
+            <p className="stat-label">{t('Pending', 'معلق')}</p>
+          </div>
+
+          <div className="stat-card glass-panel animate-fade-in" style={{animationDelay: '0.4s'}}>
+            <div className="stat-header"><h3>{t('Telemetry', 'التتبع')}</h3></div>
+            <div className="stat-value" style={{ fontSize: '1.2rem' }}>{sessionExists ? t('RECORDED', 'مُسجَّل') : t('PENDING', 'قيد الانتظار')}</div>
+            <p className="stat-label">{sessionExists ? `${t('Auth', 'بواسطة')}: ${lastSavedBy}` : t('Unsigned Data', 'بيانات غير موقّعة')}</p>
+          </div>
         </div>
 
-        <div className="stat-card glass-panel animate-fade-in" style={{animationDelay: '0.3s'}}>
-          <div className="stat-header">
-            <h3>Absent</h3>
+        <div className="chart-bento glass-panel animate-fade-in" style={{animationDelay: '0.5s'}}>
+          <div className="chart-header">
+            <h3 className="chart-title">{t('Mission Parameters', 'معاملات المهمة')}</h3>
           </div>
-          <div className="stat-value text-absent">{stats.absent}</div>
-          <p className="stat-label">Not arrived</p>
-        </div>
-
-        <div className="stat-card glass-panel animate-fade-in" style={{animationDelay: '0.4s'}}>
-          <div className="stat-header">
-            <h3>Logistics Completion</h3>
+          <div className="session-selector-pane">
+             <CustomDateInput
+                label={t('Operation Date', 'تاريخ العملية')}
+                value={selectedDate}
+                max={new Date().toLocaleDateString('en-CA')}
+                onChange={setSelectedDate}
+             />
+             <div className="selector-group">
+                <label>{t('Deployment Window', 'نافذة التوقيت')}</label>
+                <div className="timing-pills">
+                  {CLASS_TIMINGS.map(timing => (
+                    <button
+                      key={timing}
+                      className={`timing-pill ${selectedTiming === timing ? 'active' : ''}`}
+                      onClick={() => setSelectedTiming(timing)}
+                    >
+                      {timing}
+                    </button>
+                  ))}
+                </div>
+             </div>
           </div>
-          <div className="stat-value">{stats.rate}%</div>
-          <p className="stat-label">Overall Completion</p>
         </div>
       </div>
 
-      <div className="chart-bento glass-panel animate-fade-in" style={{animationDelay: '0.5s'}}>
-        <h3 className="chart-title">Overview</h3>
-        <div className="nested-chart-container">
-          <svg viewBox="0 0 100 100" className="nested-chart">
-            {/* Total Ring */}
-            <circle cx="50" cy="50" r="38" fill="none" stroke="var(--glass-border)" strokeWidth="6" />
-            <circle cx="50" cy="50" r="38" fill="none" stroke="var(--button-bg)" strokeWidth="6" 
-                    strokeLinecap="round" strokeDasharray="238.7 238.7" 
-                    transform="rotate(-90 50 50)" />
-            
-            {/* Present Ring */}
-            <circle cx="50" cy="50" r="29" fill="none" stroke="var(--status-present-bg)" strokeWidth="6" />
-            <circle cx="50" cy="50" r="29" fill="none" stroke="var(--status-present)" strokeWidth="6" 
-                    strokeLinecap="round" strokeDasharray={`${(presentPct/100) * 182.2} 182.2`} 
-                    transform="rotate(-90 50 50)" />
-                    
-            {/* Absent Ring */}
-            <circle cx="50" cy="50" r="20" fill="none" stroke="var(--status-absent-bg)" strokeWidth="6" />
-            <circle cx="50" cy="50" r="20" fill="none" stroke="var(--status-absent)" strokeWidth="6" 
-                    strokeLinecap="round" strokeDasharray={`${(absentPct/100) * 125.6} 125.6`} 
-                    transform="rotate(-90 50 50)" />
-                    
-            {/* Rate Inner Ring */}
-            <circle cx="50" cy="50" r="11" fill="none" stroke="#F4F4F0" strokeWidth="6" />
-            <circle cx="50" cy="50" r="11" fill="none" stroke="var(--accent-color)" strokeWidth="6" 
-                    strokeLinecap="round" strokeDasharray={`${(stats.rate/100) * 69.1} 69.1`} 
-                    transform="rotate(-90 50 50)" />
-          </svg>
-          <div className="chart-labels">
-            <div className="chart-label"><span className="dot" style={{background: 'var(--button-bg)'}}></span> Total</div>
-            <div className="chart-label"><span className="dot" style={{background: 'var(--status-present)'}}></span> Present</div>
-            <div className="chart-label"><span className="dot" style={{background: 'var(--status-absent)'}}></span> Absent</div>
-            <div className="chart-label"><span className="dot" style={{background: 'var(--accent-color)'}}></span> Rate</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div className="master-sticky-header">
       <div className="controls-panel">
         <div className="search-box">
-           <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
           <input 
             type="text" 
-            placeholder="Search by name or coach..." 
+            placeholder={t('Filter session roster...', 'تصفية قائمة الجلسة...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
           />
         </div>
         <div className="filter-actions">
-          <select 
+          <CustomSelect 
             value={filterSport} 
-            onChange={(e) => setFilterSport(e.target.value)}
-            className="sport-select"
-          >
-            {sports.map(sport => (
-              <option key={sport} value={sport}>{sport}</option>
-            ))}
-          </select>
-          <select
-            value={filterTiming}
-            onChange={(e) => setFilterTiming(e.target.value)}
-            className="sport-select"
-          >
-            {timings.map(t => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-          <button 
-            className="save-btn" 
-            onClick={handleSaveAttendance} 
-            disabled={isSaving}
-          >
-            {isSaving ? 'Syncing...' : `Log Hub Session (${filteredPlayers.length})`}
-          </button>
-          <button 
-            className="save-btn" 
-            onClick={syncExcelDB} 
-            disabled={isSaving}
-            style={{ backgroundColor: '#1A1A1A' }}
-          >
-            Sync XLSX to DB
-          </button>
-          <button 
-            className="save-btn" 
-            onClick={() => setResetModalOpen(true)}
-            disabled={isSaving}
-            style={{ backgroundColor: '#DC2626' }}
-            title="Reset all arrival statuses for today"
-          >
-            Reset Daily List
-          </button>
-          {saveMessage && <span className="save-msg">{saveMessage}</span>}
+            onChange={setFilterSport}
+            options={sports}
+            className="sport-dropdown"
+          />
+          {canEdit && (
+            <button
+              className="btn-premium"
+              onClick={handleSaveAttendance}
+              disabled={isSaving || loading}
+            >
+              {isSaving ? t('Processing...', 'جارٍ المعالجة...') : `${t('Commit Data', 'تسجيل البيانات')} (${presentPlayersCount})`}
+            </button>
+          )}
+          {saveMessage && <span className="save-msg animate-fade-in">{saveMessage}</span>}
         </div>
       </div>
-
-      {/* MASTER STANDALONE TABLE HEADER */}
-      <div className="standalone-table-header desktop-only">
-        <table className="attendance-table" style={{ marginBottom: 0, borderSpacing: 0, width: '100%' }}>
-          <colgroup>
-            <col style={{ width: '25%' }} />
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '12%' }} />
-            <col style={{ width: '17%' }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th>Player Name</th>
-              <th>Sport</th>
-              <th>Class Timing</th>
-              <th>Coach</th>
-              <th className="status-col">Attendance</th>
-              <th className="action-col">Transport</th>
-            </tr>
-          </thead>
-        </table>
-      </div>
-    </div>
-
       <div className="table-container">
         {loading ? (
-          <div className="jumping-logo-container">
-            <img src="/fmac-logo-new.png" alt="Loading" className="jumping-logo" />
-            <span className="jumping-text">Syncing data...</span>
+          <div className="view-loading">
+            <div className="app-loader"><span /><span /><span /><span /><span /></div>
           </div>
         ) : (
-          <>
-            <AttendanceTable 
-              players={paginatedPlayers} 
-              onToggleStatus={handleToggleStatus} 
-              onChangeTransport={handleChangeTransport}
-            />
-            {totalPages > 1 && (
-              <div className="pagination-controls">
-                <button 
-                  className="pagination-btn"
-                  disabled={currentPage === 1} 
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                >
-                  ← Previous
-                </button>
-                <div className="pagination-info">
-                  Page <span className="highlight-page">{currentPage}</span> of {totalPages}
-                </div>
-                <button 
-                  className="pagination-btn"
-                  disabled={currentPage === totalPages} 
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                >
-                  Next →
-                </button>
-              </div>
-            )}
-          </>
+          <AttendanceTable
+            players={playersWithStatus}
+            onToggleStatus={canEdit ? handleToggleStatus : undefined}
+            onChangeTransport={canEdit ? handleChangeTransport : undefined}
+            canEdit={canEdit}
+          />
         )}
       </div>
 
@@ -449,57 +314,45 @@ export default function Dashboard() {
           <div className="custom-modal glass-panel animate-pop-in">
             <div className="modal-header">
               <div className="modal-title-group">
-                <span className="modal-icon">!!!</span>
-                <h3>Action Required</h3>
+                <span className="modal-icon" style={{ color: 'var(--theme-crimson)' }}>!</span>
+                <h3>{t('Logistics Discrepancy', 'خلل في اللوجستيات')}</h3>
               </div>
-              <button 
-                className="close-modal-btn" 
-                onClick={() => setMissingTransportModal({ isOpen: false, players: [] })}
-              >
-                ✕
-              </button>
+              <button className="close-modal-btn" onClick={() => setMissingTransportModal({ isOpen: false, players: [] })}>✕</button>
             </div>
-            
             <div className="modal-body">
               <p className="modal-desc">
-                Cannot sync hub data. The following <strong>{missingTransportModal.players.length}</strong> present player(s) have no transportation specified:
+                {t('Commit failed. The following', 'فشل التسجيل. المشغّلون التاليون')} <strong>{missingTransportModal.players.length}</strong> {t('operatives have no assigned logistics:', 'ليس لديهم نقل مُخصَّص:')}
               </p>
-              
               <ul className="modal-player-list">
                 {missingTransportModal.players.map(p => (
                   <li key={p.firestoreId} className="modal-player-item">
                     <div className="modal-avatar">{p.name.charAt(0)}</div>
                     <div className="modal-player-info">
                       <span className="modal-player-name">{p.name}</span>
-                      <span className="modal-player-coach">Coach: {p.coach}</span>
+                      <span className="modal-player-coach">{t('Unit', 'الوحدة')}: {p.coach}</span>
                     </div>
                   </li>
                 ))}
               </ul>
             </div>
-            
             <div className="modal-footer">
-              <button 
-                className="modal-primary-btn" 
-                onClick={() => setMissingTransportModal({ isOpen: false, players: [] })}
-              >
-                I'll fix it
-              </button>
+              <button className="btn-premium" onClick={() => setMissingTransportModal({ isOpen: false, players: [] })}>{t('Update Logs', 'تحديث السجلات')}</button>
             </div>
           </div>
         </div>, document.body
       )}
 
-      {/* DAILY RESET CONFIRMATION MODAL */}
+      {/* OVERWRITE WARNING MODAL */}
       <ConfirmModal 
-        isOpen={resetModalOpen}
-        onClose={() => setResetModalOpen(false)}
-        onConfirm={handleDailyReset}
+        isOpen={overwriteModalOpen}
+        onClose={() => setOverwriteModalOpen(false)}
+        onConfirm={performSave}
         isDanger={true}
-        title="Reset Logistics Hub?"
-        message="This will reset all player statuses to 'Absent' for today. Previous history logs will NOT be affected."
-        confirmText="Yes, Reset Daily List"
-        requiredPasscode="Fm@c.2020"
+        title={t('Protocol Overwrite', 'تجاوز البيانات')}
+        message={t(`A data record for ${selectedDate} at ${selectedTiming} already exists (Auth: ${lastSavedBy}). Proceed with overwrite?`, `يوجد سجل بيانات لتاريخ ${selectedDate} في ${selectedTiming} (بواسطة: ${lastSavedBy}). هل تريد التجاوز؟`)}
+        confirmText={t('Execute Overwrite', 'تأكيد التجاوز')}
+        cancelText={t('Cancel', 'إلغاء')}
+        requiredPasscode={import.meta.env.VITE_RESET_PASSCODE}
       />
     </div>
   );

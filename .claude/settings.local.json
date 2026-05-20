@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(curl -s --max-time 30 https://fonts.gstatic.com/s/cairo/v31/SLXgc1nY6HkvangtZmpQdkhzfH5lkSs2SgRjCAGMQ1z0hOA-a1PiKS2EikE.ttf -o /tmp/Cairo-Regular.ttf)",
+      "Bash(curl -s --max-time 30 https://fonts.gstatic.com/s/cairo/v31/SLXgc1nY6HkvangtZmpQdkhzfH5lkSs2SgRjCAGMQ1z0hAc5a1PiKS2EikE.ttf -o /tmp/Cairo-Bold.ttf)",
+      "Read(//tmp/**)",
+      "Bash(node -e ' *)",
+      "Bash(\n# Find the Windows path for bash /tmp\necho \"Bash /tmp location:\"\nls -la /tmp/Cairo*.ttf\necho \"\"\n# Also check the project directory access\nls \"/c/Users/mohdm/Desktop/Projects/FMAC Logistics Hub/src/utils/\" 2>/dev/null && echo \"Git Bash path works\" || echo \"Git Bash path failed\"\nls \"/mnt/c/Users/mohdm/Desktop/Projects/FMAC Logistics Hub/src/utils/\" 2>/dev/null && echo \"WSL path works\" || echo \"WSL path failed\"\n# Check actual path\npwd; echo \"PATH=$PATH\"\n)",
+      "Read(//mnt/c/Users/mohdm/Desktop/Projects/FMAC Logistics Hub/src/**)",
+      "Bash(npm install *)"
+    ]
+  }
+}

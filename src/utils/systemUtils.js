@@ -1,8 +1,9 @@
 import { db } from '../firebase';
-import { collection, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, writeBatch, doc, deleteDoc } from 'firebase/firestore';
 
 /**
  * Deletes all documents in a specific collection.
+ * For sessions, we must also clear subcollections.
  */
 export const clearCollection = async (collectionName) => {
   try {
@@ -11,13 +12,17 @@ export const clearCollection = async (collectionName) => {
     
     if (snapshot.empty) return;
 
-    const batch = writeBatch(db);
-    snapshot.docs.forEach((d) => {
-      batch.delete(d.ref);
-    });
+    for (const d of snapshot.docs) {
+      if (collectionName === 'sessions') {
+        // Clear subcollection first
+        const attSnap = await getDocs(collection(db, "sessions", d.id, "attendance"));
+        const attBatch = writeBatch(db);
+        attSnap.docs.forEach(ad => attBatch.delete(ad.ref));
+        await attBatch.commit();
+      }
+      await deleteDoc(d.ref);
+    }
     
-    await batch.commit();
-    console.log(`Successfully cleared collection: ${collectionName}`);
   } catch (error) {
     console.error(`Error clearing collection ${collectionName}:`, error);
     throw error;
@@ -25,23 +30,23 @@ export const clearCollection = async (collectionName) => {
 };
 
 /**
- * Specifically clears the attendance_logs collection (History & Analytics).
+ * Specifically clears the sessions collection (History & Analytics).
  */
 export const clearAttendanceHistory = async () => {
+  // Clear both old logs and new sessions for migration safety
   await clearCollection("attendance_logs");
+  await clearCollection("sessions");
 };
 
 /**
- * Resets all players to 'absent' status for Today's Attendance.
- * This also clears their transportation for the current session.
+ * Resets all players to 'absent' status - DEPRECATED for v2 logic.
+ * We now keep player records clean.
  */
 export const resetDailyAttendanceStatus = async () => {
+  console.warn("resetDailyAttendanceStatus is deprecated. Players no longer store status.");
   try {
     const q = collection(db, "players_v2");
     const snapshot = await getDocs(q);
-    
-    if (snapshot.empty) return;
-
     const batch = writeBatch(db);
     snapshot.docs.forEach((d) => {
       batch.update(d.ref, { 
@@ -50,45 +55,26 @@ export const resetDailyAttendanceStatus = async () => {
         lastActionDate: '' 
       });
     });
-    
     await batch.commit();
-    console.log("Successfully reset all daily player statuses.");
-  } catch (error) {
-    console.error("Error resetting player statuses:", error);
-    throw error;
+  } catch (e) {
+    console.error(e);
   }
 };
 
 /**
- * Resets ONLY the transportation field in players_v2.
- * Preserves the arrival (status) field.
+ * Resets ONLY the transportation field in players_v2 - DEPRECATED.
  */
 export const resetTransportationOnly = async () => {
+  console.warn("resetTransportationOnly is deprecated.");
   try {
     const q = collection(db, "players_v2");
     const snapshot = await getDocs(q);
-    
-    if (snapshot.empty) return;
-
     const batch = writeBatch(db);
     snapshot.docs.forEach((d) => {
-      batch.update(d.ref, { 
-        transportation: ''
-      });
+      batch.update(d.ref, { transportation: '' });
     });
-    
     await batch.commit();
-    console.log("Successfully reset transportation assignments.");
-  } catch (error) {
-    console.error("Error resetting transport assignments:", error);
-    throw error;
+  } catch (e) {
+    console.error(e);
   }
-};
-
-/**
- * Global reset (Kept for reference or emergency cleanup)
- */
-export const performGlobalReset = async () => {
-  await clearAttendanceHistory();
-  await resetDailyAttendanceStatus();
 };

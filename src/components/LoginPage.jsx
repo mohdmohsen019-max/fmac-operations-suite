@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import LanguageToggle from './shared/LanguageToggle';
 import ThemeToggle from './shared/ThemeToggle';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -61,60 +61,145 @@ function CornerOrnament() {
 }
 
 function LoginMandala({ size = 200 }) {
-  const cx = size / 2;
-  const cy = size / 2;
-  const outerR = size * 0.38;
-  const starPoints1 = [];
-  const starPoints2 = [];
-  for (let i = 0; i < 4; i++) {
-    const angle1 = (i * 90 - 90) * Math.PI / 180;
-    const angle2 = (i * 90 - 45) * Math.PI / 180;
-    starPoints1.push(`${cx + outerR * Math.cos(angle1)},${cy + outerR * Math.sin(angle1)}`);
-    starPoints2.push(`${cx + outerR * Math.cos(angle2)},${cy + outerR * Math.sin(angle2)}`);
-  }
-  const dotR = size * 0.33;
-  const dots = [];
-  for (let i = 0; i < 16; i++) {
-    const angle = (i * 22.5) * Math.PI / 180;
-    dots.push({ cx: cx + dotR * Math.cos(angle), cy: cy + dotR * Math.sin(angle) });
-  }
-  const outerRingR = size * 0.44;
-  const outerSegments = [];
-  for (let i = 0; i < 8; i++) {
-    const a1 = (i * 45 - 22.5) * Math.PI / 180;
-    const a2 = (i * 45 + 22.5) * Math.PI / 180;
-    const aMid = (i * 45) * Math.PI / 180;
-    const r1 = outerRingR;
-    const r2 = outerRingR * 1.08;
-    outerSegments.push(
-      <path key={`seg-${i}`}
-        d={`M ${cx + r1 * Math.cos(a1)} ${cy + r1 * Math.sin(a1)} L ${cx + r2 * Math.cos(aMid)} ${cy + r2 * Math.sin(aMid)} L ${cx + r1 * Math.cos(a2)} ${cy + r1 * Math.sin(a2)}`}
-        fill="none" stroke="#c9a84c" strokeWidth="0.8" opacity="0.5"
-      />
-    );
-  }
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+
+  const springConfig = { damping: 25, stiffness: 200, mass: 0.5 };
+  const rotateX = useSpring(useTransform(mouseY, [-size / 2, size / 2], [12, -12]), springConfig);
+  const rotateY = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-12, 12]), springConfig);
+
+  const bgX = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-4, 4]), springConfig);
+  const bgY = useSpring(useTransform(mouseY, [-size / 2, size / 2], [-4, 4]), springConfig);
+
+  const fcX = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-10, 10]), springConfig);
+  const fcY = useSpring(useTransform(mouseY, [-size / 2, size / 2], [-10, 10]), springConfig);
+
+  const maX = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-18, 18]), springConfig);
+  const maY = useSpring(useTransform(mouseY, [-size / 2, size / 2], [-18, 18]), springConfig);
+
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    mouseX.set(x);
+    mouseY.set(y);
+  };
+
+  const handleMouseLeave = () => {
+    mouseX.set(0);
+    mouseY.set(0);
+  };
+
+  const star1 = "79,79 221,79 221,221 79,221";
+  const star2 = "150,50 250,150 150,250 50,150";
+
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size }}>
-      <g style={{ transformOrigin: `${cx}px ${cy}px`, animation: 'mandalaOuterRotate 60s linear infinite' }}>
-        {outerSegments}
-        <circle cx={cx} cy={cy} r={outerRingR} fill="none" stroke="#c9a84c" strokeWidth="0.5" opacity="0.25" />
-      </g>
-      <g style={{ transformOrigin: `${cx}px ${cy}px`, animation: 'mandalaStarRotate 80s linear infinite reverse' }}>
-        <polygon points={starPoints1.join(' ')} fill="none" stroke="#c9a84c" strokeWidth="1" opacity="0.7" />
-        <polygon points={starPoints2.join(' ')} fill="none" stroke="#c9a84c" strokeWidth="1" opacity="0.7" />
-        <circle cx={cx} cy={cy} r={outerR * 0.5} fill="none" stroke="#c9a84c" strokeWidth="0.5" opacity="0.3" />
-      </g>
-      <circle cx={cx} cy={cy} r={6} fill="#c0392b" opacity="0.9" />
-      <circle cx={cx} cy={cy} r={10} fill="none" stroke="#c0392b" strokeWidth="0.5" opacity="0.4" />
-      <g style={{ transformOrigin: `${cx}px ${cy}px`, animation: 'mandalaOuterRotate 60s linear infinite' }}>
-        {dots.map((dot, i) => (
-          <circle key={i} cx={dot.cx} cy={dot.cy} r={i % 2 === 0 ? 2 : 1.2}
-            fill={i % 4 === 0 ? '#c0392b' : '#c9a84c'} opacity="0.5"
-            style={{ animation: `mandalaDotPulse 3s ease-in-out infinite ${i * 0.19}s` }}
-          />
-        ))}
-      </g>
-    </svg>
+    <motion.div
+      className="fmac-logo-container"
+      style={{
+        width: size,
+        height: size,
+        rotateX,
+        rotateY,
+        transformStyle: 'preserve-3d',
+      }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      whileHover={{ scale: 1.04 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <div className="fmac-logo-glow" />
+
+      <svg viewBox="0 0 300 300" className="fmac-logo-svg">
+        <motion.g style={{ x: bgX, y: bgY, transformStyle: 'preserve-3d' }}>
+          <circle cx="150" cy="150" r="130" fill="none" stroke="var(--login-accent-gold)" strokeWidth="0.5" className="hud-stroke-subtle" opacity="0.12" />
+          <circle cx="150" cy="150" r="140" fill="none" stroke="var(--login-accent-gold)" strokeWidth="0.5" className="hud-stroke" strokeDasharray="3, 10" opacity="0.18" />
+          
+          <g className="fmac-logo-hud-outer">
+            <polygon points={star1} fill="none" stroke="var(--login-accent-gold)" strokeWidth="0.5" className="hud-stroke-subtle" opacity="0.1" />
+          </g>
+          <g className="fmac-logo-hud-inner">
+            <polygon points={star2} fill="none" stroke="var(--login-accent-gold)" strokeWidth="0.5" className="hud-stroke-subtle" opacity="0.1" />
+          </g>
+        </motion.g>
+
+        <motion.g style={{ x: fcX, y: fcY, transformStyle: 'preserve-3d' }}>
+          <motion.text
+            x="75"
+            y="155"
+            fontFamily="'Barlow Condensed', sans-serif"
+            fontWeight="900"
+            fontStyle="italic"
+            fontSize="135"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="var(--logo-f-c, var(--login-text-primary))"
+            initial={{ x: -60, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+            style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))' }}
+          >
+            F
+          </motion.text>
+
+          <motion.text
+            x="225"
+            y="155"
+            fontFamily="'Barlow Condensed', sans-serif"
+            fontWeight="900"
+            fontStyle="italic"
+            fontSize="135"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="var(--logo-f-c, var(--login-text-primary))"
+            initial={{ x: 60, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))' }}
+          >
+            C
+          </motion.text>
+        </motion.g>
+
+        <motion.g style={{ x: maX, y: maY, transformStyle: 'preserve-3d' }}>
+          <motion.text
+            x="150"
+            y="95"
+            fontFamily="'Barlow Condensed', sans-serif"
+            fontWeight="900"
+            fontStyle="italic"
+            fontSize="115"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="var(--logo-m-a, var(--login-accent-red))"
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            style={{ filter: 'drop-shadow(0 8px 20px rgba(192, 57, 43, 0.3))' }}
+          >
+            M
+          </motion.text>
+
+          <motion.text
+            x="150"
+            y="205"
+            fontFamily="'Barlow Condensed', sans-serif"
+            fontWeight="900"
+            fontStyle="italic"
+            fontSize="100"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="var(--logo-m-a, var(--login-accent-red))"
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            style={{ filter: 'drop-shadow(0 8px 20px rgba(192, 57, 43, 0.3))' }}
+          >
+            A
+          </motion.text>
+        </motion.g>
+      </svg>
+    </motion.div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense, Component } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Package2, Bus, Users, LifeBuoy, LogOut, BarChart2, Package } from 'lucide-react'
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -49,6 +49,38 @@ const labelTransition = (delay = 0) => ({
   delay,
   ease: [0.16, 1, 0.3, 1],
 })
+
+/* ── Catches failed chunk loads (stale hashes after deploy) and reloads once ── */
+class ChunkErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { crashed: false }
+  }
+
+  static getDerivedStateFromError(error) {
+    const isChunkError =
+      error?.name === 'ChunkLoadError' ||
+      /Failed to fetch dynamically imported module|Loading chunk \d+ failed/i.test(error?.message ?? '')
+    if (isChunkError && !sessionStorage.getItem('chunkReloaded')) {
+      sessionStorage.setItem('chunkReloaded', '1')
+      window.location.reload()
+      return null
+    }
+    return { crashed: true }
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.routeKey !== this.props.routeKey && this.state.crashed) {
+      sessionStorage.removeItem('chunkReloaded')
+      this.setState({ crashed: false })
+    }
+  }
+
+  render() {
+    if (this.state.crashed) return null
+    return this.props.children
+  }
+}
 
 /* ── Suspense fallback used inside the module viewport ── */
 function ModuleLoader() {
@@ -335,9 +367,11 @@ function MainAppLayout() {
         <div className="ops-module-container">
           <AnimatePresence mode="wait">
             <motion.div key={globalModule} className="ops-module-inner" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}>
-              <Suspense fallback={<ModuleLoader />}>
-                <Outlet />
-              </Suspense>
+              <ChunkErrorBoundary routeKey={globalModule}>
+                <Suspense fallback={<ModuleLoader />}>
+                  <Outlet />
+                </Suspense>
+              </ChunkErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </div>

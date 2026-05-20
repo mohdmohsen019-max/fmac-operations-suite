@@ -73,6 +73,37 @@ export default function FleetLiveMap() {
   // const [cameraVehicle, setCameraVehicle] = useState(null);
 
   const mapRef = useRef(null);
+  const geocoderRef = useRef(null);
+
+  const isLocationError = (desc) => !desc || /^location\s*error$/i.test(desc.trim());
+
+  const reverseGeocode = useCallback((vehicle) => {
+    if (!vehicle.location?.latitude || !window.google) return;
+    if (!geocoderRef.current) geocoderRef.current = new window.google.maps.Geocoder();
+    geocoderRef.current.geocode(
+      { location: { lat: vehicle.location.latitude, lng: vehicle.location.longitude } },
+      (results, status) => {
+        if (status === 'OK' && results[0]) {
+          setSelectedVehicle(prev =>
+            prev?.registration === vehicle.registration
+              ? { ...prev, location: { ...prev.location, position_description: results[0].formatted_address } }
+              : prev
+          );
+        }
+      }
+    );
+  }, []);
+
+  const selectVehicle = useCallback((vehicle) => {
+    setSelectedVehicle(vehicle);
+    if (mapRef.current && vehicle.location) {
+      mapRef.current.panTo({ lat: vehicle.location.latitude, lng: vehicle.location.longitude });
+      mapRef.current.setZoom(15);
+    }
+    if (isLocationError(vehicle.location?.position_description)) {
+      reverseGeocode(vehicle);
+    }
+  }, [reverseGeocode]);
 
   const fetchLiveStatus = useCallback(async () => {
     try {
@@ -121,13 +152,7 @@ export default function FleetLiveMap() {
     mapRef.current = null;
   }, []);
 
-  const handleBusClick = (vehicle) => {
-    setSelectedVehicle(vehicle);
-    if (mapRef.current && vehicle.location) {
-      mapRef.current.panTo({ lat: vehicle.location.latitude, lng: vehicle.location.longitude });
-      mapRef.current.setZoom(15);
-    }
-  };
+  const handleBusClick = selectVehicle;
 
   const handleShowAll = () => {
     setSelectedVehicle(null);
@@ -258,7 +283,7 @@ export default function FleetLiveMap() {
                   url: createMarkerIcon(vehicle.bus_number, vehicle.color),
                   anchor: new window.google.maps.Point(18, 18)
                 }}
-                onClick={() => setSelectedVehicle(vehicle)}
+                onClick={() => selectVehicle(vehicle)}
               />
             );
           })}
@@ -285,7 +310,11 @@ export default function FleetLiveMap() {
                       {selectedVehicle.statusText}
                     </span>
                   </p>
-                  <p><strong>{t('Location:', 'الموقع:')}</strong> {selectedVehicle.location.position_description || t('Unknown', 'غير معروف')}</p>
+                  <p><strong>{t('Location:', 'الموقع:')}</strong> {
+                    isLocationError(selectedVehicle.location.position_description)
+                      ? `${selectedVehicle.location.latitude.toFixed(5)}, ${selectedVehicle.location.longitude.toFixed(5)}`
+                      : (selectedVehicle.location.position_description || t('Unknown', 'غير معروف'))
+                  }</p>
                 </div>
                 <div className="info-footer">
                   {t('Updated:', 'تحديث:')} {selectedVehicle.location.timestamp ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(selectedVehicle.location.timestamp)) : new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(lastUpdated)}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import LanguageToggle from './shared/LanguageToggle';
 import ThemeToggle from './shared/ThemeToggle';
+import FMACLogo from './FMACLogo';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -615,7 +616,7 @@ export default function LoginPage() {
           transition={{ delay: 0.3, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           style={{ position: 'relative', zIndex: 5 }}
         >
-          <LoginMandala size={280} />
+          <FMACLogo size="lg" />
         </motion.div>
         <button className="login-back-link" onClick={goToPortal}>
           <ArrowLeft size={14} />

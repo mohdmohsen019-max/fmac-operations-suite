@@ -6,6 +6,7 @@ import { useLanguage } from '../../../contexts/LanguageContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import LanguageToggle from '../../shared/LanguageToggle';
 import ThemeToggle from '../../shared/ThemeToggle';
+import FMACLogo from '../../FMACLogo';
 import './HelpLanding.css';
 
 /* ── SVG Icon Paths (same as before) ────────────────── */
@@ -372,11 +373,11 @@ export default function HelpLanding() {
           initial="hidden"
           animate="visible"
         >
-          <motion.div 
+          <motion.div
             className="fmac-logo-container"
             variants={itemVariants}
           >
-            <FmacAnimatedLogo size={280} />
+            <FMACLogo size="md" />
           </motion.div>
 
           <motion.h1 className="hero-text-arabic" variants={itemVariants}>

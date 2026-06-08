@@ -211,10 +211,10 @@ export default function HelpAdminDashboard() {
   }
 
   return (
-    <div style={{ padding: '2rem 3rem', maxWidth: '1600px', margin: '0 auto' }}>
+    <div className="hc-admin-root" style={{ padding: '2rem 3rem', maxWidth: '1600px', margin: '0 auto' }}>
 
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+      <div className="hc-admin-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
         {[
           { label: t('Total Requests', 'إجمالي الطلبات'), value: stats.total, color: 'var(--hc-text-primary)' },
           { label: t('New', 'جديد'), value: stats.new, color: '#3B82F6' },
@@ -230,8 +230,8 @@ export default function HelpAdminDashboard() {
       </div>
 
       {/* Toolbar: Search + Export */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-        <div style={{ position: 'relative', width: '280px' }}>
+      <div className="hc-admin-toolbar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+        <div className="hc-admin-search" style={{ position: 'relative', width: '280px' }}>
           <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--hc-text-muted)', pointerEvents: 'none' }} size={16} />
           <input
             type="text"

@@ -180,8 +180,14 @@
   .history-container {
     grid-template-columns: 1fr;
   }
-  
+
   .history-sidebar {
     height: 300px;
   }
+}
+
+@media (max-width: 768px) {
+  .history-sidebar { height: 220px; }
+  .sidebar-header-row { padding: 10px 12px; }
+  .sidebar-title      { font-size: 0.72rem; }
 }

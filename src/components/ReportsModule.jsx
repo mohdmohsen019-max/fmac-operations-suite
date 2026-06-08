@@ -582,12 +582,12 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
     setTemplateData(data)
     setIsCompiling(true)
     popToast(t('Generating high-fidelity PDF...', 'جاري إنشاء ملف PDF عالي الجودة...'))
-    
+
     // Ensure fonts and layout are fully ready before capture
     setTimeout(async () => {
       try {
         await document.fonts.ready
-        
+
         // Priority: 1. On-screen preview, 2. Off-screen template
         const root = document.getElementById('report-preview-container') || document.getElementById('pdf-report-root')
         if (!root) throw new Error('PDF Root not found')
@@ -618,9 +618,9 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
               clonedDoc.head.appendChild(style)
             }
           })
-          
+
           const imgData = canvas.toDataURL('image/jpeg', 0.95)
-          
+
           if (i > 0) pdf.addPage()
           pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST')
         }
@@ -628,7 +628,7 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
         const [yr, mo] = reportId.split('-')
         const moName = MONTHS_AR[parseInt(mo, 10) - 1] || mo
         pdf.save(`تقرير-العمليات-${moName}-${yr}.pdf`)
-        
+
         popToast(t('PDF downloaded successfully', 'تم تحميل ملف PDF بنجاح'))
       } catch (e) {
         console.error('High-fidelity PDF export failed:', e)

@@ -169,9 +169,26 @@
     flex-direction: column;
     align-items: flex-start;
   }
-  
-  .analytics-filters {
-    width: 100%;
-    flex-wrap: wrap;
-  }
+  .analytics-filters { width: 100%; flex-wrap: wrap; }
+
+  /* Metric cards: compact value */
+  .analytics-card { padding: 14px 16px !important; }
+  .analytics-card .value { font-size: 1.85rem; }
+  .analytics-card .label { font-size: 0.7rem; }
+
+  /* Analytics grid: 2 columns */
+  .analytics-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+  /* Table: scroll horizontally */
+  .analytics-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .analytics-table { min-width: 520px; }
+  .analytics-table td, .analytics-table th { padding: 10px 12px; }
+
+  /* Performance bar: constrain width */
+  .rate-container { max-width: 120px; }
+}
+
+@media (max-width: 480px) {
+  .analytics-grid { grid-template-columns: 1fr; }
+  .analytics-card .value { font-size: 1.55rem; }
 }

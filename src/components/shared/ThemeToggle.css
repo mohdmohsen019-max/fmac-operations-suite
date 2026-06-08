@@ -32,3 +32,10 @@
   background: var(--theme-accent-soft);
   color: var(--theme-accent-bright);
 }
+
+@media (max-width: 768px) {
+  .theme-toggle-pill {
+    width: 72px;
+    height: 36px;
+  }
+}

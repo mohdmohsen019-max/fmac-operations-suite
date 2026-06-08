@@ -270,9 +270,16 @@
 }
 
 /* ── RESPONSIVE ──────────────────────────────────────── */
+@media (max-width: 768px) {
+  .fmac-form-container {
+    padding: 32px 20px;
+    border-radius: 12px;
+  }
+}
+
 @media (max-width: 480px) {
   .fmac-form-container {
-    padding: 32px 24px;
+    padding: 24px 16px;
   }
 }
 

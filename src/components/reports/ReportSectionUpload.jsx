@@ -127,17 +127,16 @@ export default function ReportSectionUpload({ section, reportId, user, lang, t, 
         type: 'text',
         text: `You are analyzing a report section submitted by an employee of Fujairah Martial Arts Club Operations Department. This is the [${sectionName}] section for [${monthName}].
 
-Extract ALL information from this document and return a JSON object with:
+Extract ALL information from this document and return a JSON object with ONLY these fields (keep values concise):
 {
   "summary": "2-3 sentence summary in English",
   "summaryAr": "2-3 sentence summary in Arabic",
-  "keyPoints": ["5-10 bullet points of main findings in English"],
+  "keyPoints": ["up to 8 bullet points of main findings in English"],
   "keyPointsAr": ["same points in Arabic"],
   "tables": [{"title": "table title", "headers": ["col1","col2"], "rows": [["val1","val2"]]}],
-  "numbers": {"metric label": "value with unit"},
-  "rawText": "full extracted text from the document"
+  "numbers": {"metric label": "value with unit"}
 }
-Return ONLY valid JSON, no markdown, no backticks.`
+Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backticks, no trailing text.`
       })
 
       const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
@@ -153,7 +152,7 @@ Return ONLY valid JSON, no markdown, no backticks.`
         },
         body: JSON.stringify({
           model: 'claude-opus-4-5',
-          max_tokens: 4000,
+          max_tokens: 8000,
           messages: [{ role: 'user', content: imageContent }]
         })
       })
@@ -166,13 +165,37 @@ Return ONLY valid JSON, no markdown, no backticks.`
       const data = await response.json()
       const text = data.content[0].text
       const cleaned = text.replace(/```json|```/g, '').trim()
-      const parsed = JSON.parse(cleaned)
+
+      // Extract the JSON object robustly — handles truncated responses
+      let parsed
+      try {
+        parsed = JSON.parse(cleaned)
+      } catch {
+        // Try to extract the JSON object between the first { and last }
+        const start = cleaned.indexOf('{')
+        const end = cleaned.lastIndexOf('}')
+        if (start !== -1 && end !== -1 && end > start) {
+          try {
+            parsed = JSON.parse(cleaned.slice(start, end + 1))
+          } catch {
+            throw new Error(t(
+              'AI returned incomplete JSON. The document may be too large — try splitting it into smaller sections.',
+              'استجابة الذكاء الاصطناعي غير مكتملة. قد يكون المستند كبيراً جداً — حاول تقسيمه إلى أقسام أصغر.'
+            ))
+          }
+        } else {
+          throw new Error(t(
+            'AI returned incomplete JSON. The document may be too large — try splitting it into smaller sections.',
+            'استجابة الذكاء الاصطناعي غير مكتملة. قد يكون المستند كبيراً جداً — حاول تقسيمه إلى أقسام أصغر.'
+          ))
+        }
+      }
 
       // Add original filename
       parsed.originalFileName = file.name
 
       setAiResult(parsed)
-      setRawText(parsed.rawText || '')
+      setRawText('')
       setStep('preview')
 
     } catch (e) {

@@ -194,6 +194,75 @@
   .inv-kpi-row { grid-template-columns: repeat(2, 1fr); }
 }
 
+@media (max-width: 768px) {
+  /* Tab method selector: scrollable instead of overflowing */
+  .inv-method-tabs {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .inv-method-tabs::-webkit-scrollbar { display: none; }
+  /* Enforce min-width so inv-table-wrap scroll actually activates */
+  .inv-table { min-width: 480px; }
+
+  /* Inventory tab header: neutralise the 24px inline margins and keep the
+     Add Item button on the same row as the scrollable tab rail */
+  .inv-tab-header {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 0 12px !important;
+    gap: 8px !important;
+  }
+  /* Inside this flex row, let the rail grow into available space
+     instead of claiming width:100% which would crowd out the button */
+  .inv-tab-header .luxury-tab-rail {
+    flex: 1 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  /* Keep the Add Item button from shrinking */
+  .inv-tab-header .inv-btn {
+    flex-shrink: 0;
+  }
+
+  /* KPI cards: compact on mobile */
+  .inv-kpi-card  { padding: 12px 14px; gap: 10px; }
+  .inv-kpi-value { font-size: 1.3rem; }
+  .inv-kpi-label { font-size: 0.72rem; }
+
+  /* Form grid: stack to single column */
+  .inv-form-grid { grid-template-columns: 1fr !important; }
+
+  /* Toolbar: stack search + actions */
+  .inv-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .inv-toolbar-left, .inv-toolbar-right { width: 100%; }
+  .inv-search-wrap { max-width: 100%; }
+
+  /* Modal as bottom sheet */
+  .inv-modal-surface {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 90vh;
+    border-radius: 20px 20px 0 0 !important;
+    overflow-y: auto;
+    margin: 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .inv-kpi-row { grid-template-columns: 1fr; }
+  .inv-tab-content { padding: 12px; }
+  .inv-toolbar-right { margin-left: 0; width: 100%; }
+}
+
 .inv-kpi-card {
   background: var(--theme-surface);
   border: 1px solid var(--theme-border);

@@ -635,8 +635,9 @@
 }
 
 @media (max-width: 768px) {
+  /* !important is required to beat the inline flexDirection:'row' on map-body-container */
   .map-body-container {
-    flex-direction: column;
+    flex-direction: column !important;
   }
   .bus-selector-panel {
     width: 100%;
@@ -644,6 +645,12 @@
     border-bottom: 1px solid var(--theme-border-light);
     height: auto;
     flex-shrink: 0;
+    order: 2; /* bus list below the map on mobile */
+  }
+  .map-wrapper {
+    order: 1; /* map first */
+    flex: 1;
+    min-height: 280px; /* guarantee the map has visible height */
   }
   .selector-header {
     display: none;
@@ -668,6 +675,19 @@
     border-left-color: transparent;
   }
   .bus-driver, .bus-item-right {
+    display: none;
+  }
+  /* Stats bar: wrap on small screens, hide last-updated to save space */
+  .live-map-stats-bar {
+    padding: 10px 12px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .live-map-stats-bar .stats-left {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .live-map-stats-bar .stats-right {
     display: none;
   }
 }
@@ -1062,4 +1082,83 @@
   .rpt-controls-row { flex-direction: column; align-items: stretch; }
   .rpt-kpi-row { grid-template-columns: 1fr 1fr; }
   .rpt-generate-btn { width: 100%; justify-content: center; }
+
+  /* Header */
+  .main-header {
+    padding: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: auto;
+  }
+  .view-title { font-size: 1.5rem; }
+  .header-clock { display: none; }
+
+  /* Main content */
+  .main-content { padding: 8px 12px 24px; }
+
+  /* Stats bento */
+  .stats-bento { grid-template-columns: repeat(2, 1fr); }
+
+  /* Registry toolbar */
+  .fleet-registry-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .fleet-search-wrapper { max-width: 100%; }
+
+  /* Table: enforce min-width so fleet-table-container scroll activates */
+  .fleet-table { min-width: 600px; }
+
+  /* Report sub-tabs: scrollable on mobile */
+  .rpt-sub-tabs {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rpt-sub-tabs::-webkit-scrollbar { display: none; }
+}
+
+@media (max-width: 480px) {
+  .stats-bento { grid-template-columns: 1fr; }
+  .view-title { font-size: 1.2rem; }
+  .rpt-kpi-row { grid-template-columns: 1fr; }
+}
+
+/* ── Extra mobile polish for fleet sub-views ── */
+@media (max-width: 768px) {
+  /* Compact glass panels — disable hover lift on touch */
+  .glass-panel { padding: 16px; border-radius: 16px; }
+  .glass-panel:hover { transform: none; }
+
+  /* Stat card values */
+  .stat-value { font-size: 1.85rem !important; }
+  .stat-card  { padding: 14px 16px !important; min-height: auto !important; }
+
+  /* 2-col chart grids → 1 col on mobile (beats inline gridTemplateColumns) */
+  .fleet-charts-grid { grid-template-columns: 1fr !important; }
+
+  /* Glass panel min-height: remove to avoid tall empty space */
+  .glass-panel[style*="min-height"] { min-height: auto !important; }
+
+  /* Fleet table container always scrollable */
+  .fleet-table-container { overflow-x: auto; }
+
+  /* Section headers in panels */
+  .section-header h2 { font-size: 1rem; }
+  .section-header p  { font-size: 0.72rem; }
+
+  /* Vendor/score rows */
+  .driver-score-row { padding: 8px 12px; gap: 8px; }
+
+  /* rpt-table-header: stack title + export button */
+  .rpt-table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 16px !important;
+  }
 }

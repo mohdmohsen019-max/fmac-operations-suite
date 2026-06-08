@@ -187,6 +187,27 @@
   box-shadow: 0 12px 32px var(--status-risk-glow);
 }
 
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .confirm-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .confirm-modal {
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+  .confirm-modal-header { padding: 24px 20px 14px; gap: 14px; }
+  .confirm-icon-circle  { width: 52px; height: 52px; font-size: 1.5rem; }
+  .confirm-modal-header h3 { font-size: 1.35rem; }
+  .confirm-modal-body   { padding: 0 20px 24px; }
+  .confirm-message      { font-size: 0.9rem; }
+  .confirm-modal-footer { padding: 16px 20px 28px; gap: 10px; }
+  .confirm-btn-cancel, .confirm-btn-action { padding: 13px; font-size: 0.9rem; }
+}
+
 /* Reusing animations from global */
 .animate-fade-in {
   animation: fadeIn var(--dur-med) ease;

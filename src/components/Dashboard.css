@@ -236,8 +236,35 @@
   }
 }
 
-@media (max-width: 600px) {
-  .stats-bento {
-    grid-template-columns: 1fr;
+@media (max-width: 768px) {
+  /* Stat cards */
+  .stats-bento { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-card  { padding: 14px 16px; min-height: auto; border-radius: 16px; }
+  .stat-value { font-size: 1.75rem; }
+  .stat-label { font-size: 0.7rem; }
+
+  /* Controls panel */
+  .controls-panel {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 14px;
+    gap: 10px;
+    position: static; /* avoid sticky z-index issues on small screens */
   }
+  .search-box { max-width: 100%; }
+
+  /* Session selector: stack vertically */
+  .session-selector-pane { grid-template-columns: 1fr; gap: 16px; }
+
+  /* Timing pills: wrap neatly */
+  .timing-pills { gap: 6px; }
+  .timing-pill  { padding: 8px 12px; font-size: 0.8rem; }
+}
+
+@media (max-width: 600px) {
+  .stats-bento { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .stat-value { font-size: 1.5rem; }
 }

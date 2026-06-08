@@ -270,7 +270,7 @@ export default function InventoryModule() {
   return (
     <div className="inv-module">
       {/* Top tab navigation */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginLeft: '24px', marginRight: '24px', marginTop: '8px', marginBottom: '20px' }}>
+      <div className="inv-tab-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginLeft: '24px', marginRight: '24px', marginTop: '8px', marginBottom: '20px' }}>
         <nav className="luxury-tab-rail">
           {visibleTabs.map(tab => {
             const Icon = tab.icon

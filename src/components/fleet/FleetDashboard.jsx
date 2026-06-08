@@ -9,12 +9,14 @@ import { useFleetSettings, convertDistance } from './FleetSettingsContext';
 import { cartrackService } from '../../services/cartrackService';
 import { getVehicleMeta } from '../../services/fleetMapping';
 import { useLanguage } from '../../contexts/LanguageContext';
+import useIsMobile from '../../hooks/useIsMobile';
 import { format, subDays, startOfDay, endOfDay, eachDayOfInterval } from 'date-fns';
 import './FleetDashboard.css';
 
 export default function FleetDashboard() {
   const { settings } = useFleetSettings();
   const { t, locale } = useLanguage();
+  const isMobile = useIsMobile();
   const unit = settings.measurementUnit;
 
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,7 @@ export default function FleetDashboard() {
     scorecards: []
   });
   const [isMounted, setIsMounted] = useState(false);
+  const [feedExpanded, setFeedExpanded] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -289,9 +292,16 @@ export default function FleetDashboard() {
         </div>
 
         <div className="fleet-chart-panel small glass-panel">
-          <h3 className="chart-title"><Clock size={18} /> {t('System Feed', 'تغذية النظام')}</h3>
+          <div className="feed-panel-header">
+            <h3 className="chart-title"><Clock size={18} /> {t('System Feed', 'تغذية النظام')}</h3>
+            {stats.recentActivity.length > 5 && (
+              <button className="feed-expand-btn" onClick={() => setFeedExpanded(v => !v)}>
+                {feedExpanded ? t('Show less', 'عرض أقل') : t(`+${stats.recentActivity.length - 5} more`, `+${stats.recentActivity.length - 5} المزيد`)}
+              </button>
+            )}
+          </div>
           <div className="activity-feed">
-            {stats.recentActivity.length > 0 ? stats.recentActivity.map((act, i) => (
+            {stats.recentActivity.length > 0 ? (feedExpanded ? stats.recentActivity : stats.recentActivity.slice(0, 5)).map((act, i) => (
               <div key={i} className="feed-item">
                 <div className="feed-time">{act.time}</div>
                 <div className="feed-info">
@@ -317,11 +327,11 @@ export default function FleetDashboard() {
               <span className="legend-item"><div className="dot risk"></div> {t('High Risk', 'خطر مرتفع')}</span>
             </div>
           </div>
-          <div className="chart-container" style={{ minHeight: '240px' }}>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={stats.scorecards} barCategoryGap="35%" margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <div className="chart-container" style={{ minHeight: isMobile ? '200px' : '240px' }}>
+            <ResponsiveContainer width="100%" height={isMobile ? 200 : 240}>
+              <BarChart data={stats.scorecards} barCategoryGap="35%" margin={{ top: 10, right: 10, left: -20, bottom: isMobile ? 18 : 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--theme-border)" />
-                <XAxis dataKey="plate" axisLine={false} tickLine={false} tick={{fill: 'var(--theme-text-muted)', fontSize: 10}} />
+                <XAxis dataKey="plate" axisLine={false} tickLine={false} interval={0} angle={isMobile ? -45 : 0} textAnchor={isMobile ? 'end' : 'middle'} height={isMobile ? 44 : 30} tick={{fill: 'var(--theme-text-muted)', fontSize: 10}} />
                 <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{fill: 'var(--theme-text-muted)', fontSize: 10}} width={30} />
                 <Tooltip 
                   cursor={{fill: 'rgba(0,0,0,0.02)'}}

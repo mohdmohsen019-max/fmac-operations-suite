@@ -4,12 +4,14 @@ import { Wrench, Receipt, Calendar, CreditCard, ChevronRight, Search, FileText, 
 import { db } from '../../firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { useLanguage } from '../../contexts/LanguageContext';
+import MaintenanceUploadModal from './MaintenanceUploadModal';
 import './FleetModule.css';
 
 export default function FleetMaintenance({ canEdit, isMasterAdmin, userProfile }) {
   const { t, locale } = useLanguage();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [stats, setStats] = useState({
     totalSpent: 0,
     monthSpent: 0,
@@ -98,7 +100,11 @@ export default function FleetMaintenance({ canEdit, isMasterAdmin, userProfile }
           </div>
           {canEdit && (
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button className="btn-refresh" style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'var(--theme-accent)', color: '#fff', border: 'none' }}>
+              <button
+                className="btn-refresh"
+                style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'var(--theme-accent)', color: '#fff', border: 'none' }}
+                onClick={() => setShowUploadModal(true)}
+              >
                 <Plus size={14} /> {t('Log Entry', 'إضافة سجل')}
               </button>
             </div>
@@ -143,6 +149,15 @@ export default function FleetMaintenance({ canEdit, isMasterAdmin, userProfile }
           </table>
         </div>
       </div>
+
+      <MaintenanceUploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onImportComplete={(count) => {
+          setShowUploadModal(false);
+          fetchMaintenanceData();
+        }}
+      />
     </div>
   );
 }

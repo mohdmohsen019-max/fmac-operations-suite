@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import LanguageToggle from './shared/LanguageToggle';
 import ThemeToggle from './shared/ThemeToggle';
@@ -60,144 +60,342 @@ function CornerOrnament() {
   );
 }
 
-function LoginMandala({ size = 200 }) {
+/* ── NEXUS COMMAND: helper geometry ── */
+const _toRad = d => d * Math.PI / 180;
+
+const _arcPath = (cx, cy, r, s, e) => {
+  const x1 = cx + r * Math.cos(_toRad(s)), y1 = cy + r * Math.sin(_toRad(s));
+  const x2 = cx + r * Math.cos(_toRad(e)), y2 = cy + r * Math.sin(_toRad(e));
+  const lg = (e - s + 360) % 360 > 180 ? 1 : 0;
+  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${lg} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+};
+
+const _hexPath = (cx, cy, r, rot = 0) => {
+  const pts = Array.from({ length: 6 }, (_, i) => {
+    const a = _toRad(i * 60 + rot);
+    return `${(cx + r * Math.cos(a)).toFixed(2)},${(cy + r * Math.sin(a)).toFixed(2)}`;
+  });
+  return `M ${pts[0]} L ${pts.slice(1).join(' L ')} Z`;
+};
+
+const NEXUS_NODES = [
+  { id: 'F', x: 150, y: 55,  arcStart: -128, arcEnd: -52 },
+  { id: 'M', x: 245, y: 150, arcStart:  -38, arcEnd:  38 },
+  { id: 'A', x: 150, y: 245, arcStart:   52, arcEnd: 128 },
+  { id: 'C', x:  55, y: 150, arcStart:  142, arcEnd: 218 },
+];
+
+const AMBIENT_PARTICLES = Array.from({ length: 16 }, (_, i) => {
+  const a = _toRad(i * 22.5 - 90);
+  return {
+    x: parseFloat((150 + 138 * Math.cos(a)).toFixed(2)),
+    y: parseFloat((150 + 138 * Math.sin(a)).toFixed(2)),
+    r: i % 4 === 0 ? 2.2 : 1.2,
+    delay: i * 0.19,
+    bright: i % 4 === 0,
+  };
+});
+
+function LoginMandala({ size = 280 }) {
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
+  const [hoveredNode, setHoveredNode] = useState(null);
+  const [tappedNodes, setTappedNodes] = useState(new Set());
+  const [autoNode, setAutoNode] = useState('F');
+  const [scanLine, setScanLine] = useState(false);
 
-  const springConfig = { damping: 25, stiffness: 200, mass: 0.5 };
-  const rotateX = useSpring(useTransform(mouseY, [-size / 2, size / 2], [12, -12]), springConfig);
-  const rotateY = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-12, 12]), springConfig);
-
-  const bgX = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-4, 4]), springConfig);
-  const bgY = useSpring(useTransform(mouseY, [-size / 2, size / 2], [-4, 4]), springConfig);
-
-  const fcX = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-10, 10]), springConfig);
-  const fcY = useSpring(useTransform(mouseY, [-size / 2, size / 2], [-10, 10]), springConfig);
-
-  const maX = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-18, 18]), springConfig);
-  const maY = useSpring(useTransform(mouseY, [-size / 2, size / 2], [-18, 18]), springConfig);
+  const sc = { damping: 25, stiffness: 180, mass: 0.6 };
+  const rX = useSpring(useTransform(mouseY, [-size / 2, size / 2], [10, -10]), sc);
+  const rY = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-10, 10]), sc);
+  const p1x = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-4, 4]), sc);
+  const p1y = useSpring(useTransform(mouseY, [-size / 2, size / 2], [-4, 4]), sc);
+  const p3x = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-14, 14]), sc);
+  const p3y = useSpring(useTransform(mouseY, [-size / 2, size / 2], [-14, 14]), sc);
 
   const handleMouseMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width / 2;
-    const y = e.clientY - rect.top - rect.height / 2;
-    mouseX.set(x);
-    mouseY.set(y);
+    const r = e.currentTarget.getBoundingClientRect();
+    mouseX.set(e.clientX - r.left - r.width / 2);
+    mouseY.set(e.clientY - r.top - r.height / 2);
+  };
+  const handleMouseLeave = () => { mouseX.set(0); mouseY.set(0); };
+
+  useEffect(() => {
+    const ids = ['F', 'M', 'A', 'C'];
+    let i = 0;
+    const t = setInterval(() => { i = (i + 1) % 4; setAutoNode(ids[i]); }, 1700);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setScanLine(true);
+      setTimeout(() => setScanLine(false), 1800);
+    }, 6500);
+    return () => clearInterval(t);
+  }, []);
+
+  const toggleTap = (nodeId) => {
+    setTappedNodes(prev => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId);
+      return next;
+    });
   };
 
-  const handleMouseLeave = () => {
-    mouseX.set(0);
-    mouseY.set(0);
-  };
+  const isActive = (id) =>
+    hoveredNode === id ||
+    tappedNodes.has(id) ||
+    (hoveredNode == null && tappedNodes.size === 0 && autoNode === id);
 
-  const star1 = "79,79 221,79 221,221 79,221";
-  const star2 = "150,50 250,150 150,250 50,150";
+  /* Pre-compute radar sector path (static, no deps) */
+  const radarPath = [
+    'M 150 150',
+    `L ${(150 + 108 * Math.cos(_toRad(-28))).toFixed(2)} ${(150 + 108 * Math.sin(_toRad(-28))).toFixed(2)}`,
+    `A 108 108 0 0 1 ${(150 + 108).toFixed(2)} 150`,
+    'Z',
+  ].join(' ');
 
   return (
     <motion.div
       className="fmac-logo-container"
-      style={{
-        width: size,
-        height: size,
-        rotateX,
-        rotateY,
-        transformStyle: 'preserve-3d',
-      }}
+      style={{ width: size, height: size, rotateX: rX, rotateY: rY, transformStyle: 'preserve-3d' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      whileHover={{ scale: 1.04 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={{ scale: 1.03 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
     >
       <div className="fmac-logo-glow" />
+      <div className="fmac-logo-glow-inner" />
 
-      <svg viewBox="0 0 300 300" className="fmac-logo-svg">
-        <motion.g style={{ x: bgX, y: bgY, transformStyle: 'preserve-3d' }}>
-          <circle cx="150" cy="150" r="130" fill="none" stroke="var(--login-accent-gold)" strokeWidth="0.5" className="hud-stroke-subtle" opacity="0.12" />
-          <circle cx="150" cy="150" r="140" fill="none" stroke="var(--login-accent-gold)" strokeWidth="0.5" className="hud-stroke" strokeDasharray="3, 10" opacity="0.18" />
-          
+      <svg viewBox="0 0 300 300" className="fmac-logo-svg" overflow="visible">
+        <defs>
+          {NEXUS_NODES.map(n => (
+            <radialGradient key={`rg-${n.id}`} id={`nx-ng-${n.id}`} cx="50%" cy="50%" r="50%">
+              <stop offset="0%"   stopColor="#e74c3c" stopOpacity="0.8" />
+              <stop offset="100%" stopColor="#e74c3c" stopOpacity="0" />
+            </radialGradient>
+          ))}
+          <radialGradient id="nx-core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stopColor="#c0392b" stopOpacity="0.6" />
+            <stop offset="55%"  stopColor="#c0392b" stopOpacity="0.1" />
+            <stop offset="100%" stopColor="#c0392b" stopOpacity="0" />
+          </radialGradient>
+          <filter id="nx-blur" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="4" />
+          </filter>
+          <clipPath id="nx-clip">
+            <rect x="-10" y="-10" width="320" height="320" />
+          </clipPath>
+        </defs>
+
+        {/* ══ OUTER RING + TICK MARKS (slowest parallax) ══ */}
+        <motion.g style={{ x: p1x, y: p1y }}>
+          <circle cx="150" cy="150" r="140" fill="none"
+            stroke="rgba(212,160,23,0.06)" strokeWidth="0.5" />
+
+          {/* 4 glowing arc segments — one per letter */}
+          {NEXUS_NODES.map(n => (
+            <motion.path key={`arc-${n.id}`}
+              d={_arcPath(150, 150, 136, n.arcStart, n.arcEnd)}
+              fill="none" strokeLinecap="round"
+              animate={{
+                stroke: isActive(n.id) ? '#c0392b' : 'rgba(212,160,23,0.22)',
+                strokeWidth: isActive(n.id) ? 3.5 : 2,
+                opacity: isActive(n.id) ? 1 : 0.55,
+              }}
+              transition={{ duration: 0.32 }}
+            />
+          ))}
+
+          {/* 16 tick marks */}
+          {Array.from({ length: 16 }, (_, i) => {
+            const a = _toRad(i * 22.5 - 90);
+            const maj = i % 4 === 0;
+            return (
+              <line key={`tk-${i}`}
+                x1={(150 + (maj ? 130 : 133) * Math.cos(a)).toFixed(2)}
+                y1={(150 + (maj ? 130 : 133) * Math.sin(a)).toFixed(2)}
+                x2={(150 + (maj ? 143 : 140) * Math.cos(a)).toFixed(2)}
+                y2={(150 + (maj ? 143 : 140) * Math.sin(a)).toFixed(2)}
+                stroke={maj ? 'rgba(212,160,23,0.55)' : 'rgba(212,160,23,0.18)'}
+                strokeWidth={maj ? 1.6 : 0.7} strokeLinecap="round"
+              />
+            );
+          })}
+
+          {/* Slow-rotating dashed orbit ring */}
           <g className="fmac-logo-hud-outer">
-            <polygon points={star1} fill="none" stroke="var(--login-accent-gold)" strokeWidth="0.5" className="hud-stroke-subtle" opacity="0.1" />
+            <circle cx="150" cy="150" r="118" fill="none"
+              stroke="rgba(212,160,23,0.1)" strokeWidth="0.7" strokeDasharray="3 13" />
           </g>
-          <g className="fmac-logo-hud-inner">
-            <polygon points={star2} fill="none" stroke="var(--login-accent-gold)" strokeWidth="0.5" className="hud-stroke-subtle" opacity="0.1" />
+
+          {/* Diamond web (adjacent node connections) */}
+          {[[0,1],[1,2],[2,3],[3,0]].map(([ai, bi]) => {
+            const a = NEXUS_NODES[ai], b = NEXUS_NODES[bi];
+            const hot = isActive(a.id) || isActive(b.id);
+            return (
+              <motion.line key={`web-${ai}`}
+                x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                strokeLinecap="round"
+                animate={{
+                  stroke: hot ? 'rgba(231,76,60,0.38)' : 'rgba(212,160,23,0.07)',
+                  strokeWidth: hot ? 1.2 : 0.6,
+                }}
+                transition={{ duration: 0.4 }}
+              />
+            );
+          })}
+        </motion.g>
+
+        {/* ══ RADAR SWEEP ══ */}
+        <motion.g
+          animate={{ rotate: 360 }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+          style={{ originX: '150px', originY: '150px' }}
+        >
+          <path d={radarPath} fill="rgba(192,57,43,0.09)" />
+          <line x1="150" y1="150" x2={(150 + 108).toFixed(2)} y2="150"
+            stroke="rgba(231,76,60,0.55)" strokeWidth="1" />
+        </motion.g>
+        <circle cx="150" cy="150" r="108" fill="none"
+          stroke="rgba(192,57,43,0.12)" strokeWidth="0.8" />
+
+        {/* ══ NEURAL LINKS + NODES + CORE (mid parallax) ══ */}
+        <motion.g style={{ x: p3x, y: p3y }}>
+
+          {/* Neural links center → each node */}
+          {NEXUS_NODES.map(n => (
+            <g key={`lnk-${n.id}`}>
+              <line x1="150" y1="150" x2={n.x} y2={n.y}
+                stroke="rgba(212,160,23,0.06)" strokeWidth="0.6" />
+              <motion.line
+                x1="150" y1="150" x2={n.x} y2={n.y}
+                strokeDasharray="5 5" strokeLinecap="round"
+                animate={{
+                  opacity: isActive(n.id) ? 1 : 0,
+                  stroke: '#e74c3c',
+                  strokeWidth: isActive(n.id) ? 1.6 : 0,
+                }}
+                transition={{ duration: 0.28 }}
+              />
+            </g>
+          ))}
+
+          {/* ── LETTER NODES ── */}
+          {NEXUS_NODES.map((n, idx) => {
+            const active = isActive(n.id);
+            return (
+              <motion.g
+                key={`nd-${n.id}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.12 + idx * 0.1 }}
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={() => setHoveredNode(n.id)}
+                onMouseLeave={() => setHoveredNode(null)}
+                onClick={() => toggleTap(n.id)}
+              >
+                {/* Outer glow halo */}
+                <motion.circle cx={n.x} cy={n.y}
+                  fill={`url(#nx-ng-${n.id})`}
+                  animate={{ r: active ? 34 : 20, opacity: active ? 0.9 : 0.05 }}
+                  transition={{ duration: 0.35 }}
+                />
+                {/* Outer orbit ring */}
+                <motion.circle cx={n.x} cy={n.y} r="22" fill="none"
+                  animate={{
+                    stroke: active ? 'rgba(231,76,60,0.5)' : 'rgba(212,160,23,0.1)',
+                    strokeWidth: active ? 1 : 0.5,
+                  }}
+                  transition={{ duration: 0.3 }}
+                />
+                {/* Main node ring */}
+                <motion.circle cx={n.x} cy={n.y} r="16" fill="none"
+                  animate={{
+                    stroke: active ? '#e74c3c' : 'rgba(212,160,23,0.38)',
+                    strokeWidth: active ? 2.2 : 1.2,
+                  }}
+                  transition={{ duration: 0.25 }}
+                />
+                {/* Node body */}
+                <motion.circle cx={n.x} cy={n.y}
+                  animate={{
+                    r: active ? 15 : 13.5,
+                    fill: active ? 'rgba(192,57,43,0.32)' : 'rgba(6,6,10,0.9)',
+                  }}
+                  transition={{ duration: 0.25 }}
+                />
+                {/* Letter glyph */}
+                <motion.text
+                  x={n.x} y={n.y}
+                  fontFamily="'Barlow Condensed','Impact',sans-serif"
+                  fontWeight="900" fontStyle="italic"
+                  fontSize="17" textAnchor="middle" dominantBaseline="central"
+                  animate={{
+                    fill: active ? '#ffffff' : 'rgba(255,255,255,0.7)',
+                    opacity: active ? 1 : 0.8,
+                  }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {n.id}
+                </motion.text>
+                {/* Active indicator pip */}
+                <motion.circle cx={n.x} cy={n.y}
+                  animate={{ r: active ? 2.8 : 0, fill: '#ff6b6b', opacity: active ? 1 : 0 }}
+                  transition={{ duration: 0.2 }}
+                />
+              </motion.g>
+            );
+          })}
+
+          {/* ══ CENTER CORE ══ */}
+          <g>
+            <motion.circle cx="150" cy="150"
+              fill="url(#nx-core)"
+              animate={{ r: [36, 44, 36] }}
+              transition={{ duration: 3.8, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <g className="fmac-logo-hud-inner">
+              <path d={_hexPath(150, 150, 28, 0)}
+                fill="none" stroke="rgba(212,160,23,0.3)" strokeWidth="0.9" />
+            </g>
+            <g className="fmac-logo-hud-outer">
+              <path d={_hexPath(150, 150, 19, 30)}
+                fill="none" stroke="rgba(192,57,43,0.45)" strokeWidth="0.9" />
+            </g>
+            <polygon
+              points={`150,${150-13} ${150+13},150 150,${150+13} ${150-13},150`}
+              fill="none" stroke="rgba(212,160,23,0.22)" strokeWidth="0.8"
+            />
+            <motion.circle cx="150" cy="150" fill="#c0392b"
+              animate={{ r: [4.5, 6.5, 4.5], opacity: [0.9, 0.45, 0.9] }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <circle cx="150" cy="150" r="1.8" fill="rgba(255,255,255,0.85)" />
           </g>
         </motion.g>
 
-        <motion.g style={{ x: fcX, y: fcY, transformStyle: 'preserve-3d' }}>
-          <motion.text
-            x="75"
-            y="155"
-            fontFamily="'Barlow Condensed', sans-serif"
-            fontWeight="900"
-            fontStyle="italic"
-            fontSize="135"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="var(--logo-f-c, var(--login-text-primary))"
-            initial={{ x: -60, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))' }}
-          >
-            F
-          </motion.text>
-
-          <motion.text
-            x="225"
-            y="155"
-            fontFamily="'Barlow Condensed', sans-serif"
-            fontWeight="900"
-            fontStyle="italic"
-            fontSize="135"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="var(--logo-f-c, var(--login-text-primary))"
-            initial={{ x: 60, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))' }}
-          >
-            C
-          </motion.text>
+        {/* ══ AMBIENT PARTICLES ══ */}
+        <motion.g style={{ x: p1x, y: p1y }}>
+          {AMBIENT_PARTICLES.map((p, i) => (
+            <motion.circle key={`ap-${i}`}
+              cx={p.x} cy={p.y} r={p.r}
+              fill={p.bright ? 'rgba(212,160,23,0.9)' : 'rgba(192,57,43,0.55)'}
+              animate={{ opacity: [0.12, p.bright ? 1 : 0.7, 0.12], r: [p.r, p.r * 1.7, p.r] }}
+              transition={{ duration: 2 + (i % 5) * 0.4, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          ))}
         </motion.g>
 
-        <motion.g style={{ x: maX, y: maY, transformStyle: 'preserve-3d' }}>
-          <motion.text
-            x="150"
-            y="95"
-            fontFamily="'Barlow Condensed', sans-serif"
-            fontWeight="900"
-            fontStyle="italic"
-            fontSize="115"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="var(--logo-m-a, var(--login-accent-red))"
-            initial={{ y: -60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            style={{ filter: 'drop-shadow(0 8px 20px rgba(192, 57, 43, 0.3))' }}
-          >
-            M
-          </motion.text>
-
-          <motion.text
-            x="150"
-            y="205"
-            fontFamily="'Barlow Condensed', sans-serif"
-            fontWeight="900"
-            fontStyle="italic"
-            fontSize="100"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="var(--logo-m-a, var(--login-accent-red))"
-            initial={{ y: 60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            style={{ filter: 'drop-shadow(0 8px 20px rgba(192, 57, 43, 0.3))' }}
-          >
-            A
-          </motion.text>
-        </motion.g>
+        {/* ══ SCAN LINE ══ */}
+        {scanLine && (
+          <motion.rect x="-10" y="0" width="320" height="3"
+            fill="rgba(231,76,60,0.18)" rx="1.5"
+            clipPath="url(#nx-clip)"
+            initial={{ y: -10 }} animate={{ y: 310 }}
+            transition={{ duration: 1.6, ease: 'linear' }}
+          />
+        )}
       </svg>
     </motion.div>
   );
@@ -417,7 +615,7 @@ export default function LoginPage() {
           transition={{ delay: 0.3, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           style={{ position: 'relative', zIndex: 5 }}
         >
-          <LoginMandala size={200} />
+          <LoginMandala size={280} />
         </motion.div>
         <button className="login-back-link" onClick={goToPortal}>
           <ArrowLeft size={14} />

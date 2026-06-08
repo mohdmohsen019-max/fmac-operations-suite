@@ -114,6 +114,31 @@
 }
 
 /* ACTIVITY FEED */
+.feed-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.feed-expand-btn {
+  background: none;
+  border: 1px solid var(--theme-border);
+  color: var(--theme-accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.feed-expand-btn:hover {
+  background: var(--theme-accent-soft);
+  border-color: var(--theme-accent-border);
+}
+
 .activity-feed {
   display: flex;
   flex-direction: column;
@@ -211,5 +236,38 @@
 
 .recharts-tooltip-wrapper {
   outline: none;
+}
+
+/* ── Mobile ───────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Stat cards: compact padding and font */
+  .stat-card {
+    padding: 14px 16px;
+    min-height: auto;
+    border-radius: 16px;
+  }
+  .stat-value { font-size: 1.85rem; margin-top: 6px; }
+  .stat-label { font-size: 0.7rem; }
+  .unit-label  { font-size: 0.8rem; }
+
+  /* Charts: fixed height to prevent overflow */
+  .chart-container { height: 200px !important; }
+  .fleet-charts-grid { gap: 12px; }
+
+  /* Activity feed: tighter spacing */
+  .activity-feed { gap: 8px; }
+  .feed-item { padding: 10px 12px; gap: 10px; }
+  .feed-time { font-size: 0.65rem; padding: 2px 5px; }
+  .feed-plate { font-size: 0.78rem; }
+  .feed-dist  { font-size: 0.65rem; }
+
+  /* Risk/legend row */
+  .legend { gap: 8px; flex-wrap: wrap; }
+  .legend-item { font-size: 0.65rem; }
+  .panel-header { gap: 8px; }
+}
+
+@media (max-width: 480px) {
+  .stat-value { font-size: 1.55rem; }
 }
 

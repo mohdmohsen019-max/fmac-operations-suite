@@ -368,3 +368,22 @@
   animation: cam-live-pulse 1.4s ease-in-out infinite;
   flex-shrink: 0;
 }
+
+@media (max-width: 768px) {
+  /* Full-screen modal on mobile */
+  .live-camera-modal {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+  /* 8-cam grid: 2 columns x 4 rows instead of 4x2 */
+  .cam-grid-8 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(4, 1fr);
+  }
+  /* Camera modal header: compact on mobile */
+  .camera-modal-header {
+    padding: 10px 12px;
+  }
+}

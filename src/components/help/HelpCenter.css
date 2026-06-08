@@ -397,3 +397,38 @@
   pointer-events: none;
   z-index: 0;
 }
+
+@media (max-width: 768px) {
+  /* Admin dashboard root: reduce heavy desktop padding */
+  .hc-admin-root {
+    padding: 1rem !important;
+  }
+  /* KPI grid: 2 columns instead of 5 so cards aren't microscopic */
+  .hc-admin-kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.75rem !important;
+  }
+  /* Toolbar: wrap search + export buttons */
+  .hc-admin-toolbar {
+    flex-wrap: wrap !important;
+    justify-content: flex-start !important;
+  }
+  .hc-admin-search {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+  /* Force admin table to be wide enough to trigger scroll on its container */
+  .hc-table {
+    min-width: 700px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hc-container { padding: 0 1rem; }
+  .hc-nav { padding: 1rem; }
+  .hc-card { padding: 1.25rem; }
+  /* On small phones: single-column KPI cards */
+  .hc-admin-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

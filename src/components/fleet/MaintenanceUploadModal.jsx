@@ -550,6 +550,17 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
         }
         .row-disabled { opacity: 0.4; background: rgba(0,0,0,0.2); }
         .editable-table input[type="number"]::-webkit-inner-spin-button { display: none; }
+        @media (max-width: 768px) {
+          .fleet-modal-overlay { align-items: flex-end; padding: 0; }
+          .fleet-modal-content {
+            max-width: 100% !important;
+            max-height: 92vh;
+            overflow-y: auto;
+            border-radius: 20px 20px 0 0;
+          }
+          .fleet-modal-header { padding: 16px 18px; }
+          .fleet-modal-body { padding: 18px !important; }
+        }
       `}</style>
     </div>
   );

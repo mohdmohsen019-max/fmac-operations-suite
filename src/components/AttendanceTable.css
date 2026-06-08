@@ -206,4 +206,7 @@
 
 @media (max-width: 768px) {
   .desktop-only { display: none; }
+  .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .attendance-table td,
+  .attendance-table th { padding: 10px 12px; font-size: 0.8rem; }
 }

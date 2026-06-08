@@ -528,3 +528,81 @@ button {
     box-shadow: 0 0 10px var(--theme-accent);
   }
 }
+
+/* ── GLOBAL MOBILE POLISH ───────────────────────────────── */
+@media (max-width: 768px) {
+  /* Prevent double-tap zoom on buttons and links */
+  button, a, [role="button"] {
+    touch-action: manipulation;
+  }
+
+  /* Prevent horizontal overflow from escaping any container */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Ensure every interactive element meets minimum 44px touch target */
+  button:not(.ops-mobile-nav-item) {
+    min-height: 36px;
+  }
+
+  /* Prevent rubber-band scroll on the outermost shell */
+  html {
+    overscroll-behavior: none;
+  }
+
+  /* Reduce hover lift animations on touch to avoid sticky states */
+  .glass-panel:hover {
+    transform: none;
+  }
+
+  /* Tab rail: scrollable on mobile instead of clipping.
+     Also zero out any inline margin-left/right so width: 100% doesn't push content off-screen. */
+  .luxury-tab-rail {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius-md);
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  .luxury-tab-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Tables: enforce a minimum width so the overflow-x wrapper activates */
+  .table-surface {
+    min-width: 560px;
+  }
+
+  /* All flex children: never overflow their row */
+  .flex-row > *, .flex-wrap > * {
+    min-width: 0;
+  }
+
+  /* Forms: full-width inputs, label above */
+  .form-group { flex-direction: column !important; align-items: stretch !important; }
+  .form-label { display: block; margin-bottom: 4px; }
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="date"], input[type="number"], textarea, select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Cards: compact radius on very small screens */
+  .card, .glass-card {
+    border-radius: 14px !important;
+  }
+
+  /* Reduce all module-level page padding to 12px */
+  .module-page, .page-content, .view-body {
+    padding: 12px !important;
+  }
+
+  /* KPI / stat value: global cap */
+  .stat-value, .kpi-value {
+    font-size: clamp(1.4rem, 5vw, 2.2rem);
+  }
+}

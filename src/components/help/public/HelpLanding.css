@@ -743,6 +743,12 @@ html {
   }
 }
 
+@media (max-width: 768px) {
+  .landing-about {
+    padding: 48px 20px;
+  }
+}
+
 @media (max-width: 600px) {
   .services-grid {
     grid-template-columns: 1fr;

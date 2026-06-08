@@ -215,3 +215,44 @@
     padding: 32px;
   }
 }
+
+@media (max-width: 768px) {
+  .profile-module-container { padding: 16px; }
+  .profile-title { font-size: 1.8rem; }
+  .profile-card-left  { padding: 24px 18px; }
+  .profile-card-right { padding: 24px 18px; }
+  /* Form rows: stack label + input */
+  .profile-form-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .profile-form-row label { min-width: unset; }
+  .profile-form-row input,
+  .profile-form-row select { width: 100%; }
+}
+
+@media (max-width: 640px) {
+  .profile-module-container {
+    padding: 16px;
+  }
+  .profile-title {
+    font-size: 1.6rem;
+  }
+  .profile-card-left {
+    padding: 24px 16px;
+  }
+  .profile-card-right {
+    padding: 24px 16px;
+  }
+  .profile-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .save-btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+}

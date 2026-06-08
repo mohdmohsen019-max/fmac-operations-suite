@@ -376,6 +376,22 @@ function MainAppLayout() {
           </AnimatePresence>
         </div>
       </motion.div>
+
+      {/* Mobile-only bottom navigation — shown via CSS only on ≤768px */}
+      <nav className="ops-mobile-nav">
+        {NAV_ITEMS.map(({ id, icon: Icon, path }) => (
+          <button
+            key={id}
+            className={`ops-mobile-nav-item${globalModule === id ? ' active' : ''}`}
+            onClick={() => navigate(path)}
+          >
+            <Icon size={21} strokeWidth={1.75} />
+          </button>
+        ))}
+        <button className="ops-mobile-nav-item ops-mobile-nav-logout" onClick={() => signOut(auth)}>
+          <LogOut size={21} strokeWidth={1.75} />
+        </button>
+      </nav>
     </div>
   )
 }

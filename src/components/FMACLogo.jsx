@@ -2,20 +2,25 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, useAnimation } from 'framer-motion';
 
 /*
- * FMACLogo — "Assembly Strike"
+ * FMACLogo — official FMAC wordmark, animated
  * ----------------------------------------------------------------------------
- * Four bold italic letters (F M A C) slam into a readable overlapping stack one
- * by one with sharp, snappy spring timing, then a single red shockwave radiates
- * from center. After assembly the mark sits completely static (no idle loop).
- * On hover the letters shift apart ~3px and snap back.
+ * Matches the brand logo: heavy condensed letters at one uniform oblique slant,
+ * tight even spacing. F/C ink, M/A red.
+ *
+ * Motion:
+ *   - "Assembly Strike" on mount: letters slam in one by one (F → M → C → A,
+ *     0.08s stagger, spring) then a single red shockwave radiates from center.
+ *   - Hover a letter: that letter jumps up and back down.
+ *   - Idle: after 3.5s with no hover, the letters bounce in sequence
+ *     (F up→down, M rising as F falls, then A, then C) and loops.
  *
  * Props:
  *   size  : "sm" | "md" | "lg"            — base font size via clamp()
  *   theme : "auto" | "dark" | "light"     — "auto" (default) tracks the live
- *                                           data-theme attribute and flips the
- *                                           F/C ink color black <-> white.
+ *                                           data-theme attribute; F/C flip
+ *                                           black <-> white. M/A stay red.
  *
- * Framer Motion only. Animation plays once on mount via useAnimation + useEffect.
+ * Framer Motion only.
  */
 
 const FONT_SIZES = {
@@ -25,18 +30,25 @@ const FONT_SIZES = {
 };
 
 const RED = '#c0392b';
-
-// Visual reading order: F · M · A · C
-// `delay` follows the landing sequence (F → M → C → A), stagger 0.08s.
-// `from` is the scattered start offset; `rest` is the final slight tilt.
-const LETTERS = [
-  { char: 'F', tone: 'ink', from: { x: -120, y: -100, rotate: -38 }, rest: -5, delay: 0.00, z: 4, spread: -4 },
-  { char: 'M', tone: 'red', from: { x: 0, y: -160, rotate: 12 }, rest: 4, delay: 0.08, z: 2, spread: -1.5 },
-  { char: 'A', tone: 'red', from: { x: 0, y: 160, rotate: -12 }, rest: -4, delay: 0.24, z: 3, spread: 1.5 },
-  { char: 'C', tone: 'ink', from: { x: 150, y: 40, rotate: 30 }, rest: 5, delay: 0.16, z: 4, spread: 4 },
-];
-
+const SLANT = -11;           // uniform oblique slant (deg) — matches the wordmark
 const SPRING = { type: 'spring', stiffness: 400, damping: 20 };
+
+// Idle "wave" timing — slow & cozy. Each letter peaks as the previous falls.
+const IDLE_DELAY = 3500;     // ms of no hover before the wave begins
+const WAVE_DUR = 1.6;        // s per single float (slow rise + fall)
+const WAVE_OFFSET = 0.8;     // s between letters (= WAVE_DUR / 2 → peak handoff)
+const WAVE_GAP = WAVE_OFFSET * 4 - WAVE_DUR; // keeps the loop seamless
+const WAVE_JUMP = '-26%';    // gentle lift, not a hard jump
+const WAVE_EASE = [0.45, 0, 0.55, 1]; // soft sine-like in/out
+const HOVER_JUMP = '-48%';
+
+// Visual reading order F · M · A · C. `delay` = landing sequence (F→M→C→A).
+const LETTERS = [
+  { char: 'F', tone: 'ink', from: { x: -120, y: -100, rotate: -34 }, delay: 0.00, z: 4 },
+  { char: 'M', tone: 'red', from: { x: 0, y: -160, rotate: 10 }, delay: 0.08, z: 2 },
+  { char: 'A', tone: 'red', from: { x: 0, y: 160, rotate: -10 }, delay: 0.24, z: 3 },
+  { char: 'C', tone: 'ink', from: { x: 150, y: 40, rotate: 26 }, delay: 0.16, z: 4 },
+];
 
 /* Tracks the live `data-theme` on <html> so the mark re-colors on toggle.
    An explicit "dark"/"light" prop overrides and skips observation. */
@@ -69,30 +81,130 @@ function useLiveTheme(override) {
 }
 
 export default function FMACLogo({ size = 'md', theme = 'auto' }) {
-  const controls = useAnimation();
-  const landedRef = useRef(false);
-  const liveTheme = useLiveTheme(theme);
+  // One controls instance per letter so they animate independently.
+  const ctrlF = useAnimation();
+  const ctrlM = useAnimation();
+  const ctrlA = useAnimation();
+  const ctrlC = useAnimation();
+  const ctrlShock = useAnimation();
+  const letterControls = [ctrlF, ctrlM, ctrlA, ctrlC];
 
+  const liveTheme = useLiveTheme(theme);
+  const inkColor = liveTheme === 'light' ? '#1a1a1a' : '#ffffff';
+
+  const landedRef = useRef(false);
+  const hoveringRef = useRef(false);
+  const wavingRef = useRef(false);
+  const idleTimerRef = useRef(null);
+
+  const cancelIdle = () => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+  };
+
+  const startWave = () => {
+    if (!landedRef.current || hoveringRef.current) return;
+    wavingRef.current = true;
+    letterControls.forEach((c, i) => {
+      // Creative touch: the letter doesn't just bob — it gently lifts off
+      // (soft scale-up + a slight sway tilt), like it's taking a slow breath.
+      c.start({
+        y: ['0%', WAVE_JUMP, '0%'],
+        scale: [1, 1.05, 1],
+        rotate: [0, -2.5, 0],
+        transition: {
+          duration: WAVE_DUR,
+          ease: WAVE_EASE,
+          repeat: Infinity,
+          repeatDelay: WAVE_GAP,
+          delay: i * WAVE_OFFSET,
+        },
+      });
+    });
+  };
+
+  const stopWave = () => {
+    if (!wavingRef.current) return;
+    wavingRef.current = false;
+    letterControls.forEach((c) => {
+      c.stop();
+      c.start({
+        y: '0%',
+        scale: 1,
+        rotate: 0,
+        transition: { duration: 0.35, ease: WAVE_EASE },
+      });
+    });
+  };
+
+  const scheduleIdle = () => {
+    cancelIdle();
+    idleTimerRef.current = setTimeout(startWave, IDLE_DELAY);
+  };
+
+  // Assembly Strike on mount, then arm the idle wave.
   useEffect(() => {
     let alive = true;
     (async () => {
-      await controls.start('land');
-      if (alive) landedRef.current = true;
+      await Promise.all(
+        LETTERS.map((L, i) =>
+          letterControls[i].start({
+            x: 0,
+            y: 0,
+            rotate: 0,
+            skewX: SLANT,
+            opacity: 1,
+            transition: { ...SPRING, delay: L.delay },
+          })
+        )
+      );
+      if (!alive) return;
+      landedRef.current = true;
+      ctrlShock.start({
+        scale: [0, 2],
+        opacity: [0.4, 0],
+        transition: { duration: 0.4, ease: 'easeOut' },
+      });
+      scheduleIdle();
     })();
-    return () => { alive = false; };
-  }, [controls]);
+    return () => {
+      alive = false;
+      cancelIdle();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const inkColor = liveTheme === 'light' ? '#1a1a1a' : '#ffffff';
+  const handleLogoHoverStart = () => {
+    hoveringRef.current = true;
+    cancelIdle();
+    stopWave();
+  };
 
-  const handleHoverStart = () => {
-    if (landedRef.current) controls.start('hover');
+  const handleLogoHoverEnd = () => {
+    hoveringRef.current = false;
+    scheduleIdle();
+  };
+
+  const jumpLetter = (i) => {
+    if (!landedRef.current) return;
+    const c = letterControls[i];
+    c.stop();
+    c.start({
+      y: ['0%', HOVER_JUMP, '0%'],
+      scale: [1, 1.08, 1],
+      rotate: [0, -3, 0],
+      transition: { duration: 0.62, ease: [0.33, 1, 0.68, 1] },
+    });
   };
 
   const fontSize = FONT_SIZES[size] || FONT_SIZES.md;
 
   return (
     <motion.div
-      onHoverStart={handleHoverStart}
+      onHoverStart={handleLogoHoverStart}
+      onHoverEnd={handleLogoHoverEnd}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -100,31 +212,21 @@ export default function FMACLogo({ size = 'md', theme = 'auto' }) {
         position: 'relative',
         direction: 'ltr',           // keep F M A C order even in RTL (Arabic) layouts
         fontFamily: "'Anton', 'Inter', sans-serif",
-        fontStyle: 'italic',
+        fontStyle: 'normal',        // slant comes from skewX so it's uniform & precise
         fontWeight: 700,
         fontSize,
         lineHeight: 1,
-        letterSpacing: '0.06em',
+        letterSpacing: '-0.01em',
         userSelect: 'none',
         cursor: 'pointer',
-        padding: '0.18em 0.3em',
+        padding: '0.2em 0.32em',
       }}
     >
       {/* Red shockwave — fires once after the last letter lands */}
       <motion.span
         aria-hidden
-        custom={{ delay: 0.5 }}
-        initial="scattered"
-        animate={controls}
-        variants={{
-          scattered: { scale: 0, opacity: 0 },
-          land: () => ({
-            scale: [0, 2],
-            opacity: [0.4, 0],
-            transition: { delay: 0.5, duration: 0.4, ease: 'easeOut', times: [0, 1] },
-          }),
-          hover: { scale: 0, opacity: 0 },
-        }}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={ctrlShock}
         style={{
           position: 'absolute',
           top: '50%',
@@ -143,35 +245,20 @@ export default function FMACLogo({ size = 'md', theme = 'auto' }) {
       {LETTERS.map((L, i) => (
         <motion.div
           key={L.char}
-          custom={L}
-          initial="scattered"
-          animate={controls}
-          variants={{
-            scattered: (l) => ({ ...l.from, opacity: 0 }),
-            land: (l) => ({
-              x: 0,
-              y: 0,
-              rotate: l.rest,
-              opacity: 1,
-              transition: { ...SPRING, delay: l.delay },
-            }),
-            hover: (l) => ({
-              x: [0, l.spread, 0],
-              y: [0, l.spread * 0.5, 0],
-              transition: { duration: 0.34, ease: 'easeOut' },
-            }),
-          }}
+          initial={{ ...L.from, skewX: SLANT, opacity: 0 }}
+          animate={letterControls[i]}
+          onHoverStart={() => jumpLetter(i)}
           style={{
             display: 'inline-block',
             position: 'relative',
-            marginLeft: i === 0 ? 0 : '-0.04em',
+            marginLeft: i === 0 ? 0 : '-0.015em',
             zIndex: L.z,
             color: L.tone === 'red' ? RED : inkColor,
             textShadow:
               L.tone === 'red'
-                ? '0 4px 18px rgba(192,57,43,0.35)'
+                ? '0 4px 18px rgba(192,57,43,0.32)'
                 : liveTheme === 'light'
-                ? '0 4px 14px rgba(0,0,0,0.18)'
+                ? '0 4px 14px rgba(0,0,0,0.16)'
                 : '0 4px 16px rgba(0,0,0,0.5)',
             willChange: 'transform',
           }}

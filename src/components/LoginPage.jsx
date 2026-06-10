@@ -473,8 +473,20 @@ export default function LoginPage() {
       return;
     }
 
-    // Allow both new format (approved: true) and legacy format (status: 'active')
-    const isApproved = data.approved === true || data.status === 'active';
+    if (data.status === 'deactivated') {
+      await signOut(auth);
+      setError(isAr
+        ? 'تم تعطيل حسابك. يرجى التواصل مع الإدارة.'
+        : 'Your account has been deactivated. Please contact the administration.');
+      return;
+    }
+
+    // "Active" must match how User Management + usePermissions decide it:
+    // the approved flag OR an approved/active status. (User Management marks
+    // accounts active with status: 'approved'; legacy accounts used 'active'.)
+    const isApproved = data.approved === true
+      || data.status === 'active'
+      || data.status === 'approved';
     if (!isApproved) {
       await signOut(auth);
       setError(isAr ? 'حسابك غير مفعل.' : 'Your account is not activated.');

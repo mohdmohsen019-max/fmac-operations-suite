@@ -300,7 +300,12 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
   const handleToggleStatus = async (u) => {
     const newStatus = u.status === 'approved' ? 'deactivated' : 'approved';
     try {
-      await updateDoc(doc(db, 'users', u.uid), { status: newStatus });
+      // Keep `approved` in sync with status so the login check and the badge
+      // never disagree (reactivating restores approved: true).
+      await updateDoc(doc(db, 'users', u.uid), {
+        status: newStatus,
+        approved: newStatus === 'approved',
+      });
       showToast(lang === 'ar' ? 'تم تحديث الحالة' : 'Status updated');
     } catch (err) {
       console.error('handleToggleStatus failed:', err);

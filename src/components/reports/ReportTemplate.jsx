@@ -1,4 +1,5 @@
 import './ReportTemplate.css'
+import { buildBlockPages } from '../../utils/reportBlocks'
 // import { reshapeArabic } from '../../utils/arabicReshaper'
 
 // ── Constants & mappings ────────────────────────────────────────────
@@ -78,6 +79,12 @@ function formatLabel(key) {
 // Returns array of page configs: [{ isFirst, tableSlices: [{table, start, end}] }]
 
 function buildSectionPageSet(section) {
+  // Block-based (edited) sections paginate through the block-stream paginator.
+  const blocks = (section.parsedContent || {}).blocks
+  if (Array.isArray(blocks) && blocks.length) {
+    return buildBlockPages(blocks)
+  }
+
   const tables = (section.parsedContent || {}).tables || []
   const pages = [{ isFirst: true, tableSlices: [] }]
 
@@ -192,6 +199,67 @@ function TocPage({ sections, sectionStartPages, totalPages, monthName }) {
   )
 }
 
+// ── Block renderers (edited sections) ───────────────────────────────
+
+function BlockPart({ part }) {
+  if (part.kind === 'tableSlice') {
+    const { block, start, end, isFirstSlice } = part
+    const titleAr = TABLE_TITLE_AR[block.title] || block.title
+    const rows = (block.rows || []).slice(start, end)
+    return (
+      <div>
+        {isFirstSlice && titleAr && <p className="section-subheading">{titleAr}</p>}
+        <table className="section-table">
+          {(block.headers || []).length > 0 && (
+            <thead>
+              <tr>{block.headers.map((h, hi) => <th key={hi}>{arHeader(h)}</th>)}</tr>
+            </thead>
+          )}
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr key={ri}>{row.map((cell, ci) => <td key={ci}>{arCell(cell)}</td>)}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  const b = part.block
+  switch (b.type) {
+    case 'heading':
+      return <p className="section-subheading">{b.text}</p>
+    case 'paragraph':
+      return <p className="section-summary-text" dir="auto">{b.text}</p>
+    case 'list':
+      return (
+        <ul className="section-keypoints">
+          {b.items.filter(Boolean).map((pt, i) => <li key={i}>{pt}</li>)}
+        </ul>
+      )
+    case 'cards':
+      return (
+        <div className="kpi-row">
+          {b.items.filter(it => it.label || it.value).map((it, i) => (
+            <div key={i} className="kpi-card">
+              <p className="kpi-value">{arCell(it.value)}</p>
+              <p className="kpi-label">{it.label}</p>
+            </div>
+          ))}
+        </div>
+      )
+    case 'image':
+      return b.src ? (
+        <figure className="section-figure">
+          <img src={b.src} alt={b.caption || ''} />
+          {b.caption && <figcaption>{b.caption}</figcaption>}
+        </figure>
+      ) : null
+    default:
+      return null
+  }
+}
+
 // ── Section Page ────────────────────────────────────────────────────
 
 function SectionPage({ section, sectionNum, pageConfig, pageNum, totalPages, monthName }) {
@@ -232,6 +300,12 @@ function SectionPage({ section, sectionNum, pageConfig, pageNum, totalPages, mon
       )}
 
       <div className="section-page-body">
+
+        {/* Block-based (edited) sections render their ordered parts */}
+        {pageConfig.parts ? (
+          pageConfig.parts.map((part, pi) => <BlockPart key={pi} part={part} />)
+        ) : (
+        <>
 
         {/* First-page-only content */}
         {pageConfig.isFirst && (
@@ -299,6 +373,9 @@ function SectionPage({ section, sectionNum, pageConfig, pageNum, totalPages, mon
 
         {pageConfig.isFirst && !summaryAr && kpis.length === 0 && keyPointsAr.length === 0 && pageConfig.tableSlices.length === 0 && (
           <p className="section-summary-text" style={{ color: '#aaa' }}>لم يتم استخراج محتوى لهذا القسم.</p>
+        )}
+
+        </>
         )}
 
       </div>

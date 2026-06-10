@@ -365,6 +365,7 @@ function NewReportModal({ user, lang, t, existingIds, onClose, onCreated }) {
 
 // ── Detail view ────────────────────────────────────────────────────
 function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
+  const { canSubmitReport } = usePermissions()
   const [report, setReport] = useState(null)
   const [sections, setSections] = useState([])
   const [loading, setLoading] = useState(true)
@@ -842,6 +843,7 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
             lang={lang}
             t={t}
             isHOD={isHOD}
+            canEdit={!!activeFormSection?.sectionKey && canSubmitReport(activeFormSection.sectionKey)}
             onClose={closeForm}
             onSubmitted={handleFormSubmitted}
           />

@@ -2,12 +2,14 @@ import { useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Upload, FileText, X, Clock, RefreshCw, Check, AlertCircle,
-  Edit3, RotateCcw, Send, ChevronDown, ChevronUp, Eye
+  Edit3, RotateCcw, Send, ChevronDown, ChevronUp, Eye, Pencil, Save
 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import { db, storage } from '../../firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import ReportBlockEditor from './ReportBlockEditor'
+import { migrateToBlocks, blocksToLegacy } from '../../utils/reportBlocks'
 import './SubmissionForms.css'
 
 // PDF.js worker — same setup as pdfService.js
@@ -33,15 +35,67 @@ function formatFileSize(bytes) {
   return (bytes / 1048576).toFixed(1) + ' MB'
 }
 
-export default function ReportSectionUpload({ section, reportId, user, lang, t, onClose, onSubmitted, isHOD }) {
+// Read-only rendering of the block list (the "view" half of view/edit).
+function ReadOnlyBlocks({ blocks }) {
+  return (
+    <div className="rsu-ro-blocks">
+      {blocks.map((b) => {
+        if (b.type === 'heading') return <h4 key={b.id} className="rsu-ro-heading" dir="auto">{b.text}</h4>
+        if (b.type === 'paragraph') return <p key={b.id} className="rsu-ro-para" dir="auto">{b.text}</p>
+        if (b.type === 'list') return (
+          <ul key={b.id} className="rsu-ro-list">
+            {b.items.filter(Boolean).map((it, i) => <li key={i} dir="auto">{it}</li>)}
+          </ul>
+        )
+        if (b.type === 'cards') return (
+          <div key={b.id} className="rsu-metrics-grid">
+            {b.items.filter(it => it.label || it.value).map((it, i) => (
+              <div key={i} className="rsu-metric-card">
+                <span className="rsu-metric-label">{it.label}</span>
+                <span className="rsu-metric-value">{it.value}</span>
+              </div>
+            ))}
+          </div>
+        )
+        if (b.type === 'table') return (
+          <div key={b.id} className="rsu-table-block">
+            {b.title && <div className="rsu-ro-table-title">{b.title}</div>}
+            <div className="sf-table-wrap">
+              <table className="sf-table">
+                <thead><tr>{(b.headers || []).map((h, hi) => <th key={hi}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {(b.rows || []).map((r, ri) => <tr key={ri}>{r.map((c, ci) => <td key={ci}>{c}</td>)}</tr>)}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+        if (b.type === 'image') return b.src ? (
+          <figure key={b.id} className="rsu-ro-figure">
+            <img src={b.src} alt={b.caption || ''} />
+            {b.caption && <figcaption>{b.caption}</figcaption>}
+          </figure>
+        ) : null
+        return null
+      })}
+    </div>
+  )
+}
+
+export default function ReportSectionUpload({ section, reportId, user, lang, t, onClose, onSubmitted, isHOD, canEdit }) {
   // Steps: 'upload' | 'analyzing' | 'preview' | 'editing'
   const [step, setStep] = useState(() => {
-    // If section already has content & is submitted/approved, go straight to preview
+    // If section already has content, go straight to preview
     let content = section?.content
     if (typeof content === 'string') {
       try { content = JSON.parse(content) } catch (e) {}
     }
-    if ((section?.status === 'submitted' || section?.status === 'approved') && content?.summary) return 'preview'
+    const hasBlocks = Array.isArray(content?.blocks) && content.blocks.length > 0
+    const hasLegacy = !!content?.summary
+      || (Array.isArray(content?.tables) && content.tables.length > 0)
+      || (content?.numbers && Object.keys(content.numbers).length > 0)
+    if (hasBlocks) return 'preview'
+    if ((section?.status === 'submitted' || section?.status === 'approved') && hasLegacy) return 'preview'
     return 'upload'
   })
   const [file, setFile] = useState(null)
@@ -54,13 +108,19 @@ export default function ReportSectionUpload({ section, reportId, user, lang, t, 
     if (typeof content === 'string') {
       try { content = JSON.parse(content) } catch (e) { console.error('Parse error:', e) }
     }
-    if (content?.summary) return content
+    const hasBlocks = Array.isArray(content?.blocks) && content.blocks.length > 0
+    if (content?.summary || hasBlocks
+        || (Array.isArray(content?.tables) && content.tables.length > 0)
+        || (content?.numbers && Object.keys(content.numbers).length > 0)) return content
     return null
   })
   const [submitting, setSubmitting] = useState(false)
   const [editingRaw, setEditingRaw] = useState(false)
   const [rawText, setRawText] = useState('')
   const [expandedTables, setExpandedTables] = useState({})
+  const [isEditing, setIsEditing] = useState(false)
+  const [blocks, setBlocks] = useState([])
+  const [savingBlocks, setSavingBlocks] = useState(false)
   const fileInputRef = useRef(null)
 
   const nameAr = section?.sectionNameAr || ''
@@ -256,6 +316,44 @@ Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backtick
     setStep('upload')
   }
 
+  // ── Rich block editing ──────────────────────────────────
+  const enterEdit = () => {
+    setBlocks(migrateToBlocks(aiResult || {}))
+    setIsEditing(true)
+  }
+
+  const cancelEdit = () => {
+    setIsEditing(false)
+    setBlocks([])
+  }
+
+  const handleSaveBlocks = async () => {
+    if (!section?.id) return
+    setSavingBlocks(true)
+    setError(null)
+    try {
+      // Blocks are the source of truth; keep a legacy projection for back-compat.
+      const legacy = blocksToLegacy(blocks)
+      const merged = { ...(aiResult || {}), ...legacy, blocks }
+      const normalizedContent = JSON.parse(JSON.stringify(merged))
+
+      await updateDoc(doc(db, 'report_sections', section.id), {
+        content: JSON.stringify(normalizedContent),
+        editedBy: user?.email || user?.uid || '',
+        editedAt: serverTimestamp(),
+      })
+
+      setAiResult(merged)
+      setIsEditing(false)
+      onSubmitted?.()
+    } catch (e) {
+      console.error('Save blocks error:', e)
+      setError(e.message)
+    } finally {
+      setSavingBlocks(false)
+    }
+  }
+
   // ── Update AI result fields ─────────────────────────────
   const updateSummary = (val) => setAiResult(p => ({ ...p, summary: val }))
   const updateKeyPoint = (idx, val) => {
@@ -383,6 +481,17 @@ Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backtick
                     <FileText size={15} />
                     {t('Upload & Analyze', 'رفع وتحليل')}
                   </button>
+
+                  {canEdit && (
+                    <button
+                      className="sf-btn sf-btn-ghost"
+                      style={{ width: '100%', padding: '11px', justifyContent: 'center', gap: 8, marginTop: 10 }}
+                      onClick={() => { setAiResult({}); setBlocks(migrateToBlocks({})); setIsEditing(true); setStep('preview') }}
+                    >
+                      <Pencil size={14} />
+                      {t('Build manually (no PDF)', 'إنشاء يدوي (بدون PDF)')}
+                    </button>
+                  )}
                 </>
               )}
             </>
@@ -413,6 +522,26 @@ Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backtick
                 </div>
               )}
 
+              {isEditing ? (
+                <ReportBlockEditor
+                  blocks={blocks}
+                  setBlocks={setBlocks}
+                  reportId={reportId}
+                  sectionKey={section?.sectionKey}
+                  t={t}
+                />
+              ) : (
+              <>
+              {canEdit && (
+                <button className="rbe-edit-cta" onClick={enterEdit}>
+                  <Pencil size={13} /> {t('Edit Report Content', 'تعديل محتوى التقرير')}
+                </button>
+              )}
+
+              {aiResult.blocks?.length > 0 ? (
+                <ReadOnlyBlocks blocks={aiResult.blocks} />
+              ) : (
+              <>
               {/* Summary */}
               <div className="rsu-preview-section">
                 <div className="rsu-preview-label">
@@ -515,6 +644,8 @@ Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backtick
                   ))}
                 </div>
               )}
+              </>
+              )}
 
               {/* Raw Text (toggle) */}
               <div className="rsu-preview-section">
@@ -556,6 +687,8 @@ Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backtick
                   </a>
                 </div>
               )}
+              </>
+              )}
             </>
           )}
         </div>
@@ -574,7 +707,29 @@ Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backtick
             </button>
           )}
 
-          {(step === 'preview' || step === 'editing') && (
+          {(step === 'preview' || step === 'editing') && isEditing && (
+            <>
+              <div className="sf-footer-left">
+                <button className="sf-btn sf-btn-ghost" onClick={cancelEdit} disabled={savingBlocks}>
+                  {t('Cancel', 'إلغاء')}
+                </button>
+              </div>
+              <button
+                className="sf-btn sf-btn-submit"
+                onClick={handleSaveBlocks}
+                disabled={savingBlocks}
+                style={{ padding: '10px 24px' }}
+              >
+                {savingBlocks ? (
+                  <><RefreshCw size={13} className="rpt-spin" /> {t('Saving…', 'جارٍ الحفظ…')}</>
+                ) : (
+                  <><Save size={13} /> {t('Save Changes', 'حفظ التغييرات')}</>
+                )}
+              </button>
+            </>
+          )}
+
+          {(step === 'preview' || step === 'editing') && !isEditing && (
             <>
               <div className="sf-footer-left">
                 {section?.type !== 'auto' && (

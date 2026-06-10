@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense, Component } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Package2, Bus, Users, LifeBuoy, LogOut, BarChart2, Package } from 'lucide-react'
+import { Package2, Bus, Users, LifeBuoy, LogOut, BarChart2, Package, Building2 } from 'lucide-react'
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 import ThemeToggle from './components/shared/ThemeToggle'
@@ -21,6 +21,7 @@ const UserManagementModule = lazy(() => import('./components/UserManagementModul
 const ProfileModule        = lazy(() => import('./components/ProfileModule'))
 const ReportsModule        = lazy(() => import('./components/ReportsModule'))
 const InventoryModule      = lazy(() => import('./components/InventoryModule'))
+const AssetsModule         = lazy(() => import('./components/AssetsModule'))
 const OperationsDashboard  = lazy(() => import('./components/OperationsDashboard'))
 const HelpAdminDashboard   = lazy(() => import('./components/help/admin/HelpAdminDashboard'))
 const HelpAdminTicket      = lazy(() => import('./components/help/admin/HelpAdminTicket'))
@@ -35,6 +36,7 @@ const NAV_ITEMS_DEF = [
   { id: 'users',     icon: Users,    en: 'User Management',  ar: 'إدارة المستخدمين',       path: '/users/dashboard' },
   { id: 'reports',   icon: BarChart2,en: 'Dept. Reports',    ar: 'تقارير الأقسام',         path: '/reports' },
   { id: 'inventory', icon: Package,  en: 'Inventory',        ar: 'المخزون',                path: '/inventory' },
+  { id: 'assets',    icon: Building2,en: 'Assets',           ar: 'الأصول',                 path: '/assets' },
 ]
 
 const SIDEBAR_COLLAPSED = 54
@@ -255,6 +257,7 @@ function MainAppLayout() {
       case 'profile':   return 'theme-profile'
       case 'reports':   return 'theme-reports'
       case 'inventory': return 'theme-inventory'
+      case 'assets':    return 'theme-assets'
       case 'dashboard': return 'theme-dashboard'
       case 'logistics':
       default:          return 'theme-logistics'
@@ -432,6 +435,7 @@ function App() {
           <Route path="/logistics/*"  element={<LogisticsModule />} />
           <Route path="/fleet/*"      element={<FleetModule />} />
           <Route path="/inventory/*"  element={<InventoryModule />} />
+          <Route path="/assets/*"     element={<AssetsModule />} />
           <Route path="/reports/*"    element={<ReportsModule user={user} userProfile={userProfile} />} />
           <Route path="/users/*"      element={<UserManagementModule isMasterAdmin={isMasterAdmin} />} />
           <Route path="/profile/*"    element={<ProfileModule user={user} userProfile={userProfile} onUpdateProfile={() => {}} />} />

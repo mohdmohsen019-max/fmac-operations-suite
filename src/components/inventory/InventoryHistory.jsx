@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect, useCallback, Fragment } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowUpRight, ArrowDownRight, RefreshCw, Download, Filter
+  ArrowUpRight, ArrowDownRight, RefreshCw, Download, Filter, StickyNote
 } from 'lucide-react'
 import { db } from '../../firebase'
 import {
@@ -23,6 +23,7 @@ export default function InventoryHistory({ items, settings }) {
   const [filterType, setFilterType] = useState('all')
   const [filterSport, setFilterSport] = useState('all')
   const [filterItem, setFilterItem] = useState('')
+  const [openNote, setOpenNote] = useState(null)
 
   const sports = settings?.sports || DEFAULT_SPORTS
 
@@ -200,15 +201,18 @@ export default function InventoryHistory({ items, settings }) {
                 <th>{t('Recipient', 'المستلم')}</th>
                 <th>{t('Reference', 'المرجع')}</th>
                 <th>{t('By', 'بواسطة')}</th>
+                <th>{t('Notes', 'ملاحظات')}</th>
               </tr>
             </thead>
             <tbody>
               {movements.map((mv, idx) => {
                 const bd = typeBadge(mv.type)
                 const Icon = bd.icon
+                const hasNote = !!(mv.notes && String(mv.notes).trim())
+                const noteOpen = openNote === mv.id
                 return (
+                  <Fragment key={mv.id}>
                   <motion.tr
-                    key={mv.id}
                     className="inv-table-row"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -249,7 +253,41 @@ export default function InventoryHistory({ items, settings }) {
                     <td style={{ fontSize: '0.78rem', color: 'var(--theme-text-muted)' }}>
                       {mv.performedByName}
                     </td>
+                    <td>
+                      {hasNote ? (
+                        <button
+                          className={`inv-note-btn ${noteOpen ? 'active' : ''}`}
+                          onClick={() => setOpenNote(noteOpen ? null : mv.id)}
+                          title={t('Show notes', 'عرض الملاحظات')}
+                        >
+                          <StickyNote size={14} />
+                        </button>
+                      ) : (
+                        <span style={{ color: 'var(--theme-text-ghost)' }}>—</span>
+                      )}
+                    </td>
                   </motion.tr>
+                  <AnimatePresence>
+                    {noteOpen && hasNote && (
+                      <motion.tr
+                        className="inv-note-row"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                      >
+                        <td colSpan={9} style={{ padding: 0 }}>
+                          <div className="inv-note-panel">
+                            <StickyNote size={14} style={{ flexShrink: 0, marginTop: 2, color: 'var(--theme-accent)' }} />
+                            <div>
+                              <div className="inv-note-label">{t('Notes', 'ملاحظات')}</div>
+                              <div className="inv-note-text">{mv.notes}</div>
+                            </div>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    )}
+                  </AnimatePresence>
+                  </Fragment>
                 )
               })}
             </tbody>

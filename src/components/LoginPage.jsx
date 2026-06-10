@@ -13,7 +13,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, getDocs, serverTimestamp, collection, addDoc, query, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, updateDoc, serverTimestamp, collection, addDoc, query, where } from 'firebase/firestore';
 import { JOB_TITLES, MASTER_ADMIN_EMAIL } from '../utils/jobTitlePermissions';
 
 /* ── Geometric Pattern SVG ── */
@@ -443,8 +443,12 @@ export default function LoginPage() {
     const credential = await signInWithEmailAndPassword(auth, email, password);
     const userDoc = await getDoc(doc(db, 'users', credential.user.uid));
 
+    // Record last login (best-effort — never block sign-in on this write).
+    const stampLogin = () => updateDoc(doc(db, 'users', credential.user.uid), { lastLogin: serverTimestamp() }).catch(() => {});
+
     // Master admin bypasses all status checks
     if (credential.user.email === MASTER_ADMIN_EMAIL) {
+      stampLogin();
       navigate('/dashboard');
       return;
     }
@@ -493,6 +497,7 @@ export default function LoginPage() {
       return;
     }
 
+    stampLogin();
     navigate('/dashboard');
   };
 

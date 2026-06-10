@@ -834,6 +834,48 @@
   transition: color 150ms, background 150ms, border-color 150ms;
 }
 
+/* Movement notes button + expandable panel */
+.inv-note-btn {
+  padding: 5px 7px;
+  border-radius: 7px;
+  background: var(--theme-surface-hover);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: color 150ms, background 150ms, border-color 150ms;
+}
+.inv-note-btn:hover,
+.inv-note-btn.active {
+  color: var(--theme-accent);
+  border-color: var(--theme-accent-border);
+  background: var(--theme-accent-soft);
+}
+.inv-note-row td { border-bottom: 1px solid var(--theme-border) !important; }
+.inv-note-panel {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--theme-surface-hover);
+  border-left: 3px solid var(--theme-accent);
+}
+[dir="rtl"] .inv-note-panel { border-left: none; border-right: 3px solid var(--theme-accent); }
+.inv-note-label {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--theme-text-muted);
+  margin-bottom: 3px;
+}
+.inv-note-text {
+  font-size: 0.84rem;
+  color: var(--theme-text-main);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
 .inv-icon-btn:hover {
   background: var(--theme-surface-hover);
   border-color: var(--theme-border);

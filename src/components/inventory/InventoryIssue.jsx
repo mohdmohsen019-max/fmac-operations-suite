@@ -133,6 +133,14 @@ function ReceiptDocument({ receipt, t, lang, sports }) {
         </tbody>
       </table>
 
+      {/* Players the coach is collecting for */}
+      {receipt.issuedTo?.playerNames && (
+        <div style={{ marginBottom: 20, fontSize: 12, border: '1px solid #eee', borderRadius: 6, padding: '10px 12px', background: '#fafafa' }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>اللاعبون المستفيدون / Players</div>
+          <div style={{ whiteSpace: 'pre-line', color: '#333', lineHeight: 1.7 }}>{receipt.issuedTo.playerNames}</div>
+        </div>
+      )}
+
       {/* Items */}
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 28, fontSize: 12 }}>
         <thead>
@@ -182,7 +190,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
   const { t, lang } = useLanguage()
   const [step, setStep] = useState(1)
   const [recipient, setRecipient] = useState({
-    sport: '', sportAr: '', personName: '', role: 'player', roleAr: '', notes: ''
+    sport: '', sportAr: '', personName: '', role: 'player', roleAr: '', playerNames: '', notes: ''
   })
   const [selectedItems, setSelectedItems] = useState([])
   const [saving, setSaving] = useState(false)
@@ -218,6 +226,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
 
       const sport = sports.find(s => s.id === recipient.sport)
       const role = roles.find(r => r.id === recipient.role)
+      const playerNames = recipient.role === 'coach' ? (recipient.playerNames.trim() || null) : null
 
       const receiptItems = selectedItems.map(r => {
         const unit = units.find(u => u.id === r.item.unit) || { ar: r.item.unit, en: r.item.unit }
@@ -241,6 +250,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
           personName: recipient.personName || null,
           role: recipient.role,
           roleAr: role?.ar || recipient.role,
+          playerNames,
         },
         items: receiptItems,
         issuedBy: user?.uid || 'unknown',
@@ -276,6 +286,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
             sportAr: sport?.ar || recipient.sport,
             personName: recipient.personName || null,
             role: recipient.role,
+            playerNames,
           },
           deliveryNoteRef: null,
           receiptId: receiptRef2.id,
@@ -322,7 +333,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
 
   const resetForm = () => {
     setStep(1)
-    setRecipient({ sport: '', sportAr: '', personName: '', role: 'player', roleAr: '', notes: '' })
+    setRecipient({ sport: '', sportAr: '', personName: '', role: 'player', roleAr: '', playerNames: '', notes: '' })
     setSelectedItems([])
     setReceipt(null)
     onIssueComplete?.()
@@ -380,6 +391,20 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
                 ))}
               </div>
             </div>
+
+            {/* Coaches collect items for their players — capture who they're for */}
+            {recipient.role === 'coach' && (
+              <div className="inv-form-row">
+                <label className="inv-label">{t('Player Name(s)', 'اسم/أسماء اللاعبين')}</label>
+                <textarea
+                  className="inv-textarea"
+                  rows={2}
+                  placeholder={t('Optional — players these items are for (one per line)', 'اختياري — اللاعبون المخصص لهم الأصناف (اسم في كل سطر)')}
+                  value={recipient.playerNames}
+                  onChange={e => setRecipient(p => ({ ...p, playerNames: e.target.value }))}
+                />
+              </div>
+            )}
 
             <div className="inv-form-row">
               <label className="inv-label">{t('Notes', 'ملاحظات')}</label>
@@ -510,6 +535,12 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
                 <span>{t('Role', 'الدور')}</span>
                 <span>{getRoleLabel(recipient.role, lang)}</span>
               </div>
+              {recipient.role === 'coach' && recipient.playerNames.trim() && (
+                <div className="inv-confirm-row">
+                  <span>{t('Players', 'اللاعبون')}</span>
+                  <span style={{ whiteSpace: 'pre-line', textAlign: lang === 'ar' ? 'left' : 'right' }}>{recipient.playerNames.trim()}</span>
+                </div>
+              )}
             </div>
 
             <div className="inv-confirm-block">

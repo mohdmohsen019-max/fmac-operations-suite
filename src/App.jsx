@@ -39,6 +39,18 @@ const NAV_ITEMS_DEF = [
   { id: 'assets',    icon: Building2,en: 'Assets',           ar: 'الأصول',                 path: '/assets' },
 ]
 
+// Arabic labels for the job titles defined in jobTitlePermissions (English-only there).
+const JOB_TITLE_AR = {
+  'Head of Operations':            'رئيس العمليات',
+  'Sports Activities Specialist':  'أخصائي الأنشطة الرياضية',
+  'Logistics Specialist':          'أخصائي اللوجستيات',
+  'Warehouse/Store Manager':       'مدير المخزن',
+  'Customer Happiness Specialist': 'أخصائي سعادة المتعاملين',
+  'Media Coordinator':             'منسق إعلامي',
+  'Manager':                       'مدير',
+  'Admin':                         'مسؤول',
+}
+
 const SIDEBAR_COLLAPSED = 54
 const SIDEBAR_EXPANDED  = 230
 
@@ -280,6 +292,10 @@ function MainAppLayout() {
 
   const getRoleLabel = () => {
     if (isMasterAdmin) return t('Master Admin', 'المسؤول العام')
+    // Prefer the specific job title (what User Management shows) over the
+    // generic role bucket, so the chip reads e.g. "Sports Activities Specialist".
+    const jobTitle = userProfile?.jobTitle
+    if (jobTitle) return t(jobTitle, JOB_TITLE_AR[jobTitle] || jobTitle)
     const role = userProfile?.role
     if (!role) return t('Pending', 'معلق')
     const roleMap = {

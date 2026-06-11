@@ -25,6 +25,7 @@ import ReportSectionUpload from './reports/ReportSectionUpload'
 
 // Phase 5 — Final Report Template
 import ReportTemplate from './reports/ReportTemplate'
+import CustomSelect from './CustomSelect'
 
 const MANUAL_SECTIONS = new Set(['player_registration', 'admin_costs', 'media', 'inventory', 'projects'])
 
@@ -173,12 +174,10 @@ function DashboardView({ user, isHOD, lang, t, onOpen }) {
       </div>
 
       <div className="rpt-filter-row">
-        <select className="rpt-select" value={filter} onChange={e => setFilter(e.target.value)}>
-          <option value="all">{t('All Months', 'كل الأشهر')}</option>
-          {uniqueMonths.map(m => (
-            <option key={m} value={m}>{monthLabel(m, lang)}</option>
-          ))}
-        </select>
+        <div style={{ minWidth: 160 }}>
+          <CustomSelect value={filter} onChange={setFilter}
+            options={[{ value: 'all', label: t('All Months', 'كل الأشهر') }, ...uniqueMonths.map(m => ({ value: m, label: monthLabel(m, lang) }))]} />
+        </div>
         <button className="rpt-btn-ghost rpt-btn-sm" onClick={load}>
           <RefreshCw size={13} /> {t('Refresh', 'تحديث')}
         </button>
@@ -321,21 +320,13 @@ function NewReportModal({ user, lang, t, existingIds, onClose, onCreated }) {
           <div className="rpt-field-row">
             <div className="rpt-field">
               <label className="rpt-label">{t('Year', 'السنة')}</label>
-              <select className="rpt-select" value={year} onChange={e => setYear(e.target.value)}>
-                {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
+              <CustomSelect value={year} onChange={setYear}
+                options={[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => ({ value: String(y), label: String(y) }))} />
             </div>
             <div className="rpt-field">
               <label className="rpt-label">{t('Month', 'الشهر')}</label>
-              <select className="rpt-select" value={month} onChange={e => setMonth(e.target.value)}>
-                {MONTHS_EN.map((m, i) => (
-                  <option key={i} value={String(i + 1).padStart(2, '0')}>
-                    {lang === 'ar' ? MONTHS_AR[i] : m}
-                  </option>
-                ))}
-              </select>
+              <CustomSelect value={month} onChange={setMonth}
+                options={MONTHS_EN.map((m, i) => ({ value: String(i + 1).padStart(2, '0'), label: lang === 'ar' ? MONTHS_AR[i] : m }))} />
             </div>
           </div>
           {isDup && (

@@ -6,6 +6,7 @@ import { db, auth } from '../../../firebase';
 import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { ArrowLeft, User, Phone, Mail, MapPin, Clock, FileText, History, CheckCircle2, AlertCircle, Loader2, Tag } from 'lucide-react';
 import { useLanguage } from '../../../contexts/LanguageContext';
+import CustomSelect from '../../CustomSelect';
 
 
 const Field = ({ label, value }) => (
@@ -392,17 +393,16 @@ export default function HelpAdminTicket({ userProfile }) {
 
           <div className="hc-card">
             <div style={{ color: 'var(--hc-text-secondary)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '1rem' }}>{t('Execution Status', 'حالة التنفيذ')}</div>
-            <select
-              className="hc-select"
+            <CustomSelect
               value={request.status}
-              onChange={(e) => canEditHelp && handleStatusChange(e.target.value)}
+              onChange={(v) => canEditHelp && handleStatusChange(v)}
               disabled={!canEditHelp}
-              style={{ fontWeight: 600, opacity: canEditHelp ? 1 : 0.6, cursor: canEditHelp ? 'pointer' : 'not-allowed' }}
-            >
-              <option value="new">🔴 {t('NEW', 'جديد')}</option>
-              <option value="progress">🟡 {t('IN PROGRESS', 'قيد التنفيذ')}</option>
-              <option value="closed">🟢 {t('CLOSED', 'مغلق')}</option>
-            </select>
+              options={[
+                { value: 'new', label: `🔴 ${t('NEW', 'جديد')}` },
+                { value: 'progress', label: `🟡 ${t('IN PROGRESS', 'قيد التنفيذ')}` },
+                { value: 'closed', label: `🟢 ${t('CLOSED', 'مغلق')}` },
+              ]}
+            />
           </div>
 
           {/* Workflow Actions */}

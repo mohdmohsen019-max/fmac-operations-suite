@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { getItemStatus, getSportLabel, getCatLabel } from './shared'
+import CustomSelect from '../CustomSelect'
 
 function StatusBadge({ status, t }) {
   const cfg = {
@@ -82,24 +83,23 @@ export default function InventoryStock({
           />
         </div>
         <div className="inv-filters">
-          <select className="inv-select" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
-            <option value="all">{t('All Categories', 'كل الفئات')}</option>
-            {categories.map(c => (
-              <option key={c.id} value={c.id}>{lang === 'ar' ? c.ar : c.en}</option>
-            ))}
-          </select>
-          <select className="inv-select" value={filterSport} onChange={e => setFilterSport(e.target.value)}>
-            <option value="all">{t('All Sports', 'كل الرياضات')}</option>
-            {sports.map(s => (
-              <option key={s.id} value={s.id}>{lang === 'ar' ? s.ar : s.en}</option>
-            ))}
-          </select>
-          <select className="inv-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-            <option value="all">{t('All Status', 'كل الحالات')}</option>
-            <option value="ok">{t('Available', 'متوفر')}</option>
-            <option value="low">{t('Low Stock', 'منخفض')}</option>
-            <option value="out">{t('Out of Stock', 'نفذ')}</option>
-          </select>
+          <div style={{ minWidth: 150 }}>
+            <CustomSelect value={filterCat} onChange={setFilterCat}
+              options={[{ value: 'all', label: t('All Categories', 'كل الفئات') }, ...categories.map(c => ({ value: c.id, label: lang === 'ar' ? c.ar : c.en }))]} />
+          </div>
+          <div style={{ minWidth: 150 }}>
+            <CustomSelect value={filterSport} onChange={setFilterSport}
+              options={[{ value: 'all', label: t('All Sports', 'كل الرياضات') }, ...sports.map(s => ({ value: s.id, label: lang === 'ar' ? s.ar : s.en }))]} />
+          </div>
+          <div style={{ minWidth: 150 }}>
+            <CustomSelect value={filterStatus} onChange={setFilterStatus}
+              options={[
+                { value: 'all', label: t('All Status', 'كل الحالات') },
+                { value: 'ok', label: t('Available', 'متوفر') },
+                { value: 'low', label: t('Low Stock', 'منخفض') },
+                { value: 'out', label: t('Out of Stock', 'نفذ') },
+              ]} />
+          </div>
         </div>
         <div className="inv-toolbar-right">
           {selectedItems.length > 0 && (

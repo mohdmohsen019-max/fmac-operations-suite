@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { getSportLabel, fmtDateTime, DEFAULT_SPORTS } from './shared'
+import CustomSelect from '../CustomSelect'
 import * as XLSX from 'xlsx'
 
 const PAGE_SIZE = 50
@@ -147,19 +148,20 @@ export default function InventoryHistory({ items, settings }) {
             </div>
           )}
 
-          <select className="inv-select" value={filterType} onChange={e => setFilterType(e.target.value)}>
-            <option value="all">{t('All Types', 'كل الأنواع')}</option>
-            <option value="stock_in">{t('Stock In', 'وارد')}</option>
-            <option value="stock_out">{t('Stock Out', 'صادر')}</option>
-            <option value="adjustment">{t('Adjustment', 'تسوية')}</option>
-          </select>
+          <div style={{ minWidth: 150 }}>
+            <CustomSelect value={filterType} onChange={setFilterType}
+              options={[
+                { value: 'all', label: t('All Types', 'كل الأنواع') },
+                { value: 'stock_in', label: t('Stock In', 'وارد') },
+                { value: 'stock_out', label: t('Stock Out', 'صادر') },
+                { value: 'adjustment', label: t('Adjustment', 'تسوية') },
+              ]} />
+          </div>
 
-          <select className="inv-select" value={filterSport} onChange={e => setFilterSport(e.target.value)}>
-            <option value="all">{t('All Sports', 'كل الرياضات')}</option>
-            {sports.map(s => (
-              <option key={s.id} value={s.id}>{lang === 'ar' ? s.ar : s.en}</option>
-            ))}
-          </select>
+          <div style={{ minWidth: 150 }}>
+            <CustomSelect value={filterSport} onChange={setFilterSport}
+              options={[{ value: 'all', label: t('All Sports', 'كل الرياضات') }, ...sports.map(s => ({ value: s.id, label: lang === 'ar' ? s.ar : s.en }))]} />
+          </div>
 
           <input
             className="inv-search inv-input-sm"

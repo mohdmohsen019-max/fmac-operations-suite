@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { db } from '../../firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import CustomSelect from '../CustomSelect'
 import {
   ASSET_STATUSES, STATUS_META, statusLabel, roomLabel, fmtDate, logAudit,
 } from './shared'
@@ -86,39 +87,32 @@ export default function AssetRegistry({
     <>
       <div className="ast-filter-group">
         <label>{t('Room', 'الغرفة')}</label>
-        <select value={roomFilter} onChange={e => setRoomFilter(e.target.value)}>
-          <option value="all">{t('All Rooms', 'كل الغرف')}</option>
-          {rooms.map(r => <option key={r.id} value={r.id}>{roomLabel(r, lang)}</option>)}
-        </select>
+        <CustomSelect value={roomFilter} onChange={setRoomFilter}
+          options={[{ value: 'all', label: t('All Rooms', 'كل الغرف') }, ...rooms.map(r => ({ value: r.id, label: roomLabel(r, lang) }))]} />
       </div>
       <div className="ast-filter-group">
         <label>{t('Category', 'الفئة')}</label>
-        <select value={category} onChange={e => setCategory(e.target.value)}>
-          <option value="all">{t('All Categories', 'كل الفئات')}</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <CustomSelect value={category} onChange={setCategory}
+          options={[{ value: 'all', label: t('All Categories', 'كل الفئات') }, ...categories.map(c => ({ value: c, label: c }))]} />
       </div>
       <div className="ast-filter-group">
         <label>{t('Type', 'النوع')}</label>
-        <select value={type} onChange={e => setType(e.target.value)}>
-          <option value="all">{t('All Types', 'كل الأنواع')}</option>
-          {types.map(ty => <option key={ty} value={ty}>{ty}</option>)}
-        </select>
+        <CustomSelect value={type} onChange={setType}
+          options={[{ value: 'all', label: t('All Types', 'كل الأنواع') }, ...types.map(ty => ({ value: ty, label: ty }))]} />
       </div>
       <div className="ast-filter-group">
         <label>{t('Status', 'الحالة')}</label>
-        <select value={status} onChange={e => setStatus(e.target.value)}>
-          <option value="all">{t('All Statuses', 'كل الحالات')}</option>
-          {ASSET_STATUSES.map(s => <option key={s} value={s}>{statusLabel(s, lang)}</option>)}
-        </select>
+        <CustomSelect value={status} onChange={setStatus}
+          options={[{ value: 'all', label: t('All Statuses', 'كل الحالات') }, ...ASSET_STATUSES.map(s => ({ value: s, label: statusLabel(s, lang) }))]} />
       </div>
       <div className="ast-filter-group">
         <label>{t('Assignment', 'التعيين')}</label>
-        <select value={assignment} onChange={e => setAssignment(e.target.value)}>
-          <option value="all">{t('All', 'الكل')}</option>
-          <option value="assigned">{t('Assigned', 'مُعيَّن')}</option>
-          <option value="unassigned">{t('Unassigned', 'غير مُعيَّن')}</option>
-        </select>
+        <CustomSelect value={assignment} onChange={setAssignment}
+          options={[
+            { value: 'all', label: t('All', 'الكل') },
+            { value: 'assigned', label: t('Assigned', 'مُعيَّن') },
+            { value: 'unassigned', label: t('Unassigned', 'غير مُعيَّن') },
+          ]} />
       </div>
       {activeFilterCount > 0 && (
         <button className="ast-btn ast-btn-ghost ast-btn-sm" onClick={clearAll}>
@@ -224,14 +218,15 @@ export default function AssetRegistry({
                     {canManage && (
                       <td onClick={e => e.stopPropagation()}>
                         <div className="ast-row-actions">
-                          <select
-                            className="ast-quick-status"
-                            value={a.status}
-                            onChange={e => quickStatus(a, e.target.value)}
-                            title={t('Quick status change', 'تغيير سريع للحالة')}
-                          >
-                            {ASSET_STATUSES.map(s => <option key={s} value={s}>{statusLabel(s, lang)}</option>)}
-                          </select>
+                          <div style={{ minWidth: 130 }}>
+                            <CustomSelect
+                              className="cs-sm"
+                              value={a.status}
+                              onChange={(v) => quickStatus(a, v)}
+                              options={ASSET_STATUSES.map(s => ({ value: s, label: statusLabel(s, lang) }))}
+                              ariaLabel={t('Quick status change', 'تغيير سريع للحالة')}
+                            />
+                          </div>
                           <button className="ast-icon-btn" onClick={() => onOpenEdit(a)} title={t('Edit', 'تعديل')}>
                             <Pencil size={14} />
                           </button>

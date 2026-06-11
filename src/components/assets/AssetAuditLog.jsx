@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Search, X, ScrollText, RefreshCw } from 'lucide-react'
 import { db } from '../../firebase'
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
+import CustomSelect from '../CustomSelect'
 import { CHANGE_TYPE_META, changeTypeLabel, fmtDateTime, toMillis } from './shared'
 
 export default function AssetAuditLog({ lang, t }) {
@@ -68,10 +69,10 @@ export default function AssetAuditLog({ lang, t }) {
             value={search} onChange={e => setSearch(e.target.value)} />
           {search && <button className="ast-search-clear" onClick={() => setSearch('')}><X size={14} /></button>}
         </div>
-        <select className="ast-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-          <option value="all">{t('All change types', 'كل أنواع التغيير')}</option>
-          {Object.keys(CHANGE_TYPE_META).map(k => <option key={k} value={k}>{changeTypeLabel(k, lang)}</option>)}
-        </select>
+        <div style={{ minWidth: 180 }}>
+          <CustomSelect value={typeFilter} onChange={setTypeFilter}
+            options={[{ value: 'all', label: t('All change types', 'كل أنواع التغيير') }, ...Object.keys(CHANGE_TYPE_META).map(k => ({ value: k, label: changeTypeLabel(k, lang) }))]} />
+        </div>
         <input className="ast-select" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title={t('From', 'من')} />
         <input className="ast-select" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title={t('To', 'إلى')} />
         {hasFilters && <button className="ast-btn ast-btn-ghost ast-btn-sm" onClick={clearAll}><X size={13} /> {t('Clear', 'مسح')}</button>}

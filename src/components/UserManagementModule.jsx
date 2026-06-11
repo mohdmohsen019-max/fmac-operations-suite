@@ -15,6 +15,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import {
   JOB_TITLES, JOB_TITLE_PERMISSIONS, MASTER_ADMIN_EMAIL,
 } from '../utils/jobTitlePermissions';
+import CustomSelect from './CustomSelect';
 
 /* ── helpers ── */
 const fmtDate = (ts) => {
@@ -513,19 +514,11 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
                   <label className="field-label-luxe">
                     {lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title'}
                   </label>
-                  <div style={{ position: 'relative' }}>
-                    <select
-                      className="input-luxe"
-                      value={approveJobTitle}
-                      onChange={(e) => setApproveJobTitle(e.target.value)}
-                      style={{ cursor: 'pointer', appearance: 'none', paddingRight: '32px' }}
-                    >
-                      {JOB_TITLES.map(title => (
-                        <option key={title} value={title}>{title}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', opacity: 0.5 }} />
-                  </div>
+                  <CustomSelect
+                    value={approveJobTitle}
+                    onChange={setApproveJobTitle}
+                    options={JOB_TITLES.map(title => ({ value: title, label: title }))}
+                  />
                 </div>
 
                 <div className="field-group">
@@ -583,18 +576,12 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
               <div className="modal-body-luxe">
                 <div className="field-group">
                   <label className="field-label-luxe">{lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title'}</label>
-                  <div style={{ position: 'relative' }}>
-                    <select
-                      className="input-luxe"
+                  <div>
+                    <CustomSelect
                       value={editJobTitle}
-                      onChange={(e) => setEditJobTitle(e.target.value)}
-                      style={{ cursor: 'pointer', appearance: 'none', paddingRight: '32px' }}
-                    >
-                      {JOB_TITLES.map(title => (
-                        <option key={title} value={title}>{title}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', opacity: 0.5 }} />
+                      onChange={setEditJobTitle}
+                      options={JOB_TITLES.map(title => ({ value: title, label: title }))}
+                    />
                   </div>
                 </div>
                 <div className="field-group">
@@ -860,27 +847,26 @@ function AllUsersTab({
             style={{ paddingLeft: '32px', height: '36px', fontSize: '0.82rem' }}
           />
         </div>
-        <select
-          className="input-luxe"
-          value={filterJobTitle}
-          onChange={e => setFilterJobTitle(e.target.value)}
-          style={{ height: '36px', fontSize: '0.82rem', minWidth: '150px', cursor: 'pointer' }}
-        >
-          <option value="">{lang === 'ar' ? 'كل الوظائف' : 'All Job Titles'}</option>
-          {JOB_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select
-          className="input-luxe"
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          style={{ height: '36px', fontSize: '0.82rem', minWidth: '120px', cursor: 'pointer' }}
-        >
-          <option value="">{lang === 'ar' ? 'كل الحالات' : 'All Statuses'}</option>
-          <option value="approved">{lang === 'ar' ? 'نشط' : 'Active'}</option>
-          <option value="pending">{lang === 'ar' ? 'معلق' : 'Pending'}</option>
-          <option value="rejected">{lang === 'ar' ? 'مرفوض' : 'Rejected'}</option>
-          <option value="deactivated">{lang === 'ar' ? 'موقوف' : 'Deactivated'}</option>
-        </select>
+        <div style={{ minWidth: 150 }}>
+          <CustomSelect
+            value={filterJobTitle}
+            onChange={setFilterJobTitle}
+            options={[{ value: '', label: lang === 'ar' ? 'كل الوظائف' : 'All Job Titles' }, ...JOB_TITLES.map(t => ({ value: t, label: t }))]}
+          />
+        </div>
+        <div style={{ minWidth: 130 }}>
+          <CustomSelect
+            value={filterStatus}
+            onChange={setFilterStatus}
+            options={[
+              { value: '', label: lang === 'ar' ? 'كل الحالات' : 'All Statuses' },
+              { value: 'approved', label: lang === 'ar' ? 'نشط' : 'Active' },
+              { value: 'pending', label: lang === 'ar' ? 'معلق' : 'Pending' },
+              { value: 'rejected', label: lang === 'ar' ? 'مرفوض' : 'Rejected' },
+              { value: 'deactivated', label: lang === 'ar' ? 'موقوف' : 'Deactivated' },
+            ]}
+          />
+        </div>
       </div>
 
       {loading ? (

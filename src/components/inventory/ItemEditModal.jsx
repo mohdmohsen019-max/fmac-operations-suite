@@ -6,6 +6,7 @@ import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, wh
 import { useLanguage } from '../../contexts/LanguageContext'
 import { usePermissions } from '../../hooks/usePermissions'
 import { buildSKU, DEFAULT_SPORTS, DEFAULT_CATEGORIES, DEFAULT_UNITS } from './shared'
+import CustomSelect from '../CustomSelect'
 
 async function nextSKUCounter(sport, category) {
   const configRef = doc(db, 'inventory_config', 'main')
@@ -145,15 +146,13 @@ export default function ItemEditModal({ item, settings, onClose, onSaved }) {
             </div>
             <div className="inv-form-row">
               <label className="inv-label">{t('Category', 'الفئة')}</label>
-              <select className="inv-select inv-full" value={form.category} onChange={e => set('category', e.target.value)}>
-                {categories.map(c => <option key={c.id} value={c.id}>{lang === 'ar' ? c.ar : c.en}</option>)}
-              </select>
+              <CustomSelect value={form.category} onChange={(v) => set('category', v)}
+                options={categories.map(c => ({ value: c.id, label: lang === 'ar' ? c.ar : c.en }))} />
             </div>
             <div className="inv-form-row">
               <label className="inv-label">{t('Sport', 'الرياضة')}</label>
-              <select className="inv-select inv-full" value={form.sport} onChange={e => set('sport', e.target.value)}>
-                {sports.map(s => <option key={s.id} value={s.id}>{lang === 'ar' ? s.ar : s.en}</option>)}
-              </select>
+              <CustomSelect value={form.sport} onChange={(v) => set('sport', v)}
+                options={sports.map(s => ({ value: s.id, label: lang === 'ar' ? s.ar : s.en }))} />
             </div>
             <div className="inv-form-row">
               <label className="inv-label">{t('Size', 'المقاس')}</label>
@@ -161,9 +160,8 @@ export default function ItemEditModal({ item, settings, onClose, onSaved }) {
             </div>
             <div className="inv-form-row">
               <label className="inv-label">{t('Unit', 'الوحدة')}</label>
-              <select className="inv-select inv-full" value={form.unit} onChange={e => set('unit', e.target.value)}>
-                {units.map(u => <option key={u.id} value={u.id}>{lang === 'ar' ? u.ar : u.en}</option>)}
-              </select>
+              <CustomSelect value={form.unit} onChange={(v) => set('unit', v)}
+                options={units.map(u => ({ value: u.id, label: lang === 'ar' ? u.ar : u.en }))} />
             </div>
             <div className="inv-form-row inv-form-row-full">
               <label className="inv-label">{t('Barcode', 'الباركود')}</label>

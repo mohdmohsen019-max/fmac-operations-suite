@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { usePermissions } from '../../hooks/usePermissions'
 import { getSportLabel, getCatLabel, getUnitLabel, buildSKU, DEFAULT_SPORTS, DEFAULT_CATEGORIES, DEFAULT_UNITS } from './shared'
+import CustomSelect from '../CustomSelect'
 
 async function doStockIn(item, qty, reason, notes, deliveryRef, supplierId) {
   const user = auth.currentUser
@@ -160,12 +161,13 @@ function QuickAddTab({ items, settings, isAdmin }) {
 
       <div className="inv-form-row">
         <label className="inv-label">{t('Reason', 'السبب')}</label>
-        <select className="inv-select inv-full" value={reason} onChange={e => setReason(e.target.value)}>
-          <option value="purchase">{t('Purchase', 'شراء')}</option>
-          <option value="return">{t('Return', 'إرجاع')}</option>
-          <option value="transfer">{t('Transfer', 'نقل')}</option>
-          <option value="other">{t('Other', 'أخرى')}</option>
-        </select>
+        <CustomSelect value={reason} onChange={setReason}
+          options={[
+            { value: 'purchase', label: t('Purchase', 'شراء') },
+            { value: 'return', label: t('Return', 'إرجاع') },
+            { value: 'transfer', label: t('Transfer', 'نقل') },
+            { value: 'other', label: t('Other', 'أخرى') },
+          ]} />
       </div>
 
       <div className="inv-form-row">
@@ -300,16 +302,15 @@ function BatchReceiveTab({ items, settings }) {
                     />
                   </td>
                   <td>
-                    <select
-                      className="inv-select inv-select-sm"
-                      value={r.reason}
-                      onChange={e => updateRow(idx, 'reason', e.target.value)}
-                    >
-                      <option value="purchase">{t('Purchase', 'شراء')}</option>
-                      <option value="return">{t('Return', 'إرجاع')}</option>
-                      <option value="transfer">{t('نقل', 'Transfer')}</option>
-                      <option value="other">{t('Other', 'أخرى')}</option>
-                    </select>
+                    <div style={{ minWidth: 120 }}>
+                      <CustomSelect className="cs-sm" value={r.reason} onChange={(v) => updateRow(idx, 'reason', v)}
+                        options={[
+                          { value: 'purchase', label: t('Purchase', 'شراء') },
+                          { value: 'return', label: t('Return', 'إرجاع') },
+                          { value: 'transfer', label: t('Transfer', 'نقل') },
+                          { value: 'other', label: t('Other', 'أخرى') },
+                        ]} />
+                    </div>
                   </td>
                   <td>
                     <button className="inv-icon-btn inv-icon-btn-danger" onClick={() => removeRow(idx)}>

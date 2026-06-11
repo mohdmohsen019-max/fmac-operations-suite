@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { X, Save, RefreshCw } from 'lucide-react'
 import { db } from '../../firebase'
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import CustomSelect from '../CustomSelect'
 import { ASSET_STATUSES, statusLabel, roomLabel, logAudit } from './shared'
 
 const EMPTY = {
@@ -133,10 +134,9 @@ export default function AssetEditModal({
             </div>
             <div className="ast-field">
               <label>{t('Room / Area', 'الغرفة / المنطقة')}</label>
-              <select value={form.location_room} onChange={e => set('location_room', e.target.value)}>
-                <option value="">{t('— Unassigned —', '— غير محدد —')}</option>
-                {rooms.map(r => <option key={r.id} value={r.id}>{roomLabel(r, lang)}</option>)}
-              </select>
+              <CustomSelect value={form.location_room} onChange={(v) => set('location_room', v)}
+                placeholder={t('— Unassigned —', '— غير محدد —')}
+                options={[{ value: '', label: t('— Unassigned —', '— غير محدد —') }, ...rooms.map(r => ({ value: r.id, label: roomLabel(r, lang) }))]} />
             </div>
             <div className="ast-field">
               <label>{t('Assigned To', 'مُعيَّن إلى')}</label>
@@ -144,9 +144,8 @@ export default function AssetEditModal({
             </div>
             <div className="ast-field">
               <label>{t('Status', 'الحالة')}</label>
-              <select value={form.status} onChange={e => set('status', e.target.value)}>
-                {ASSET_STATUSES.map(s => <option key={s} value={s}>{statusLabel(s, lang)}</option>)}
-              </select>
+              <CustomSelect value={form.status} onChange={(v) => set('status', v)}
+                options={ASSET_STATUSES.map(s => ({ value: s, label: statusLabel(s, lang) }))} />
             </div>
             <div className="ast-field ast-field-full">
               <label>{t('Notes', 'ملاحظات')}</label>

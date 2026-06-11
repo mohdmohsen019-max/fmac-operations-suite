@@ -4,6 +4,7 @@ import { X, Save, AlertCircle, Fuel, Calendar, DollarSign, Droplets, Upload, Fil
 import { db } from '../../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useLanguage } from '../../../contexts/LanguageContext';
+import CustomSelect from '../../CustomSelect';
 import * as XLSX from 'xlsx';
 
 export default function FuelStatementModal({ isOpen, onClose, onSave }) {
@@ -217,15 +218,11 @@ export default function FuelStatementModal({ isOpen, onClose, onSave }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
               <div className="fuel-input-group">
                 <label className="fuel-kpi-label">{t('Reporting Month', 'شهر التقرير')}</label>
-                <select 
-                  className="fuel-input" 
-                  value={formData.month} 
-                  onChange={e => setFormData({...formData, month: parseInt(e.target.value)})}
-                >
-                  {months.map((m, i) => (
-                    <option key={m} value={i + 1}>{m}</option>
-                  ))}
-                </select>
+                <CustomSelect
+                  value={formData.month}
+                  onChange={(v) => setFormData({ ...formData, month: v })}
+                  options={months.map((m, i) => ({ value: i + 1, label: m }))}
+                />
               </div>
               <div className="fuel-input-group">
                 <label className="fuel-kpi-label">{t('Reporting Year', 'سنة التقرير')}</label>

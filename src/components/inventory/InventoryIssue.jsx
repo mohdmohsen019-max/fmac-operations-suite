@@ -14,6 +14,7 @@ import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { getSportLabel, getRoleLabel, getUnitLabel, fmtDateTime, DEFAULT_SPORTS, DEFAULT_ROLES } from './shared'
+import CustomSelect from '../CustomSelect'
 
 // Generate receipt number — ISS-YYYY-XXXX
 async function nextReceiptNumber() {
@@ -355,16 +356,12 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
 
             <div className="inv-form-row">
               <label className="inv-label">{t('Sport', 'الرياضة')} *</label>
-              <select
-                className="inv-select inv-full"
+              <CustomSelect
                 value={recipient.sport}
-                onChange={e => setRecipient(p => ({ ...p, sport: e.target.value }))}
-              >
-                <option value="">{t('Select sport…', 'اختر الرياضة…')}</option>
-                {sports.map(s => (
-                  <option key={s.id} value={s.id}>{lang === 'ar' ? s.ar : s.en}</option>
-                ))}
-              </select>
+                onChange={(v) => setRecipient(p => ({ ...p, sport: v }))}
+                placeholder={t('Select sport…', 'اختر الرياضة…')}
+                options={sports.map(s => ({ value: s.id, label: lang === 'ar' ? s.ar : s.en }))}
+              />
             </div>
 
             <div className="inv-form-row">

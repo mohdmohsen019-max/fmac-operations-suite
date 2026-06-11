@@ -9,6 +9,7 @@ import jsPDF from 'jspdf'
 import { db } from '../../firebase'
 import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore'
 import { daysSince, roomLabel } from './shared'
+import CustomSelect from '../CustomSelect'
 import AssetRoomReport from './AssetRoomReport'
 
 // Map a spreadsheet row's flexible headers to our fields.
@@ -284,10 +285,10 @@ export default function AssetSystem({ assets, rooms, lang, t, actorUid, actorNam
           </div>
         </div>
         <div className="ast-report-controls">
-          <select className="ast-select" value={reportRoomId} onChange={e => setReportRoomId(e.target.value)}>
-            <option value="all">{t('All Rooms', 'كل الغرف')}</option>
-            {rooms.map(r => <option key={r.id} value={r.id}>{roomLabel(r, lang)}</option>)}
-          </select>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <CustomSelect value={reportRoomId} onChange={setReportRoomId}
+              options={[{ value: 'all', label: t('All Rooms', 'كل الغرف') }, ...rooms.map(r => ({ value: r.id, label: roomLabel(r, lang) }))]} />
+          </div>
           <button className="ast-btn ast-btn-primary ast-btn-sm" onClick={generateReport} disabled={generating || rooms.length === 0}>
             {generating ? <><RefreshCw size={14} className="ast-spin" /> {t('Generating…', 'جارٍ الإنشاء…')}</> : <><Download size={14} /> {t('Generate Report', 'إنشاء التقرير')}</>}
           </button>

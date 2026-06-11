@@ -22,6 +22,7 @@ import { cartrackService } from '../../services/cartrackService';
 import { FLEET_MAPPING, getVehicleMeta } from '../../services/fleetMapping';
 import { pdfService } from '../../services/pdfService';
 import { useLanguage } from '../../contexts/LanguageContext';
+import CustomSelect from '../CustomSelect';
 import './FleetModule.css';
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -543,11 +544,8 @@ export default function FleetReports() {
             </div>
             <div className="rpt-field">
               <label>{t('Vehicle', 'المركبة')}</label>
-              <select className="fleet-search-input rpt-select" value={odomVehicle}
-                onChange={e => setOdomVehicle(e.target.value)}>
-                <option value="all">{t('All Buses', 'جميع الحافلات')}</option>
-                {VEHICLE_OPTIONS.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
-              </select>
+              <CustomSelect value={odomVehicle} onChange={setOdomVehicle}
+                options={[{ value: 'all', label: t('All Buses', 'جميع الحافلات') }, ...VEHICLE_OPTIONS.map(v => ({ value: v.value, label: v.label }))]} />
             </div>
             <button className="rpt-generate-btn" onClick={() => fetchOdometer()} disabled={odomLoading}>
               {odomLoading ? <Loader2 size={15} className="animate-spin" /> : <BarChart2 size={15} />}
@@ -673,21 +671,18 @@ export default function FleetReports() {
             </div>
             <div className="rpt-field">
               <label>{t('Vehicle', 'المركبة')}</label>
-              <select className="fleet-search-input rpt-select" value={riskVehicle}
-                onChange={e => setRiskVehicle(e.target.value)}>
-                <option value="all">{t('All Buses', 'جميع الحافلات')}</option>
-                {VEHICLE_OPTIONS.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
-              </select>
+              <CustomSelect value={riskVehicle} onChange={setRiskVehicle}
+                options={[{ value: 'all', label: t('All Buses', 'جميع الحافلات') }, ...VEHICLE_OPTIONS.map(v => ({ value: v.value, label: v.label }))]} />
             </div>
             <div className="rpt-field">
               <label>{t('Risk Level', 'مستوى المخاطر')}</label>
-              <select className="fleet-search-input rpt-select" value={riskFilter}
-                onChange={e => setRiskFilter(e.target.value)}>
-                <option value="all">{t('All Levels', 'جميع المستويات')}</option>
-                <option value={t('High', 'مرتفع')}>{t('High Risk', 'مخاطر عالية')}</option>
-                <option value={t('Medium', 'متوسط')}>{t('Medium Risk', 'مخاطر متوسطة')}</option>
-                <option value={t('Low', 'منخفض')}>{t('Low Risk', 'مخاطر منخفضة')}</option>
-              </select>
+              <CustomSelect value={riskFilter} onChange={setRiskFilter}
+                options={[
+                  { value: 'all', label: t('All Levels', 'جميع المستويات') },
+                  { value: t('High', 'مرتفع'), label: t('High Risk', 'مخاطر عالية') },
+                  { value: t('Medium', 'متوسط'), label: t('Medium Risk', 'مخاطر متوسطة') },
+                  { value: t('Low', 'منخفض'), label: t('Low Risk', 'مخاطر منخفضة') },
+                ]} />
             </div>
             <button className="rpt-generate-btn" onClick={() => fetchRisk()} disabled={riskLoading}>
               {riskLoading ? <Loader2 size={15} className="animate-spin" /> : <Shield size={15} />}
@@ -820,11 +815,8 @@ export default function FleetReports() {
             </div>
             <div className="rpt-field">
               <label>{t('Driver / Vehicle', 'السائق / المركبة')}</label>
-              <select className="fleet-search-input rpt-select" value={scVehicle}
-                onChange={e => setScVehicle(e.target.value)}>
-                <option value="all">{t('All Drivers', 'جميع السائقين')}</option>
-                {VEHICLE_OPTIONS.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
-              </select>
+              <CustomSelect value={scVehicle} onChange={setScVehicle}
+                options={[{ value: 'all', label: t('All Drivers', 'جميع السائقين') }, ...VEHICLE_OPTIONS.map(v => ({ value: v.value, label: v.label }))]} />
             </div>
             <button className="rpt-generate-btn" onClick={() => fetchScorecard()} disabled={scLoading}>
               {scLoading ? <Loader2 size={15} className="animate-spin" /> : <Award size={15} />}

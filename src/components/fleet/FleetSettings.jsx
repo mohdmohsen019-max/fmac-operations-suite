@@ -4,6 +4,7 @@ import { useFleetSettings, DEFAULT_SETTINGS } from './FleetSettingsContext';
 import { cartrackService } from '../../services/cartrackService';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import CustomSelect from '../CustomSelect';
 import './FleetModule.css';
 
 function sensitivityLabel(val, t) {
@@ -138,27 +139,30 @@ export default function FleetSettings() {
           
           <div className="fleet-input-group" style={{ marginBottom: '24px', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
             <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px' }}>{t('Regional Currency', 'العملة الإقليمية')}</label>
-            <select className="fleet-search-input" style={{ paddingLeft: '16px' }} value={draft.currency} onChange={e => canEdit && set('currency', e.target.value)} disabled={!canEdit}>
-              <option value="AED">{t('AED — United Arab Emirates Dirham', 'درهم — درهم الإمارات العربية المتحدة')}</option>
-              <option value="USD">{t('USD — United States Dollar', 'دولار — دولار أمريكي')}</option>
-              <option value="EUR">{t('EUR — Euro Member State', 'يورو — يورو')}</option>
-            </select>
+            <CustomSelect value={draft.currency} onChange={(v) => canEdit && set('currency', v)} disabled={!canEdit}
+              options={[
+                { value: 'AED', label: t('AED — United Arab Emirates Dirham', 'درهم — درهم الإمارات العربية المتحدة') },
+                { value: 'USD', label: t('USD — United States Dollar', 'دولار — دولار أمريكي') },
+                { value: 'EUR', label: t('EUR — Euro Member State', 'يورو — يورو') },
+              ]} />
           </div>
 
           <div className="fleet-input-group" style={{ marginBottom: '24px', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
             <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px' }}>{t('Measurement Standard', 'معيار القياس')}</label>
-            <select className="fleet-search-input" style={{ paddingLeft: '16px' }} value={draft.measurementUnit} onChange={e => canEdit && set('measurementUnit', e.target.value)} disabled={!canEdit}>
-              <option value="km">{t('Metric (Kilometers)', 'متري (كيلومترات)')}</option>
-              <option value="mi">{t('Imperial (Miles)', 'إمبراطوري (أميال)')}</option>
-            </select>
+            <CustomSelect value={draft.measurementUnit} onChange={(v) => canEdit && set('measurementUnit', v)} disabled={!canEdit}
+              options={[
+                { value: 'km', label: t('Metric (Kilometers)', 'متري (كيلومترات)') },
+                { value: 'mi', label: t('Imperial (Miles)', 'إمبراطوري (أميال)') },
+              ]} />
           </div>
 
           <div className="fleet-input-group" style={{ textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
             <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px' }}>{t('Operational Timezone', 'المنطقة الزمنية للتشغيل')}</label>
-            <select className="fleet-search-input" style={{ paddingLeft: '16px' }} value={draft.timezone} onChange={e => canEdit && set('timezone', e.target.value)} disabled={!canEdit}>
-              <option value="Asia/Dubai">{t('(GMT+04:00) Gulf Standard Time', '(GMT+04:00) توقيت الخليج القياسي')}</option>
-              <option value="Europe/London">{t('(GMT+00:00) Greenwich Mean Time', '(GMT+00:00) توقيت غرينتش')}</option>
-            </select>
+            <CustomSelect value={draft.timezone} onChange={(v) => canEdit && set('timezone', v)} disabled={!canEdit}
+              options={[
+                { value: 'Asia/Dubai', label: t('(GMT+04:00) Gulf Standard Time', '(GMT+04:00) توقيت الخليج القياسي') },
+                { value: 'Europe/London', label: t('(GMT+00:00) Greenwich Mean Time', '(GMT+00:00) توقيت غرينتش') },
+              ]} />
           </div>
         </div>
 

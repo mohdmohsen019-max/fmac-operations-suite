@@ -3,6 +3,7 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import LanguageToggle from './shared/LanguageToggle';
 import ThemeToggle from './shared/ThemeToggle';
 import FMACLogo from './FMACLogo';
+import CustomSelect from './CustomSelect';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -750,18 +751,12 @@ export default function LoginPage() {
                 <label className="login-label">
                   {isAr ? 'المسمى الوظيفي / Job Title' : 'Job Title / المسمى الوظيفي'}
                 </label>
-                <select
-                  className="login-input"
+                <CustomSelect
                   value={jobTitle}
-                  onChange={(e) => setJobTitle(e.target.value)}
-                  required
-                  style={{ cursor: 'pointer' }}
-                >
-                  <option value="">{isAr ? '— اختر المسمى الوظيفي —' : '— Select Job Title —'}</option>
-                  {JOB_TITLES.map(title => (
-                    <option key={title} value={title}>{title}</option>
-                  ))}
-                </select>
+                  onChange={setJobTitle}
+                  placeholder={isAr ? '— اختر المسمى الوظيفي —' : '— Select Job Title —'}
+                  options={JOB_TITLES.map(title => ({ value: title, label: title }))}
+                />
               </div>
             )}
 

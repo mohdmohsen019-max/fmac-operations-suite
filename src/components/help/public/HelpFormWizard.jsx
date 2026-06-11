@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { submitTicket } from '../services/ticketService';
 import { useLanguage } from '../../../contexts/LanguageContext';
+import CustomSelect from '../../CustomSelect';
 import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 
 import './HelpFormWizard.css';
@@ -205,9 +206,8 @@ export default function HelpFormWizard() {
           <label className={isAr ? 'form-label-ar' : 'form-label-en'}>
             {isAr ? 'الفرع' : 'BRANCH'} <span className="required-asterisk">*</span>
           </label>
-          <select className="form-input" name="branch" value={userInfo.branch} onChange={handleUserChange}>
-            {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-          </select>
+          <CustomSelect value={userInfo.branch} onChange={(v) => handleUserChange({ target: { name: 'branch', value: v } })}
+            options={BRANCHES.map(b => ({ value: b, label: b }))} />
         </div>
         <div className="form-group">
           <label className={isAr ? 'form-label-ar' : 'form-label-en'}>
@@ -270,9 +270,8 @@ export default function HelpFormWizard() {
           <>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الشكوى ضد' : 'COMPLAINT AGAINST'} <span className="required-asterisk">*</span></label>
-              <select className="form-input" name="against" value={details.against} onChange={handleDetailChange}>
-                {['مدرب / Coach', 'موظف إداري / Admin Staff', 'سائق حافلة / Bus Driver', 'لاعب آخر / Other Player', 'المنشأة / Facility', 'أخرى / Other'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <CustomSelect value={details.against} onChange={(v) => handleDetailChange({ target: { name: 'against', value: v } })}
+                options={['مدرب / Coach', 'موظف إداري / Admin Staff', 'سائق حافلة / Bus Driver', 'لاعب آخر / Other Player', 'المنشأة / Facility', 'أخرى / Other'].map(opt => ({ value: opt, label: opt }))} />
             </div>
             {['مدرب / Coach', 'سائق حافلة / Bus Driver', 'لاعب آخر / Other Player'].includes(details.against) && (
               <div className="form-group">
@@ -291,15 +290,13 @@ export default function HelpFormWizard() {
           <>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'القسم' : 'DEPARTMENT'}</label>
-              <select className="form-input" name="department" value={details.department} onChange={handleDetailChange}>
-                {['التدريب / Coaching', 'الإدارة / Administration', 'النقل / Transport', 'المرافق / Facilities', 'الفعاليات / Events', 'أخرى / Other'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <CustomSelect value={details.department} onChange={(v) => handleDetailChange({ target: { name: 'department', value: v } })}
+                options={['التدريب / Coaching', 'الإدارة / Administration', 'النقل / Transport', 'المرافق / Facilities', 'الفعاليات / Events', 'أخرى / Other'].map(opt => ({ value: opt, label: opt }))} />
             </div>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الأولوية' : 'PRIORITY'}</label>
-              <select className="form-input" name="priority" value={details.priority} onChange={handleDetailChange}>
-                {['منخفض / Low', 'متوسط / Medium', 'عالي / High'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <CustomSelect value={details.priority} onChange={(v) => handleDetailChange({ target: { name: 'priority', value: v } })}
+                options={['منخفض / Low', 'متوسط / Medium', 'عالي / High'].map(opt => ({ value: opt, label: opt }))} />
             </div>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'النتيجة المتوقعة' : 'EXPECTED OUTCOME'}</label>
@@ -316,9 +313,8 @@ export default function HelpFormWizard() {
           <>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الاجتماع مع' : 'MEETING WITH'} <span className="required-asterisk">*</span></label>
-              <select className="form-input" name="meetingWith" value={details.meetingWith} onChange={handleDetailChange}>
-                {['مدير النادي / Club Director', 'مدير العمليات / Operations Manager', 'المدرب الرئيسي / Head Coach', 'الفريق الإداري / Admin Team'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <CustomSelect value={details.meetingWith} onChange={(v) => handleDetailChange({ target: { name: 'meetingWith', value: v } })}
+                options={['مدير النادي / Club Director', 'مدير العمليات / Operations Manager', 'المدرب الرئيسي / Head Coach', 'الفريق الإداري / Admin Team'].map(opt => ({ value: opt, label: opt }))} />
             </div>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'التاريخ المفضل' : 'PREFERRED DATE'} <span className="required-asterisk">*</span></label>
@@ -335,9 +331,8 @@ export default function HelpFormWizard() {
           <>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'صفتك' : 'YOUR ROLE'}</label>
-              <select className="form-input" name="role" value={details.role} onChange={handleDetailChange}>
-                {['ولي أمر / Parent', 'لاعب / Player', 'مدرب / Coach', 'زائر / Visitor', 'أخرى / Other'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <CustomSelect value={details.role} onChange={(v) => handleDetailChange({ target: { name: 'role', value: v } })}
+                options={['ولي أمر / Parent', 'لاعب / Player', 'مدرب / Coach', 'زائر / Visitor', 'أخرى / Other'].map(opt => ({ value: opt, label: opt }))} />
             </div>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'موضوع المكالمة' : 'CALL SUBJECT'} <span className="required-asterisk">*</span></label>
@@ -345,9 +340,8 @@ export default function HelpFormWizard() {
             </div>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الوقت المفضل' : 'BEST TIME TO CALL'}</label>
-              <select className="form-input" name="bestTime" value={details.bestTime} onChange={handleDetailChange}>
-                {['الصباح 8-12 / Morning 8-12', 'الظهر 12-4 / Afternoon 12-4', 'المساء 4-8 / Evening 4-8'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <CustomSelect value={details.bestTime} onChange={(v) => handleDetailChange({ target: { name: 'bestTime', value: v } })}
+                options={['الصباح 8-12 / Morning 8-12', 'الظهر 12-4 / Afternoon 12-4', 'المساء 4-8 / Evening 4-8'].map(opt => ({ value: opt, label: opt }))} />
             </div>
           </>
         )}
@@ -356,9 +350,8 @@ export default function HelpFormWizard() {
           <>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الموقع' : 'LOCATION'} <span className="required-asterisk">*</span></label>
-              <select className="form-input" name="location" value={details.location} onChange={handleDetailChange}>
-                {['المبنى الرئيسي / Main Building', 'الحافلة / Bus', 'أرض التدريب / Training Ground', 'غرف التبديل / Changing Rooms', 'أخرى / Other'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <CustomSelect value={details.location} onChange={(v) => handleDetailChange({ target: { name: 'location', value: v } })}
+                options={['المبنى الرئيسي / Main Building', 'الحافلة / Bus', 'أرض التدريب / Training Ground', 'غرف التبديل / Changing Rooms', 'أخرى / Other'].map(opt => ({ value: opt, label: opt }))} />
             </div>
             {details.location === 'الحافلة / Bus' && (
               <div className="form-group">
@@ -379,9 +372,8 @@ export default function HelpFormWizard() {
             </div>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'درجة الأهمية' : 'URGENCY'}</label>
-              <select className="form-input" name="urgency" value={details.urgency} onChange={handleDetailChange}>
-                {['منخفض / Low', 'متوسط / Medium', 'عالي / High', 'طارئ / Emergency'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <CustomSelect value={details.urgency} onChange={(v) => handleDetailChange({ target: { name: 'urgency', value: v } })}
+                options={['منخفض / Low', 'متوسط / Medium', 'عالي / High', 'طارئ / Emergency'].map(opt => ({ value: opt, label: opt }))} />
             </div>
             <div className="form-group">
               <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'وصف المشكلة' : 'ISSUE DESCRIPTION'} <span className="required-asterisk">*</span></label>

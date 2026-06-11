@@ -5,6 +5,7 @@ import { db } from '../../firebase'
 import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { getSportLabel, getCatLabel, getItemStatus, fmtDate, DEFAULT_SPORTS } from './shared'
+import CustomSelect from '../CustomSelect'
 import * as XLSX from 'xlsx'
 
 const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -411,12 +412,14 @@ export default function InventoryReports({ items, settings }) {
         {/* ── Monthly controls ── */}
         {activeReport === 'monthly' && (
           <div className="inv-report-controls">
-            <select className="inv-select" value={selectedYear} onChange={e => setSelectedYear(+e.target.value)}>
-              {years.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <select className="inv-select" value={selectedMonth} onChange={e => setSelectedMonth(+e.target.value)}>
-              {MONTHS_EN.map((m,i) => <option key={i} value={i}>{lang === 'ar' ? MONTHS_AR[i] : m}</option>)}
-            </select>
+            <div style={{ minWidth: 110 }}>
+              <CustomSelect value={selectedYear} onChange={setSelectedYear}
+                options={years.map(y => ({ value: y, label: String(y) }))} />
+            </div>
+            <div style={{ minWidth: 140 }}>
+              <CustomSelect value={selectedMonth} onChange={setSelectedMonth}
+                options={MONTHS_EN.map((m, i) => ({ value: i, label: lang === 'ar' ? MONTHS_AR[i] : m }))} />
+            </div>
             <button className="inv-btn inv-btn-primary" onClick={generateMonthlyReport} disabled={loading}>
               {loading ? <RefreshCw size={14} className="inv-spin" /> : t('Generate','إنشاء')}
             </button>

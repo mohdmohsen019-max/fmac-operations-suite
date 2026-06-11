@@ -87,6 +87,8 @@
 /* ── Portal panel ── */
 .select-options {
   z-index: 9999;
+  box-sizing: border-box;
+  width: max-content;          /* grow to the longest option, clamped by maxWidth */
   background: var(--theme-surface-raised, var(--theme-surface));
   border: 1px solid var(--theme-border-strong, var(--theme-border));
   border-radius: 12px;

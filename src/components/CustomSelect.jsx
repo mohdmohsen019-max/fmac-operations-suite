@@ -56,7 +56,16 @@ export default function CustomSelect({
     const spaceAbove = r.top;
     const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
     const maxHeight = Math.min(300, Math.max(160, (openUp ? spaceAbove : spaceBelow) - 16));
-    setPos({ top: r.bottom, bottom: window.innerHeight - r.top, left: r.left, width: r.width, openUp, maxHeight });
+    setPos({
+      top: r.bottom,
+      bottom: window.innerHeight - r.top,
+      left: r.left,
+      right: window.innerWidth - r.right,
+      width: r.width,
+      vw: window.innerWidth,
+      openUp,
+      maxHeight,
+    });
   }, []);
 
   // Reposition while open (covers ancestor scroll + window resize).
@@ -127,12 +136,16 @@ export default function CustomSelect({
     }
   };
 
+  // Grow to fit the widest option (min = trigger width), but never past the
+  // viewport edge. Anchored to the trigger's start edge per direction.
+  const vw = pos.vw || (typeof window !== 'undefined' ? window.innerWidth : 9999);
   const panelStyle = {
     position: 'fixed',
-    left: pos.left,
-    width: pos.width,
+    minWidth: pos.width,
+    maxWidth: Math.max(pos.width, vw - (isRTL ? (pos.right || 0) : pos.left) - 8),
     maxHeight: pos.maxHeight,
     ...(pos.openUp ? { bottom: pos.bottom + 6 } : { top: pos.top + 6 }),
+    ...(isRTL ? { right: pos.right } : { left: pos.left }),
     direction: isRTL ? 'rtl' : 'ltr',
   };
 

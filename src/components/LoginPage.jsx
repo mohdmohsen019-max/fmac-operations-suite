@@ -3,6 +3,8 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import LanguageToggle from './shared/LanguageToggle';
 import ThemeToggle from './shared/ThemeToggle';
 import FMACLogo from './FMACLogo';
+import CinematicBackdrop from './shared/CinematicBackdrop';
+import useIsMobile from '../hooks/useIsMobile';
 import CustomSelect from './CustomSelect';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ArrowLeft } from 'lucide-react';
@@ -59,6 +61,44 @@ function CornerOrnament() {
       <path d="M16 0 Q16 16 0 16" stroke="currentColor" strokeWidth="0.5" fill="none" />
       <circle cx="8" cy="8" r="1.5" fill="currentColor" opacity="0.5" />
     </svg>
+  );
+}
+
+/* ── Rotating martial virtues ticker (left panel) ── */
+const VIRTUES = [
+  { ar: 'انضباط', en: 'DISCIPLINE' },
+  { ar: 'قوة',    en: 'STRENGTH' },
+  { ar: 'احترام', en: 'RESPECT' },
+  { ar: 'شرف',    en: 'HONOR' },
+  { ar: 'إتقان',  en: 'MASTERY' },
+];
+
+function VirtueTicker() {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setIdx(i => (i + 1) % VIRTUES.length), 2600);
+    return () => clearInterval(id);
+  }, []);
+  const v = VIRTUES[idx];
+  return (
+    <div className="login-virtues" aria-hidden="true">
+      <motion.div
+        key={idx}
+        initial={{ opacity: 0, y: 14, filter: 'blur(5px)' }}
+        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+        className="login-virtue"
+      >
+        <span className="login-virtue-ar">{v.ar}</span>
+        <span className="login-virtue-en">{v.en}</span>
+      </motion.div>
+      <div className="login-virtue-dots">
+        {VIRTUES.map((_, i) => (
+          <span key={i} className={`login-virtue-dot ${i === idx ? 'on' : ''}`} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -422,6 +462,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
+  const isMobile = useIsMobile(900);
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -622,8 +663,8 @@ export default function LoginPage() {
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       >
-        <div className="login-left-pattern"><LoginPatternSVG /></div>
-        <div className="login-left-glow" />
+        <CinematicBackdrop intensity={0.85} />
+        <div className="login-ghost-word" aria-hidden="true">دخول</div>
         <div className="login-corner tl"><CornerOrnament /></div>
         <div className="login-corner tr"><CornerOrnament /></div>
         <div className="login-corner bl"><CornerOrnament /></div>
@@ -636,6 +677,7 @@ export default function LoginPage() {
         >
           <FMACLogo size="lg" />
         </motion.div>
+        <VirtueTicker />
         <button className="login-back-link" onClick={goToPortal}>
           <ArrowLeft size={14} />
           <span>{isAr ? 'العودة للبوابة' : 'Back to Portal'}</span>
@@ -649,6 +691,9 @@ export default function LoginPage() {
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       >
+        {/* On mobile the decorative left panel is hidden, so bring the
+            ember atmosphere into the form column instead. */}
+        {isMobile && <CinematicBackdrop intensity={0.6} spotlight={false} />}
         <div className="login-noise" />
 
         <div className="login-top-actions">

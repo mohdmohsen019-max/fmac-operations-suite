@@ -1,0 +1,92 @@
+/* ── CinematicBackdrop — shared ember-forge atmosphere ── */
+
+.cb-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Aurora blobs — huge, soft, slowly breathing */
+.cb-aurora {
+  position: absolute;
+  width: 72vmax;
+  height: 72vmax;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.5;
+  will-change: transform;
+}
+.cb-aurora-red {
+  top: -28vmax;
+  left: -18vmax;
+  background: radial-gradient(circle, rgba(192, 57, 43, 0.34) 0%, rgba(192, 57, 43, 0.07) 45%, transparent 70%);
+  animation: cb-breathe-a 16s ease-in-out infinite;
+}
+.cb-aurora-gold {
+  bottom: -30vmax;
+  right: -20vmax;
+  background: radial-gradient(circle, rgba(201, 168, 76, 0.22) 0%, rgba(201, 168, 76, 0.05) 45%, transparent 70%);
+  animation: cb-breathe-b 21s ease-in-out infinite;
+}
+@keyframes cb-breathe-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(6vmax, 4vmax) scale(1.12); }
+}
+@keyframes cb-breathe-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-5vmax, -5vmax) scale(1.08); }
+}
+
+/* Ember canvas */
+.cb-embers {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Cursor spotlight (fixed so it tracks viewport coords) */
+.cb-spotlight {
+  position: fixed;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  background: radial-gradient(
+    560px circle at var(--cb-x, 50%) var(--cb-y, 40%),
+    rgba(201, 168, 76, 0.075),
+    transparent 65%
+  );
+}
+
+/* Film grain */
+.cb-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+}
+
+/* Light theme: tone everything down */
+[data-theme="light"] .cb-aurora-red  { opacity: 0.30; }
+[data-theme="light"] .cb-aurora-gold { opacity: 0.34; }
+[data-theme="light"] .cb-embers      { opacity: 0.5; }
+[data-theme="light"] .cb-spotlight {
+  background: radial-gradient(
+    560px circle at var(--cb-x, 50%) var(--cb-y, 40%),
+    rgba(192, 57, 43, 0.05),
+    transparent 65%
+  );
+}
+[data-theme="light"] .cb-grain { opacity: 0.035; }
+
+/* Mobile: spotlight off (no cursor), fewer GPU layers */
+@media (max-width: 768px) {
+  .cb-spotlight { display: none; }
+  .cb-aurora { filter: blur(70px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-aurora-red, .cb-aurora-gold { animation: none; }
+}

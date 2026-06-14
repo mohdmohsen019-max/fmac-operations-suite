@@ -7,6 +7,7 @@ import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/fi
 import { ArrowLeft, User, Phone, Mail, MapPin, Clock, FileText, History, CheckCircle2, AlertCircle, Loader2, Tag } from 'lucide-react';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import CustomSelect from '../../CustomSelect';
+import { sendNotification } from '../../../utils/notify';
 
 
 const Field = ({ label, value }) => (
@@ -203,10 +204,23 @@ export default function HelpAdminTicket({ userProfile }) {
         status: 'progress',
         adminComments: arrayUnion(sysComment)
       });
-      setRequest(prev => ({ 
-        ...prev, 
-        assignedTo: 'hod', 
-        status: 'progress', 
+
+      // Notify configured recipients (fire-and-forget, never blocks)
+      try {
+        sendNotification('escalated_ticket', {
+          ticketId: request.ticketNumber,
+          type: request.type,
+          escalatedBy: userProfile?.displayName || currentUser?.email || 'Unknown',
+          escalatedAt: new Date().toISOString(),
+        });
+      } catch (notifyErr) {
+        console.error('escalated_ticket notification failed silently:', notifyErr);
+      }
+
+      setRequest(prev => ({
+        ...prev,
+        assignedTo: 'hod',
+        status: 'progress',
         escalationReason,
         escalatedAt: { toDate: () => new Date() }, // fallback for local UI
         adminComments: [...(prev.adminComments || []), sysComment] 

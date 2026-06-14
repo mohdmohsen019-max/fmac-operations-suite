@@ -1,5 +1,6 @@
 import { db } from '../../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { sendNotification } from '../../../utils/notify';
 
 const generateTicketNumber = () => {
   const random = Math.floor(100000 + Math.random() * 900000);
@@ -32,6 +33,17 @@ export const submitTicket = async (type, userInfo, details) => {
   try {
     // 1. Write to Firestore
     await addDoc(collection(db, 'requests'), requestData);
+
+    // 1b. Notify configured recipients (fire-and-forget, never blocks submit)
+    try {
+      sendNotification('new_ticket', {
+        ticketId: ticketNumber,
+        type,
+        submittedAt: new Date().toISOString(),
+      });
+    } catch (notifyErr) {
+      console.error('new_ticket notification failed silently:', notifyErr);
+    }
 
     // 2. Email Notification (Web3Forms)
     const WEB3FORMS_KEY = import.meta.env.VITE_WEB3FORMS_KEY;

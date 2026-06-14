@@ -15,6 +15,7 @@ import jsPDF from 'jspdf'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { getSportLabel, getRoleLabel, getUnitLabel, fmtDateTime, DEFAULT_SPORTS, DEFAULT_ROLES } from './shared'
 import CustomSelect from '../CustomSelect'
+import { sendNotification } from '../../utils/notify'
 
 // Generate receipt number — ISS-YYYY-XXXX
 async function nextReceiptNumber() {
@@ -268,10 +269,27 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
       await Promise.all(selectedItems.map(async r => {
         const prev = r.item.currentStock
         const newStock = Math.max(0, prev - r.qty)
+        // Low-stock detection: fire once per dip below threshold.
+        const threshold = r.item.minThreshold ?? 5
+        const nowLow = newStock <= threshold && r.item.low_stock_notified !== true
         await updateDoc(doc(db, 'inventory_items', r.item.id), {
           currentStock: increment(-r.qty),
           updatedAt: serverTimestamp(),
+          ...(nowLow ? { low_stock_notified: true } : {}),
         })
+        if (nowLow) {
+          try {
+            sendNotification('inventory_low', {
+              nameEn: r.item.nameEn,
+              nameAr: r.item.nameAr,
+              quantity: newStock,
+              threshold,
+              category: r.item.category || '',
+            })
+          } catch (notifyErr) {
+            console.error('inventory_low notification failed silently:', notifyErr)
+          }
+        }
         await addDoc(collection(db, 'inventory_movements'), {
           itemId: r.item.id,
           itemNameAr: r.item.nameAr,

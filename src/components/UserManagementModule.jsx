@@ -16,6 +16,7 @@ import {
   JOB_TITLES, JOB_TITLE_PERMISSIONS, MASTER_ADMIN_EMAIL,
 } from '../utils/jobTitlePermissions';
 import CustomSelect from './CustomSelect';
+import NotificationSettings from './NotificationSettings';
 import './UserManagementModule.css';
 
 /* ── helpers ── */
@@ -483,6 +484,14 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
             {passwordResets.length > 0 && <span className="um-tab-count amber">{passwordResets.length}</span>}
           </button>
         )}
+        {isMasterAdmin && (
+          <button
+            className={`tab-item ${activeTab === 'notifications' ? 'active' : ''}`}
+            onClick={() => setActiveTab('notifications')}
+          >
+            {lang === 'ar' ? 'الإشعارات' : 'Notifications'}
+          </button>
+        )}
       </nav>
 
       <AnimatePresence mode="wait">
@@ -505,6 +514,10 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
               onSetTemp={handleSetTempPassword}
               onDismiss={handleDismissReset}
             />
+          </motion.div>
+        ) : activeTab === 'notifications' ? (
+          <motion.div key="notifications" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <NotificationSettings isMasterAdmin={isMasterAdmin} />
           </motion.div>
         ) : (
           <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>

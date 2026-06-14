@@ -1,0 +1,87 @@
+// Fire-and-forget client notification helper.
+//
+// Reads the recipient list for `type` from notification_config/main, posts to
+// the server route (which holds the Resend key), then logs each result to
+// notification_log. ALWAYS wrapped in try/catch — a notification failure must
+// never block or delay the user action that triggered it.
+
+import { db } from '../firebase';
+import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+
+// Mirror of the server-side subject builder (kept tiny + secret-free) so the
+// log records the same subject the email used. Templates/HTML stay server-only.
+export function buildSubject(type, payload = {}) {
+  switch (type) {
+    case 'new_ticket':
+      return `New Ticket Received — ${payload.ticketId || ''}`.trim();
+    case 'escalated_ticket':
+      return `Ticket Escalated — ${payload.ticketId || ''}`.trim();
+    case 'inventory_low':
+      return `Low Stock Alert — ${payload.nameEn || payload.nameAr || ''}`.trim();
+    case 'monthly_report_reminder':
+      return `📋 Monthly Report Reminder — ${payload.monthLabel || ''}`.trim();
+    default:
+      return 'FMAC Operations Notification';
+  }
+}
+
+/**
+ * Send a notification of `type` with `payload`. Optionally pass
+ * { test: true, recipients } to bypass the config lookup (used by the test
+ * button to target a specific section's recipients).
+ */
+export async function sendNotification(type, payload = {}, opts = {}) {
+  try {
+    let recipients = opts.recipients;
+    const enabledByDefault = true;
+
+    if (!recipients) {
+      const configSnap = await getDoc(doc(db, 'notification_config', 'main'));
+      const config = configSnap.exists() ? configSnap.data() : null;
+
+      // Per-type enable flag (only the monthly cron has a separate flag; the
+      // in-app types are toggled via `enabled_<type>` in config).
+      if (config?.[`enabled_${type}`] === false) return;
+
+      recipients = config?.recipients?.[type] || [];
+    }
+
+    if (!recipients.length) return; // nothing configured — skip silently
+
+    const res = await fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, payload, recipients, test: !!opts.test }),
+    });
+
+    let results = [];
+    try {
+      const data = await res.json();
+      results = Array.isArray(data?.results) ? data.results : [];
+    } catch {
+      results = recipients.map(r => ({ email: r.email, status: 'failed', error: 'No response from server' }));
+    }
+
+    const subject = (opts.test ? '[TEST] ' : '') + buildSubject(type, payload);
+    const byEmail = Object.fromEntries(recipients.map(r => [r.email, r.name || '']));
+
+    for (const result of results) {
+      try {
+        await addDoc(collection(db, 'notification_log'), {
+          type,
+          recipient_email: result.email || '',
+          recipient_name: byEmail[result.email] || '',
+          status: result.status || 'failed',
+          error: result.error || null,
+          subject,
+          timestamp: serverTimestamp(),
+        });
+      } catch (logErr) {
+        console.error('notification_log write failed:', logErr);
+      }
+    }
+  } catch (err) {
+    console.error('Notification failed silently:', err);
+    // never block the main action
+  }
+}

@@ -19,9 +19,15 @@ async function doStockIn(item, qty, reason, notes, deliveryRef, supplierId) {
   const prev = item.currentStock || 0
   const newStock = prev + qty
 
+  // Reset the low-stock flag once stock recovers above its threshold, so a
+  // future dip will alert again.
+  const threshold = item.minThreshold ?? 5
+  const clearLow = newStock > threshold && item.low_stock_notified === true
+
   await updateDoc(doc(db, 'inventory_items', item.id), {
     currentStock: increment(qty),
     updatedAt: serverTimestamp(),
+    ...(clearLow ? { low_stock_notified: false } : {}),
   })
 
   await addDoc(collection(db, 'inventory_movements'), {

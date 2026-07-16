@@ -155,6 +155,9 @@
   color: var(--land-text-primary);
   text-shadow: 0 6px 40px rgba(0, 0, 0, 0.45);
 }
+[data-theme="light"] .hero-text-arabic {
+  text-shadow: none;
+}
 .kinetic-word-mask {
   display: inline-block;
   overflow: hidden;

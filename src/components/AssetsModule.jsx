@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { List, DoorOpen, ScrollText, SlidersHorizontal, RefreshCw, Wrench } from 'lucide-react'
+import { List, DoorOpen, ScrollText, SlidersHorizontal, RefreshCw, FileBarChart } from 'lucide-react'
 import { db } from '../firebase'
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -9,6 +9,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import AssetRegistry    from './assets/AssetRegistry'
 import AssetRooms       from './assets/AssetRooms'
 import AssetAuditLog    from './assets/AssetAuditLog'
+import AssetReports     from './assets/AssetReports'
 import AssetSystem      from './assets/AssetSystem'
 import AssetDetailModal from './assets/AssetDetailModal'
 import AssetEditModal   from './assets/AssetEditModal'
@@ -17,10 +18,11 @@ import { toMillis } from './assets/shared'
 import './AssetsModule.css'
 
 const TABS = [
-  { id: 'registry', icon: List,               en: 'Registry',  ar: 'السجل',        managerOnly: false },
-  { id: 'rooms',    icon: DoorOpen,           en: 'Rooms',     ar: 'الغرف',        managerOnly: false },
-  { id: 'audit',    icon: ScrollText,         en: 'Audit Log', ar: 'سجل التغييرات', managerOnly: false },
-  { id: 'system',   icon: SlidersHorizontal,  en: 'System',    ar: 'النظام',       managerOnly: true  },
+  { id: 'registry', icon: List,               en: 'Registry',  ar: 'السجل',            managerOnly: false },
+  { id: 'reports',  icon: FileBarChart,       en: 'Reports',   ar: 'التقارير',         managerOnly: true  },
+  { id: 'rooms',    icon: DoorOpen,           en: 'Rooms',     ar: 'الغرف',            managerOnly: false },
+  { id: 'audit',    icon: ScrollText,         en: 'Audit Log', ar: 'سجل التغييرات',    managerOnly: false },
+  { id: 'system',   icon: SlidersHorizontal,  en: 'System',    ar: 'النظام',           managerOnly: true  },
 ]
 
 export default function AssetsModule() {
@@ -28,11 +30,6 @@ export default function AssetsModule() {
   const { userProfile, user, isMasterAdmin } = usePermissions()
 
   // ── Access control ────────────────────────────────────────────────
-  // TEMPORARY: the whole module is under maintenance and restricted to the
-  // master admin until it's ready for other users. Remove `moduleLocked` (and
-  // its early return below) to re-open it to Store Managers / viewers.
-  const moduleLocked = !isMasterAdmin
-
   // Per spec: only Warehouse/Store Manager (role 'store_manager') + master admin
   // get full edit access. Everyone else authenticated is view-only.
   const canManage = isMasterAdmin || userProfile?.role === 'store_manager'
@@ -135,31 +132,6 @@ export default function AssetsModule() {
     onOpenBarcode: openBarcodeFor,
   }
 
-  // ── Under-maintenance gate (master admin only) ───────────────────
-  if (moduleLocked) {
-    return (
-      <div className="ast-module">
-        <motion.div
-          className="ast-maintenance"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <div className="ast-maintenance-icon">
-            <Wrench size={40} strokeWidth={1.5} />
-          </div>
-          <h2>{t('Assets — Under Maintenance', 'الأصول — تحت الصيانة')}</h2>
-          <p>
-            {t(
-              'This module is being prepared and is temporarily unavailable. It will be opened to all users once it’s ready.',
-              'هذا القسم قيد الإعداد وغير متاح مؤقتاً. سيتم فتحه لجميع المستخدمين بمجرد جاهزيته.'
-            )}
-          </p>
-        </motion.div>
-      </div>
-    )
-  }
-
   return (
     <div className="ast-module">
       {/* Tab navigation */}
@@ -213,6 +185,7 @@ export default function AssetsModule() {
                   setRoomFilter={setRegistryRoomFilter}
                 />
               )}
+              {activeTab === 'reports' && canManage && <AssetReports {...tabProps} />}
               {activeTab === 'rooms' && (
                 <AssetRooms {...tabProps} onViewRoomAssets={goToRoomAssets} />
               )}

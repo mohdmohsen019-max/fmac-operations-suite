@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore'
 import {
   ASSET_STATUSES, STATUS_META, statusLabel, changeTypeLabel, roomLabel, fmtDateTime, toMillis, logAudit,
+  conditionLabel, criticalityLabel, CRITICALITY_META, goalByCode, withDefaults, fmtMoney,
 } from './shared'
 
 function Field({ label, children, rtl }) {
@@ -103,19 +104,33 @@ export default function AssetDetailModal({
         </div>
 
         <div className="ast-modal-body">
+          {(() => { const d = withDefaults(asset); const goal = goalByCode(asset.strategic_goal_code); const cm = CRITICALITY_META[d.criticality]; return (
           <div className="ast-detail-grid">
+            <Field label={t('Asset ID', 'رقم الأصل')}>{asset.asset_code || asset.barcode || '—'}</Field>
             <Field label={t('Name (EN)', 'الاسم (إنجليزي)')}>{asset.name_en || '—'}</Field>
-            <Field label={t('Name (AR)', 'الاسم (عربي)')} rtl>{asset.name_ar || '—'}</Field>
-            <Field label={t('SKU', 'رمز SKU')}>{asset.sku || '—'}</Field>
-            <Field label={t('Barcode', 'الباركود')}>{asset.barcode || '—'}</Field>
+            <Field label={t('Location / Department', 'الموقع / القسم')}>{asset.department || '—'}</Field>
             <Field label={t('Category', 'الفئة')}>{asset.category || '—'}</Field>
-            <Field label={t('Type', 'النوع')}>{asset.type || '—'}</Field>
+            <Field label={t('Quantity', 'الكمية')}>{asset.quantity || 1} {asset.unit || ''}</Field>
+            <Field label={t('Condition', 'الحالة الفنية')}>{conditionLabel(d.condition, lang)}</Field>
+            <Field label={t('Criticality', 'درجة الأهمية')}>
+              <span style={cm ? { color: cm.color, fontWeight: 700 } : undefined}>{criticalityLabel(d.criticality, lang)}</span>
+            </Field>
             <Field label={t('Room / Area', 'الغرفة / المنطقة')}>{roomLabel(room, lang)}</Field>
-            <Field label={t('Assigned To', 'مُعيَّن إلى')}>{asset.assigned_to || t('Unassigned', 'غير مُعيَّن')}</Field>
+            <Field label={t('Replacement Year', 'سنة الاستبدال')}>{d.replacement_year || '—'}</Field>
+            <Field label={t('Est. Replacement (AED)', 'تكلفة الاستبدال (د.إ)')}>{fmtMoney(d.est_replacement_cost)}</Field>
+            <Field label={t('Utilization', 'مدى الاستغلال')}>{d.utilization === 'Underutilized' ? t('Underutilized', 'غير مُستغَل بالكامل') : t('Well-utilized', 'مُستغَل جيداً')}</Field>
             <Field label={t('Last Updated', 'آخر تحديث')}>{fmtDateTime(asset.last_updated)}</Field>
-            <Field label={t('Created', 'تاريخ الإنشاء')}>{fmtDateTime(asset.created_at)}</Field>
+            {goal && (
+              <div className="ast-detail-field ast-detail-field-full">
+                <span className="ast-detail-label">{t('Strategic Goal', 'الهدف الاستراتيجي')}</span>
+                <span className="ast-detail-value" dir="rtl" style={{ fontFamily: "'Tajawal', sans-serif" }}>
+                  <strong style={{ color: goal.color }}>{goal.code}</strong> — {goal.ar}
+                </span>
+              </div>
+            )}
             {asset.notes && <div className="ast-detail-field ast-detail-field-full"><span className="ast-detail-label">{t('Notes', 'ملاحظات')}</span><span className="ast-detail-value">{asset.notes}</span></div>}
           </div>
+          )})()}
 
           {/* Manager quick actions */}
           {canManage && (

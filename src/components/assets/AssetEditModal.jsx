@@ -4,11 +4,20 @@ import { X, Save, RefreshCw } from 'lucide-react'
 import { db } from '../../firebase'
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import CustomSelect from '../CustomSelect'
-import { ASSET_STATUSES, statusLabel, roomLabel, logAudit } from './shared'
+import {
+  ASSET_STATUSES, statusLabel, roomLabel, logAudit,
+  CONDITIONS, CRITICALITIES, UTILIZATIONS, STRATEGIC_GOALS,
+  conditionLabel, criticalityLabel, utilizationLabel, goalByCode, deriveDefaults,
+} from './shared'
 
 const EMPTY = {
-  name_en: '', name_ar: '', sku: '', barcode: '', category: '', type: '',
-  location_room: '', assigned_to: '', status: 'Active', notes: '',
+  asset_code: '', name_en: '', name_ar: '', sku: '', barcode: '', category: '', type: '',
+  department: '', location_room: '', assigned_to: '', status: 'Active', notes: '',
+  quantity: 1, unit: 'PCS', brand: '', serial: '', location_code: '', rack: '',
+  purchase_cost: 0,
+  condition: 'Good', criticality: '', strategic_goal_code: '',
+  useful_life_years: '', replacement_year: '', est_replacement_cost: '',
+  funding_source: 'الموازنة التشغيلية', utilization: 'Well-utilized',
 }
 
 export default function AssetEditModal({
@@ -30,16 +39,43 @@ export default function AssetEditModal({
     }
     setSaving(true); setError('')
     try {
+      const goal = goalByCode(form.strategic_goal_code)
+      // Fill any lifecycle field left blank with a smart default from category/condition.
+      const derived = deriveDefaults({
+        category: form.category, condition: form.condition, criticality: form.criticality,
+        quantity: form.quantity, purchase_cost: form.purchase_cost,
+        useful_life_years: form.useful_life_years, replacement_year: form.replacement_year,
+        est_replacement_cost: form.est_replacement_cost,
+        funding_source: form.funding_source, utilization: form.utilization,
+      })
       const payload = {
+        asset_code: (form.asset_code || '').trim(),
         name_en: form.name_en.trim(),
         name_ar: form.name_ar.trim(),
         sku: form.sku.trim(),
         barcode: form.barcode.trim(),
         category: form.category.trim(),
         type: form.type.trim(),
+        department: (form.department || '').trim(),
         location_room: form.location_room || '',
         assigned_to: form.assigned_to.trim(),
         status: form.status || 'Active',
+        quantity: Number(form.quantity) || 1,
+        unit: (form.unit || 'PCS').trim(),
+        brand: (form.brand || '').trim(),
+        serial: (form.serial || '').trim(),
+        location_code: (form.location_code || '').trim(),
+        rack: (form.rack || '').trim(),
+        purchase_cost: Number(form.purchase_cost) || 0,
+        condition: form.condition || 'Good',
+        criticality: derived.criticality,
+        useful_life_years: derived.useful_life_years,
+        replacement_year: derived.replacement_year,
+        est_replacement_cost: derived.est_replacement_cost,
+        funding_source: derived.funding_source,
+        utilization: derived.utilization,
+        strategic_goal_code: goal?.code || '',
+        strategic_goal_text: goal?.ar || '',
         notes: form.notes.trim(),
         last_updated: serverTimestamp(),
         last_updated_by: actorUid,
@@ -133,23 +169,66 @@ export default function AssetEditModal({
               <datalist id="ast-type-list">{types.map(ty => <option key={ty} value={ty} />)}</datalist>
             </div>
             <div className="ast-field">
+              <label>{t('Location / Department', 'الموقع / القسم')}</label>
+              <input value={form.department} onChange={e => set('department', e.target.value)} placeholder={t('e.g. GYM, Finance…', 'مثال: الصالة، المالية…')} />
+            </div>
+            <div className="ast-field">
               <label>{t('Room / Area', 'الغرفة / المنطقة')}</label>
               <CustomSelect value={form.location_room} onChange={(v) => set('location_room', v)}
                 placeholder={t('— Unassigned —', '— غير محدد —')}
                 options={[{ value: '', label: t('— Unassigned —', '— غير محدد —') }, ...rooms.map(r => ({ value: r.id, label: roomLabel(r, lang) }))]} />
             </div>
             <div className="ast-field">
-              <label>{t('Assigned To', 'مُعيَّن إلى')}</label>
-              <input value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)} placeholder={t('Person name', 'اسم الشخص')} />
+              <label>{t('Quantity', 'الكمية')}</label>
+              <input type="number" min="1" value={form.quantity} onChange={e => set('quantity', e.target.value)} />
             </div>
             <div className="ast-field">
               <label>{t('Status', 'الحالة')}</label>
               <CustomSelect value={form.status} onChange={(v) => set('status', v)}
                 options={ASSET_STATUSES.map(s => ({ value: s, label: statusLabel(s, lang) }))} />
             </div>
+          </div>
+
+          {/* Strategic & lifecycle — feeds the approved reports (smart-defaulted, editable) */}
+          <div className="ast-form-section-label">{t('Strategic & Lifecycle', 'الاستراتيجية ودورة الحياة')}</div>
+          <div className="ast-form-grid">
+            <div className="ast-field">
+              <label>{t('Condition', 'الحالة الفنية')}</label>
+              <CustomSelect value={form.condition} onChange={(v) => set('condition', v)}
+                options={CONDITIONS.map(c => ({ value: c, label: conditionLabel(c, lang) }))} />
+            </div>
+            <div className="ast-field">
+              <label>{t('Criticality', 'درجة الأهمية')}</label>
+              <CustomSelect value={form.criticality} onChange={(v) => set('criticality', v)}
+                placeholder={t('Auto from category', 'تلقائي حسب الفئة')}
+                options={[{ value: '', label: t('Auto from category', 'تلقائي حسب الفئة') }, ...CRITICALITIES.map(c => ({ value: c, label: criticalityLabel(c, lang) }))]} />
+            </div>
+            <div className="ast-field ast-field-full">
+              <label>{t('Strategic Goal Supported', 'الهدف الاستراتيجي المدعوم')}</label>
+              <CustomSelect value={form.strategic_goal_code} onChange={(v) => set('strategic_goal_code', v)}
+                placeholder={t('— None —', '— لا يوجد —')}
+                options={[{ value: '', label: t('— None —', '— لا يوجد —') }, ...STRATEGIC_GOALS.map(g => ({ value: g.code, label: `${g.code} — ${g.shortAr}` }))]} />
+            </div>
+            <div className="ast-field">
+              <label>{t('Purchase / Unit Cost (AED)', 'تكلفة الشراء / الوحدة (د.إ)')}</label>
+              <input type="number" min="0" value={form.purchase_cost} onChange={e => set('purchase_cost', e.target.value)} placeholder={t('Blank = category estimate', 'فارغ = تقدير حسب الفئة')} />
+            </div>
+            <div className="ast-field">
+              <label>{t('Replacement Year', 'سنة الاستبدال')}</label>
+              <input type="number" value={form.replacement_year} onChange={e => set('replacement_year', e.target.value)} placeholder={t('Auto', 'تلقائي')} />
+            </div>
+            <div className="ast-field">
+              <label>{t('Utilization', 'مدى الاستغلال')}</label>
+              <CustomSelect value={form.utilization} onChange={(v) => set('utilization', v)}
+                options={UTILIZATIONS.map(u => ({ value: u, label: utilizationLabel(u, lang) }))} />
+            </div>
+            <div className="ast-field">
+              <label>{t('Funding Source', 'مصدر التمويل')}</label>
+              <input value={form.funding_source} onChange={e => set('funding_source', e.target.value)} dir="rtl" style={{ fontFamily: "'Tajawal', sans-serif" }} />
+            </div>
             <div className="ast-field ast-field-full">
               <label>{t('Notes', 'ملاحظات')}</label>
-              <textarea rows={3} value={form.notes} onChange={e => set('notes', e.target.value)} />
+              <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} />
             </div>
           </div>
         </div>

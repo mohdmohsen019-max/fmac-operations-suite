@@ -152,6 +152,7 @@ function ReceiptDocument({ receipt, t, lang, sports }) {
             <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '1px solid #ccc' }}>المقاس</th>
             <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '1px solid #ccc' }}>الوحدة</th>
             <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '1px solid #ccc' }}>الكمية</th>
+            <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '1px solid #ccc', width: 80 }}>توقيع</th>
           </tr>
         </thead>
         <tbody>
@@ -162,26 +163,49 @@ function ReceiptDocument({ receipt, t, lang, sports }) {
               <td style={{ padding: '7px 10px', textAlign: 'center', borderBottom: '1px solid #eee' }}>{item.size || '—'}</td>
               <td style={{ padding: '7px 10px', textAlign: 'center', borderBottom: '1px solid #eee' }}>{item.unitAr || item.unit}</td>
               <td style={{ padding: '7px 10px', textAlign: 'center', fontWeight: 700, borderBottom: '1px solid #eee' }}>{item.quantity}</td>
+              <td style={{ padding: '7px 10px', borderBottom: '1px solid #eee' }} />
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* Footer */}
-      <div style={{ fontSize: 11, color: '#555', marginBottom: 32, textAlign: 'right' }}>
+      {/* Authorised-by line */}
+      <div style={{ fontSize: 11, color: '#555', marginBottom: 28, textAlign: 'right' }}>
         تم الصرف بواسطة: {receipt.issuedByName}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-        <div style={{ width: '42%', textAlign: 'center' }}>
+
+      {/* Named signatories */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+        <div style={{ width: '44%', textAlign: 'center' }}>
           <div style={{ borderBottom: '1px solid #555', marginBottom: 8, paddingBottom: 32 }} />
-          <div style={{ fontSize: 11, fontWeight: 600 }}>توقيع أمين المخزن</div>
+          <div style={{ fontSize: 12, fontWeight: 700 }}>ايهاب استيتيه</div>
+          <div style={{ fontSize: 10, color: '#555', marginTop: 2 }}>رئيس قسم العمليات</div>
         </div>
-        <div style={{ width: '42%', textAlign: 'center' }}>
+        <div style={{ width: '44%', textAlign: 'center' }}>
           <div style={{ borderBottom: '1px solid #555', marginBottom: 8, paddingBottom: 32 }} />
-          <div style={{ fontSize: 11, fontWeight: 600 }}>توقيع المستلم</div>
+          <div style={{ fontSize: 12, fontWeight: 700 }}>أنس العداربة</div>
+          <div style={{ fontSize: 10, color: '#555', marginTop: 2 }}>رئيس القسم الفني</div>
         </div>
       </div>
-      <div style={{ marginTop: 28, textAlign: 'center', fontSize: 10, color: '#888', borderTop: '1px solid #eee', paddingTop: 12 }}>
+
+      {/* Receiver acknowledgment */}
+      <div style={{ marginTop: 32, border: '1px solid #ccc', borderRadius: 6, padding: '14px 16px', background: '#fafafa', fontSize: 12, lineHeight: 1.85, direction: 'rtl' }}>
+        <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13 }}>إقرار الاستلام</div>
+        <div>
+          أقر بموجب هذا بأنني قد استلمت بنجاح البضائع أو المواد المدرجة أدناه من السيد/ محمد عبدالله العمايره
+        </div>
+        <div style={{ marginTop: 6 }}>
+          أقر بأن البضائع المستلمة تمثل الكمية المذكورة أعلاه، وأنني قد تحققت منها وتأكدت من أنها تطابق ما تم ذكره في الوصف. وأنا مسؤول عن البضائع المستلمة اعتبارًا من تاريخ الاستلام أعلاه.
+        </div>
+        <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>الاسم : <span style={{ display: 'inline-block', width: 180, borderBottom: '1px solid #999' }} /></div>
+          <div>المنصب : <span style={{ display: 'inline-block', width: 160, borderBottom: '1px solid #999' }} /></div>
+          <div>التوقيع : <span style={{ display: 'inline-block', width: 200, borderBottom: '1px solid #999' }} /></div>
+          <div>التاريخ : <span style={{ display: 'inline-block', width: 160, borderBottom: '1px solid #999' }} /></div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 20, textAlign: 'center', fontSize: 10, color: '#888', borderTop: '1px solid #eee', paddingTop: 12 }}>
         هذا المستند رسمي ويجب الاحتفاظ به
       </div>
     </div>

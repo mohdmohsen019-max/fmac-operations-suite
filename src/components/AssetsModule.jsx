@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { List, DoorOpen, ScrollText, SlidersHorizontal, RefreshCw, FileBarChart } from 'lucide-react'
+import { List, DoorOpen, ScrollText, SlidersHorizontal, RefreshCw, FileBarChart, ShieldCheck } from 'lucide-react'
 import { db } from '../firebase'
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { collection, onSnapshot, doc, query, orderBy } from 'firebase/firestore'
 import { useLanguage } from '../contexts/LanguageContext'
 import { usePermissions } from '../hooks/usePermissions'
 
@@ -10,16 +10,19 @@ import AssetRegistry    from './assets/AssetRegistry'
 import AssetRooms       from './assets/AssetRooms'
 import AssetAuditLog    from './assets/AssetAuditLog'
 import AssetReports     from './assets/AssetReports'
+import AssetAMS         from './assets/AssetAMS'
 import AssetSystem      from './assets/AssetSystem'
 import AssetDetailModal from './assets/AssetDetailModal'
 import AssetEditModal   from './assets/AssetEditModal'
 import BarcodePrintModal from './inventory/BarcodePrintModal'
 import { toMillis } from './assets/shared'
+import { mergeAmsConfig } from './assets/ams'
 import './AssetsModule.css'
 
 const TABS = [
   { id: 'registry', icon: List,               en: 'Registry',  ar: 'السجل',            managerOnly: false },
   { id: 'reports',  icon: FileBarChart,       en: 'Reports',   ar: 'التقارير',         managerOnly: true  },
+  { id: 'ams',      icon: ShieldCheck,        en: 'AMS',       ar: 'نظام الأصول',      managerOnly: true  },
   { id: 'rooms',    icon: DoorOpen,           en: 'Rooms',     ar: 'الغرف',            managerOnly: false },
   { id: 'audit',    icon: ScrollText,         en: 'Audit Log', ar: 'سجل التغييرات',    managerOnly: false },
   { id: 'system',   icon: SlidersHorizontal,  en: 'System',    ar: 'النظام',           managerOnly: true  },
@@ -40,6 +43,8 @@ export default function AssetsModule() {
   const [activeTab, setActiveTab] = useState('registry')
   const [assets, setAssets] = useState([])
   const [rooms, setRooms] = useState([])
+  const [amsConfig, setAmsConfig] = useState(null)   // merged AMS config (ISO 55001)
+  const [snapshots, setSnapshots] = useState([])     // dated performance snapshots
   const [loading, setLoading] = useState(true)
 
   // Cross-tab control: room pre-filter when arriving from the Rooms tab.
@@ -65,7 +70,20 @@ export default function AssetsModule() {
       setRooms(list)
     }, err => console.error('[assets] rooms listener error:', err))
 
-    return () => { unsubAssets(); unsubRooms() }
+    // AMS config (ISO 55001) — single doc, merged onto defaults so reports
+    // and the editor always have a complete config.
+    const unsubAms = onSnapshot(doc(db, 'asset_ams', 'config'), snap => {
+      setAmsConfig(mergeAmsConfig(snap.exists() ? snap.data() : null))
+    }, err => { console.error('[assets] ams config listener error:', err); setAmsConfig(mergeAmsConfig(null)) })
+
+    // Dated performance snapshots for trend analysis.
+    const unsubSnaps = onSnapshot(collection(db, 'asset_snapshots'), snap => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+      setSnapshots(list)
+    }, err => console.error('[assets] snapshots listener error:', err))
+
+    return () => { unsubAssets(); unsubRooms(); unsubAms(); unsubSnaps() }
   }, [])
 
   // Keep the open detail modal in sync with live data after edits.
@@ -126,7 +144,7 @@ export default function AssetsModule() {
 
   const tabProps = {
     assets, rooms, canManage, lang, t, isRTL,
-    actorUid, actorName,
+    actorUid, actorName, amsConfig, snapshots,
     onOpenDetail: (a) => setDetailAsset(a),
     onOpenEdit: (a) => setEditAsset(a),
     onOpenBarcode: openBarcodeFor,
@@ -186,6 +204,7 @@ export default function AssetsModule() {
                 />
               )}
               {activeTab === 'reports' && canManage && <AssetReports {...tabProps} />}
+              {activeTab === 'ams' && canManage && <AssetAMS {...tabProps} />}
               {activeTab === 'rooms' && (
                 <AssetRooms {...tabProps} onViewRoomAssets={goToRoomAssets} />
               )}

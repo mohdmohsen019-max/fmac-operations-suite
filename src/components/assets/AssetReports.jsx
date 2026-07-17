@@ -2,13 +2,16 @@ import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   FileText, Target, CalendarClock, Download, RefreshCw, ShieldCheck, Info,
-  Briefcase, FileSpreadsheet,
+  Briefcase, FileSpreadsheet, ShieldHalf,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
-import { buildStrategy, buildLinkage, buildPlan, buildExecutive, docRef } from './reports'
+import { db } from '../../firebase'
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { buildStrategy, buildLinkage, buildPlan, buildExecutive, buildAMS, docRef } from './reports'
 import StrategicReportDoc, { TITLES } from './StrategicReportDoc'
+import { DEFAULT_AMS_CONFIG, buildSnapshot } from './ams'
 import {
   fmtMoney, withDefaults, resolveGoalCode, goalByCode,
   criticalityLabel, conditionLabel, normalizeCategory,
@@ -24,9 +27,9 @@ const REPORTS = [
     ar: 'استراتيجية الأصول والموارد',
     en: 'Asset & Resource Strategy',
     deliverable: 'استراتيجية الأصول والموارد المعتمدة',
-    pagesAr: '٣ صفحات',
-    build: buildStrategy,
-    desc: 'المحفظة كاملة: التوزيع بالفئة والموقع، الحالة والأهمية، سجل الصيانة، أولويات الاستبدال، وقراءات تحليلية.',
+    pagesAr: '٤ صفحات',
+    build: (a, c, s) => buildStrategy(a, c, s),
+    desc: 'المحفظة كاملة: التوزيع، الحالة والأهمية، أهداف إدارة الأصول وتتبّع الأداء، سجل الصيانة، وأولويات الاستبدال.',
     stats: (d) => [
       { v: d.kpi.totalAssets, l: 'أصل' },
       { v: d.kpi.locations, l: 'موقعاً' },
@@ -41,9 +44,9 @@ const REPORTS = [
     ar: 'خريطة الربط الاستراتيجي للأصول',
     en: 'Strategic Asset-Linkage Map',
     deliverable: 'خريطة الربط الاستراتيجي للأصول المعتمدة',
-    pagesAr: '٣ صفحات',
-    build: buildLinkage,
-    desc: 'كل أصل مربوط بأحد أعمدة البيت الاستراتيجي الستة، مع تفصيل لكل هدف وقوائم العناية الخاصة ومنهجية الربط.',
+    pagesAr: '٤ صفحات',
+    build: (a, c) => buildLinkage(a, c),
+    desc: 'كل أصل مربوط بأحد أعمدة البيت الاستراتيجي الستة، مع منهجية المخاطر وسجل مخاطر كامل ومنهجية الربط.',
     stats: (d) => [
       { v: `${d.kpi.coverage}%`, l: 'تغطية' },
       { v: d.kpi.goalsUsed, l: 'أهداف' },
@@ -58,9 +61,9 @@ const REPORTS = [
     ar: 'خطة الأصول متوسطة المدى (٣–٥ سنوات)',
     en: 'Medium-Term Asset Plan',
     deliverable: 'خطة الأصول متوسطة المدى المعتمدة',
-    pagesAr: '٣ صفحات',
-    build: (a) => buildPlan(a, 5),
-    desc: 'جدول الاستبدال بالسنة ومنحنى الإنفاق، مصادر التمويل، أولويات رأسمالية متوازنة، والمخاطر وإجراءات التخفيف.',
+    pagesAr: '٤ صفحات',
+    build: (a, c) => buildPlan(a, 5, c),
+    desc: 'جدول الاستبدال، منهجية ترتيب الأولويات بالنقاط، التكلفة الإجمالية للملكية، مصادر التمويل، والمخاطر.',
     stats: (d) => [
       { v: d.kpi.dueCount, l: 'بند' },
       { v: fmtMoney(d.kpi.totalPlanCost), l: 'د.إ' },
@@ -76,7 +79,7 @@ const REPORTS = [
     en: 'Executive Portfolio Summary',
     deliverable: 'ملخص من صفحة واحدة لعرض القيادة',
     pagesAr: 'صفحة واحدة',
-    build: buildExecutive,
+    build: (a, c, s) => buildExecutive(a, c, s),
     desc: 'صفحة واحدة للقيادة: أهم المؤشرات، توزيع المحفظة والأهداف، وخمسة إجراءات موصى بها جاهزة للاعتماد.',
     stats: (d) => [
       { v: d.strategy.kpi.totalAssets, l: 'أصل' },
@@ -85,9 +88,27 @@ const REPORTS = [
       { v: d.actions.length, l: 'إجراءات' },
     ],
   },
+  {
+    type: 'ams',
+    icon: ShieldHalf,
+    color: '#0ea5e9',
+    ar: 'نظام إدارة الأصول (ISO 55001)',
+    en: 'Asset Management System Overview',
+    deliverable: 'نظام إدارة الأصول — نظرة عامة',
+    pagesAr: '٥ صفحات',
+    build: (a, c, s) => buildAMS(a, c, s),
+    desc: 'الوثيقة الحاكمة: السياسة والنطاق، الأدوار، الأهداف، منهجية المخاطر، سجل الالتزام، استراتيجية الصيانة، الحوكمة، والتخلص.',
+    stats: (d) => [
+      { v: d.portfolioCount, l: 'أصل' },
+      { v: d.objectives.length, l: 'هدف' },
+      { v: d.compliance.length, l: 'التزام' },
+      { v: `${d.avgRiskScore}`, l: 'م. مخاطر' },
+    ],
+  },
 ]
 
-export default function AssetReports({ assets, rooms, lang, t }) {
+export default function AssetReports({ assets, rooms, lang, t, amsConfig, snapshots = [] }) {
+  const config = amsConfig || DEFAULT_AMS_CONFIG
   const [active, setActive] = useState(null)   // { type, data, meta } while rendering offscreen
   const [busy, setBusy] = useState(null)       // report type currently generating
 
@@ -95,22 +116,41 @@ export default function AssetReports({ assets, rooms, lang, t }) {
   const datasets = useMemo(() => {
     const map = {}
     for (const r of REPORTS) {
-      try { map[r.type] = r.build(assets) } catch (e) { console.error('[assets] report build failed:', r.type, e); map[r.type] = null }
+      try { map[r.type] = r.build(assets, config, snapshots) } catch (e) { console.error('[assets] report build failed:', r.type, e); map[r.type] = null }
     }
     return map
-  }, [assets])
+  }, [assets, config, snapshots])
+
+  // Persist a dated performance snapshot (once per day) so future reports can
+  // show trends and target-vs-actual — ISO 55001 §9 performance evaluation.
+  const persistSnapshot = async () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      if ((snapshots || []).some(s => s.date === today)) return // already captured today
+      const portfolio = (assets || []).filter(a => a.status !== 'Disposed').map(withDefaults)
+      if (portfolio.length === 0) return
+      const snap = buildSnapshot(portfolio, config)
+      await addDoc(collection(db, 'asset_snapshots'), { ...snap, created_at: serverTimestamp() })
+    } catch (e) {
+      console.error('[assets] snapshot persist failed:', e)
+    }
+  }
 
   const generate = async (report) => {
     if (busy) return
-    const data = datasets[report.type] || report.build(assets)
+    const data = datasets[report.type] || report.build(assets, config, snapshots)
     const now = new Date()
     const meta = {
       ref: docRef(report.type.slice(0, 3).toUpperCase()),
       dateEn: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       dateAr: now.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' }),
+      version: config.version || '1.0',
+      reviewNext: config.review?.next || '—',
+      color: report.color,
     }
     setBusy(report.type)
     setActive({ type: report.type, data, meta })
+    persistSnapshot() // fire-and-forget; picked up by the shell listener
 
     // Wait for the offscreen DOM + fonts.
     await new Promise(res => setTimeout(res, 450))
@@ -197,8 +237,8 @@ export default function AssetReports({ assets, rooms, lang, t }) {
 
       <div className="ast-reports-note">
         <Info size={15} />
-        <span>{t('Every asset is auto-linked to one of the 6 strategic-house pillars from its location & function. Costs are conservative planning estimates until real purchase costs are recorded — refine any asset in the Registry and reports update instantly.',
-                  'يُربط كل أصل تلقائياً بأحد أعمدة البيت الاستراتيجي الستة وفق موقعه ووظيفته. التكاليف تقديرات تخطيطية متحفّظة إلى حين تسجيل تكاليف الشراء الفعلية — عدّل أي أصل في السجل وتتحدّث التقارير فوراً.')}</span>
+        <span>{t('These reports form an ISO 55001-structured Asset Management System: policy & scope, roles, objectives, risk register, compliance, maintenance strategy, whole-life cost and governance. Sections with no data yet are shown as "pending" — edit them in the AMS tab and reports update instantly.',
+                  'تشكّل هذه التقارير نظام إدارة أصول وفق هيكل ISO 55001: السياسة والنطاق، الأدوار، الأهداف، سجل المخاطر، الالتزام، استراتيجية الصيانة، تكلفة دورة الحياة، والحوكمة. الأقسام غير المكتملة تظهر كـ«قيد الإدخال» — عدّلها من تبويب «نظام الأصول» وتتحدّث التقارير فوراً.')}</span>
       </div>
 
       {empty && (

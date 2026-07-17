@@ -11,6 +11,7 @@ import {
   criticalityLabel, conditionLabel, fmtMoney, assetDisplayName,
   CLUB_VISION, CLUB_MISSION,
 } from './shared'
+import { categoryAr } from './ams'
 
 const TITLES = {
   strategy: {
@@ -33,15 +34,41 @@ const TITLES = {
     ar: 'الملخص التنفيذي لمحفظة الأصول',
     deliverable: 'الملخص التنفيذي لمحفظة الأصول',
   },
+  ams: {
+    en: 'Asset Management System Overview',
+    ar: 'نظام إدارة الأصول',
+    deliverable: 'نظام إدارة الأصول — نظرة عامة (ISO 55001)',
+  },
 }
 
-const PAGE_COUNTS = { strategy: 3, linkage: 3, plan: 3, executive: 1 }
+const PAGE_COUNTS = { strategy: 4, linkage: 4, plan: 4, executive: 1, ams: 5 }
 
 const catAr = {
   'Medical Devices': 'أجهزة طبية', 'Sport Equipment': 'معدات رياضية',
   'Electronics': 'إلكترونيات', 'Furniture': 'أثاث', 'Decorations': 'ديكورات', 'Other': 'أخرى',
 }
 const cAr = (c) => catAr[c] || c
+
+// html2canvas cannot parse the CSS color-mix() function, so per-report accent
+// tints are pre-computed here as plain rgba() strings and injected as CSS
+// custom properties — never color-mix in anything under .ast-report-root.
+function hexToRgb(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '#06b6d4')
+  return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 6, g: 182, b: 212 }
+}
+function accentVars(color) {
+  const { r, g, b } = hexToRgb(color)
+  const rgba = (a) => `rgba(${r},${g},${b},${a})`
+  return {
+    '--sr-accent': color || '#06b6d4',
+    '--sr-accent-07': rgba(0.07),
+    '--sr-accent-10': rgba(0.10),
+    '--sr-accent-12': rgba(0.12),
+    '--sr-accent-25': rgba(0.25),
+    '--sr-accent-28': rgba(0.28),
+    '--sr-accent-85': rgba(0.85),
+  }
+}
 
 /* ── Page frame ─────────────────────────────────────────────────────── */
 // dir="rtl" is set as a real HTML attribute (not just CSS `direction`) so the
@@ -53,9 +80,9 @@ function Page({ type, meta, pageNo, children }) {
   const ti = TITLES[type]
   const pages = PAGE_COUNTS[type]
   return (
-    <div className="ast-report-page sr-page" dir="rtl">
+    <div className="ast-report-page sr-page" dir="rtl" style={accentVars(meta.color)}>
       <div className="sr-head">
-        <img src="/fmac-logo-new.png" alt="FMAC" className="sr-logo" />
+        <img src="/fmac-report-logo.png" alt="FMAC" className="sr-logo" />
         <div className="sr-head-mid">
           <div className="sr-title-ar">{ti.ar}</div>
           <div className="sr-title-en" dir="ltr">{ti.en}</div>
@@ -70,13 +97,20 @@ function Page({ type, meta, pageNo, children }) {
           <div className="sr-date">{meta.dateAr}</div>
         </div>
       </div>
+      {/* ISO 55001 controlled-document header: version / revision / review */}
+      <div className="sr-metabar">
+        <span><b>الإصدار:</b> <span dir="ltr">{meta.version || '1.0'}</span></span>
+        <span><b>تاريخ الإصدار:</b> {meta.dateAr}</span>
+        <span><b>المراجعة القادمة:</b> <span dir="ltr">{meta.reviewNext || '—'}</span></span>
+        <span><b>التصنيف:</b> داخلي — معتمد</span>
+      </div>
       <div className="sr-rule" />
 
       <div className="sr-body">{children}</div>
 
       <div className="sr-foot">
         <span>نادي الفجيرة للفنون القتالية — قسم العمليات · إدارة الأصول الاستراتيجية</span>
-        <span dir="ltr">Fujairah Martial Arts Club · Page {pageNo} / {pages}</span>
+        <span dir="ltr">Fujairah MAC · ISO 55001 · Page {pageNo} / {pages}</span>
       </div>
     </div>
   )
@@ -92,9 +126,10 @@ function SecTitle({ ar, en, accent }) {
 }
 
 function Kpi({ value, ar, en, color }) {
+  const c = color || '#06b6d4'
   return (
-    <div className="sr-kpi">
-      <div className="sr-kpi-val" style={color ? { color } : undefined} dir="ltr">{value}</div>
+    <div className="sr-kpi" style={{ borderTopColor: c, background: `${c}0e` }}>
+      <div className="sr-kpi-val" style={{ color: c }} dir="ltr">{value}</div>
       <div className="sr-kpi-ar">{ar}</div>
       <div className="sr-kpi-en" dir="ltr">{en}</div>
     </div>
@@ -162,6 +197,113 @@ function QualityNote({ q }) {
       {q.realCost} أصلاً بتكلفة شراء فعلية مسجّلة، و{q.estimatedCost} أصلاً ({q.estimatedPct}%) بتكلفة تخطيطية مُقدّرة وفق فئة الأصل —
       تُستبدل التقديرات تلقائياً فور تسجيل التكلفة الفعلية في سجل الأصول.
     </div>
+  )
+}
+
+// Status / risk-band pill.
+function Pill({ label, color }) {
+  return <span className="sr-pill" style={{ color, borderColor: color, background: `${color}18` }}>{label}</span>
+}
+
+// "Data pending" marker — shows the ISO gap honestly instead of hiding it.
+function Pending({ label = 'قيد الإدخال' }) {
+  return <span className="sr-pending">{label}</span>
+}
+
+// Target-vs-actual progress bar.
+function Progress({ value }) {
+  if (value == null) return <Pending label="قيد الجمع" />
+  const color = value >= 100 ? '#10b981' : value >= 60 ? '#06b6d4' : value >= 30 ? '#f59e0b' : '#f43f5e'
+  return (
+    <div className="sr-prog">
+      <div className="sr-prog-track"><div className="sr-prog-fill" style={{ width: `${Math.max(3, value)}%`, background: color }} /></div>
+      <span className="sr-prog-val" dir="ltr">{value}%</span>
+    </div>
+  )
+}
+
+// A short labelled policy/text block (RTL body).
+function TextBlock({ ar, body }) {
+  return (
+    <div className="sr-textblock">
+      {ar && <div className="sr-textblock-h">{ar}</div>}
+      <p className="sr-textblock-b">{body}</p>
+    </div>
+  )
+}
+
+// 5×5 risk matrix grid (likelihood × consequence), coloured by band.
+function RiskMatrix({ matrix }) {
+  const bandFor = (score) => (matrix.bands.find(b => score <= b.max) || matrix.bands[matrix.bands.length - 1])
+  const L = matrix.likelihoodAr, C = matrix.consequenceAr
+  return (
+    <div className="sr-riskmatrix">
+      <table className="sr-rm-table">
+        <thead>
+          <tr>
+            <th className="sr-rm-corner"><span dir="rtl">الاحتمال ← / الأثر ↓</span></th>
+            {C.map((c, i) => <th key={i}>{c}<br /><span dir="ltr">{i + 1}</span></th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {L.map((l, li) => {
+            const lik = L.length - li // top row = highest likelihood (5)
+            return (
+              <tr key={li}>
+                <th className="sr-rm-row">{L[lik - 1]}<br /><span dir="ltr">{lik}</span></th>
+                {C.map((_, ci) => {
+                  const cons = ci + 1
+                  const score = lik * cons
+                  const band = bandFor(score)
+                  return <td key={ci} style={{ background: band.color, color: '#fff' }} dir="ltr">{score}</td>
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <div className="sr-rm-legend">
+        {matrix.bands.map((b, i) => (
+          <span key={i}><span className="sr-rm-swatch" style={{ background: b.color }} />{b.ar} (≤{b.max})</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Simple multi-metric trend (needs ≥2 snapshots) rendered as labelled columns.
+function TrendChart({ trend }) {
+  const rows = [
+    { key: 'totalValue', ar: 'قيمة المحفظة (د.إ)', fmt: (v) => fmtMoney(v) },
+    { key: 'goodConditionPct', ar: 'نسبة الحالة الجيدة', fmt: (v) => `${v}%` },
+    { key: 'avgRiskScore', ar: 'متوسط درجة المخاطر', fmt: (v) => v },
+  ]
+  const pts = trend.slice(-6)
+  return (
+    <table className="sr-table sr-mini">
+      <thead>
+        <tr>
+          <th className="ar">المؤشر</th>
+          {pts.map((s, i) => <th key={i} className="num" dir="ltr">{s.date?.slice(2)}</th>)}
+          <th className="num">الاتجاه</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, ri) => {
+          const first = pts[0]?.[r.key], last = pts[pts.length - 1]?.[r.key]
+          const up = last > first, flat = last === first
+          const arrow = flat ? '→' : up ? '↑' : '↓'
+          const good = r.key === 'avgRiskScore' ? !up : up
+          return (
+            <tr key={ri}>
+              <td className="ar">{r.ar}</td>
+              {pts.map((s, i) => <td key={i} className="num" dir="ltr">{r.fmt(s[r.key])}</td>)}
+              <td className="num" style={{ color: flat ? '#8b8b9e' : good ? '#10b981' : '#f43f5e', fontWeight: 800 }}>{arrow}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
   )
 }
 
@@ -303,6 +445,38 @@ function StrategyPages({ data, meta }) {
       </Page>
 
       <Page type="strategy" meta={meta} pageNo={3}>
+        <SecTitle ar="أهداف إدارة الأصول" en="Asset Management Objectives (ISO 55001 §6.2)" accent="#06b6d4" />
+        <p className="sr-note-plain">أهداف قابلة للقياس ومحددة زمنياً مرتبطة بأعمدة البيت الاستراتيجي، مع القيمة المرجعية والمستهدفة والفعلية الحيّة.</p>
+        <table className="sr-table">
+          <thead>
+            <tr>
+              <th>الهدف</th><th className="ar">المؤشر</th>
+              <th className="num">المرجعي</th><th className="num">المستهدف</th><th className="num">الفعلي</th>
+              <th>التقدّم</th><th className="num">الموعد</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.objectives.map((o, i) => (
+              <tr key={i}>
+                <td>{o.goal ? <Chip label={o.goal.code} color={o.goal.color} /> : '—'}</td>
+                <td className="ar sr-small">{o.metricAr}</td>
+                <td className="num" dir="ltr">{o.baseline != null ? `${o.baseline}${o.unit === '%' ? '%' : ''}` : '—'}</td>
+                <td className="num" dir="ltr">{o.target}{o.unit === '%' ? '%' : ''}</td>
+                <td className="num" dir="ltr">{o.hasActual ? `${o.actual}${o.unit === '%' ? '%' : ''}` : <Pending label="قيد الجمع" />}</td>
+                <td style={{ minWidth: 90 }}><Progress value={o.progress} /></td>
+                <td className="num sr-small" dir="ltr">{o.targetDate}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <SecTitle ar="تتبّع الأداء (الاتجاه الزمني)" en="Performance Trend" accent="#8b5cf6" />
+        <p className="sr-note-plain">مقارنة المؤشرات عبر لقطات أداء مؤرّخة تُحفظ تلقائياً عند كل إصدار للتقرير، لرصد اتجاه المحفظة عبر الزمن.</p>
+        <TrendChart trend={data.trend} />
+        <p className="sr-more">تُحدَّث سلسلة الاتجاه ذاتياً مع كل إصدار جديد للتقرير.</p>
+      </Page>
+
+      <Page type="strategy" meta={meta} pageNo={4}>
         <SecTitle ar="سجل الصيانة المطلوبة" en="Maintenance Backlog" accent="#f59e0b" />
         {data.maintenance.length === 0 ? (
           <p className="sr-note">لا توجد أصول تتطلب صيانة عاجلة — جميع الأصول بحالة جيدة وفق آخر تحديث للسجل. ✔</p>
@@ -438,30 +612,57 @@ function LinkagePages({ data, meta }) {
       </Page>
 
       <Page type="linkage" meta={meta} pageNo={3}>
-        <SecTitle ar="أصول تتطلب عناية خاصة" en="Assets Requiring Special Care" accent="#f43f5e" />
-        <table className="sr-table">
+        <SecTitle ar="منهجية إدارة المخاطر" en="Risk Management Methodology (ISO 55001 §6.1)" accent="#f43f5e" />
+        <div className="sr-two-col sr-risk-intro">
+          <div>
+            <p className="sr-note-plain">
+              تُقيَّم مخاطر الأصول بضرب الاحتمال (١–٥) في الأثر (١–٥) لإنتاج درجة مخاطر (١–٢٥) تُصنَّف ضمن أربعة نطاقات.
+              الاحتمال يُشتق من الحالة الفنية والأثر من درجة الأهمية، وكلاهما قابل للتعديل يدوياً لكل أصل.
+            </p>
+            <div className="sr-risk-bands">
+              {data.riskBands.map((b, i) => (
+                <div key={i} className="sr-risk-band-row">
+                  <span className="sr-rm-swatch" style={{ background: b.color }} />
+                  <span className="sr-risk-band-name">{b.ar}</span>
+                  <span className="sr-risk-band-range" dir="ltr">≤{b.max}</span>
+                  <span className="sr-risk-band-count"><b dir="ltr">{b.count}</b> أصل</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <RiskMatrix matrix={data.riskMatrix} />
+        </div>
+
+        <SecTitle ar="سجل المخاطر" en="Risk Register" accent="#f43f5e" />
+        <table className="sr-table sr-risk-table">
           <thead>
-            <tr><th className="ar">الأصل</th><th>الموقع</th><th>الفئة</th><th>الأهمية</th><th>الهدف</th></tr>
+            <tr>
+              <th className="ar">الأصل</th><th>الموقع</th>
+              <th className="num">الاحتمال</th><th className="num">الأثر</th><th className="num">الدرجة</th>
+              <th>التصنيف</th><th className="ar">المالك</th><th className="ar">إجراء المعالجة</th>
+            </tr>
           </thead>
           <tbody>
-            {data.criticalCare.map((a, i) => {
-              const g = STRATEGIC_GOALS.find(x => x.code === a.goal_code)
-              return (
-                <tr key={i}>
-                  <td>{assetDisplayName(a, 'en')}</td>
-                  <td className="sr-small">{a.department || '—'}</td>
-                  <td className="ar">{cAr(a.category)}</td>
-                  <td><Chip label={criticalityLabel(a.criticality, 'ar')} color={CRITICALITY_META[a.criticality]?.color} /></td>
-                  <td>{g ? <Chip label={g.code} color={g.color} /> : '—'}</td>
-                </tr>
-              )
-            })}
+            {data.riskRegister.map((w, i) => (
+              <tr key={i}>
+                <td>{assetDisplayName(w.a, 'en')}</td>
+                <td className="sr-small">{w.a.department || '—'}</td>
+                <td className="num" dir="ltr">{w.risk.likelihood}</td>
+                <td className="num" dir="ltr">{w.risk.consequence}</td>
+                <td className="num" dir="ltr"><b>{w.risk.score}</b></td>
+                <td><Pill label={w.risk.band.ar} color={w.risk.band.color} /></td>
+                <td className="ar sr-small">{w.risk.owner}</td>
+                <td className="ar sr-small">{w.risk.treatmentAr}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
-        {data.criticalCareTotal > data.criticalCare.length && (
-          <p className="sr-more">و {data.criticalCareTotal - data.criticalCare.length} أصلاً آخر ضمن قائمة العناية الخاصة الكاملة.</p>
+        {data.riskTotal > data.riskRegister.length && (
+          <p className="sr-more">يعرض الجدول أعلى {data.riskRegister.length} أصلاً بدرجة مخاطر؛ السجل الكامل يشمل {data.riskTotal} أصلاً.</p>
         )}
+      </Page>
 
+      <Page type="linkage" meta={meta} pageNo={4}>
         <SecTitle ar="أصول غير مستغَلة بالكامل" en="Underutilized Assets" accent="#f59e0b" />
         {data.underutilized.length === 0 ? (
           <p className="sr-note">لا توجد أصول مصنّفة كغير مستغَلة حالياً — تُحدَّث هذه القائمة من سجل الأصول عند تقييم الاستغلال ميدانياً.</p>
@@ -533,35 +734,97 @@ function PlanPages({ data, meta }) {
       </Page>
 
       <Page type="plan" meta={meta} pageNo={2}>
-        <SecTitle ar="مصادر التمويل" en="Funding Sources" />
-        <table className="sr-table sr-mini">
-          <thead><tr><th className="ar">المصدر</th><th className="num">عدد البنود</th><th className="num">القيمة (د.إ)</th><th className="num">الحصة</th></tr></thead>
-          <tbody>
-            {data.byFunding.map((f, i) => (
-              <tr key={i}>
-                <td className="ar">{f.source}</td><td className="num">{f.count}</td>
-                <td className="num">{fmtMoney(f.value)}</td>
-                <td className="num">{k.totalPlanCost ? Math.round((f.value / k.totalPlanCost) * 100) : 0}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <SecTitle ar="منهجية ترتيب أولويات الاستثمار" en="Investment Prioritisation Methodology" accent="#f43f5e" />
+        <div className="sr-formula">
+          <span className="sr-formula-label">درجة الأولوية =</span>
+          <span dir="ltr" className="sr-formula-eq">Criticality Weight × Risk Score × Goal Weight − (Cost Penalty × Cost Factor × 100)</span>
+        </div>
+        <div className="sr-two-col">
+          <table className="sr-table sr-mini">
+            <thead><tr><th className="ar">وزن الأهمية</th><th className="num">القيمة</th></tr></thead>
+            <tbody>
+              <tr><td className="ar">منخفضة</td><td className="num" dir="ltr">1</td></tr>
+              <tr><td className="ar">متوسطة</td><td className="num" dir="ltr">2</td></tr>
+              <tr><td className="ar">مرتفعة</td><td className="num" dir="ltr">3</td></tr>
+              <tr><td className="ar">حرجة</td><td className="num" dir="ltr">4</td></tr>
+            </tbody>
+          </table>
+          <table className="sr-table sr-mini">
+            <thead><tr><th className="ar">وزن الهدف الاستراتيجي</th><th className="num">القيمة</th></tr></thead>
+            <tbody>
+              {STRATEGIC_GOALS.map((g, i) => (
+                <tr key={i}>
+                  <td className="ar"><Chip label={g.code} color={g.color} /> {g.shortAr}</td>
+                  <td className="num" dir="ltr">{(data.investmentWeights?.goalWeights?.[g.code] ?? 0.7).toFixed(1)}</td>
+                </tr>
+              ))}
+              <tr className="sr-total"><td className="ar">معامل عقوبة التكلفة</td><td className="num" dir="ltr">{(data.investmentWeights?.costPenalty ?? 0.15).toFixed(2)}</td></tr>
+            </tbody>
+          </table>
+        </div>
 
-        <SecTitle ar="أولويات الإنفاق الرأسمالي" en="Capital Priorities (balanced mix)" accent="#f43f5e" />
+        <SecTitle ar="أولويات الإنفاق الرأسمالي" en="Capital Priorities (method-scored)" accent="#f43f5e" />
         <table className="sr-table">
           <thead>
-            <tr><th className="num">#</th><th className="ar">الأصل</th><th>الموقع</th><th>الفئة</th><th>الأهمية</th><th className="num">السنة</th><th className="num">التكلفة (د.إ)</th></tr>
+            <tr><th className="num">#</th><th className="ar">الأصل</th><th>الفئة</th><th>الأهمية</th><th className="num">المخاطر</th><th className="num">الدرجة</th><th className="num">السنة</th><th className="num">التكلفة (د.إ)</th></tr>
           </thead>
           <tbody>
             {data.priorities.map((a, i) => (
               <tr key={i}>
                 <td className="num">{i + 1}</td>
                 <td>{assetDisplayName(a, 'en')}</td>
-                <td className="sr-small">{a.department || '—'}</td>
-                <td className="ar">{cAr(a.category)}</td>
+                <td className="ar sr-small">{cAr(a.category)}</td>
                 <td><Chip label={criticalityLabel(a.criticality, 'ar')} color={CRITICALITY_META[a.criticality]?.color} /></td>
-                <td className="num">{a.replacement_year}</td>
-                <td className="num">{fmtMoney(a.est_replacement_cost)}</td>
+                <td className="num" dir="ltr">{a._risk}</td>
+                <td className="num" dir="ltr"><b>{a._score}</b></td>
+                <td className="num" dir="ltr">{a.replacement_year}</td>
+                <td className="num" dir="ltr">{fmtMoney(a.est_replacement_cost)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Page>
+
+      <Page type="plan" meta={meta} pageNo={3}>
+        <SecTitle ar="التكلفة الإجمالية للملكية (دورة الحياة)" en="Whole-Life Cost / Total Cost of Ownership" accent="#10b981" />
+        <p className="sr-note-plain">لا يقتصر التخطيط على تكلفة الاقتناء؛ يضيف هذا القسم التكلفة التشغيلية والصيانة السنوية على مدى العمر الافتراضي لكل فئة.</p>
+        <table className="sr-table">
+          <thead>
+            <tr>
+              <th className="ar">الفئة</th><th className="num">العمر (سنة)</th>
+              <th className="num">التكلفة الرأسمالية (د.إ)</th><th className="num">تشغيل سنوي (د.إ)</th>
+              <th className="num">تشغيل مدى العمر (د.إ)</th><th className="num">إجمالي الملكية (د.إ)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.wholeLife.map((w, i) => (
+              <tr key={i}>
+                <td className="ar">{cAr(w.category)}</td>
+                <td className="num" dir="ltr">{w.life}</td>
+                <td className="num" dir="ltr">{fmtMoney(w.capex)}</td>
+                <td className="num" dir="ltr">{fmtMoney(w.annualOpex)}</td>
+                <td className="num" dir="ltr">{fmtMoney(w.lifetimeOpex)}</td>
+                <td className="num" dir="ltr"><b>{fmtMoney(w.totalCostOfOwnership)}</b></td>
+              </tr>
+            ))}
+            <tr className="sr-total">
+              <td className="ar">الإجمالي</td><td />
+              <td className="num" dir="ltr">{fmtMoney(data.capexTotal)}</td><td />
+              <td className="num" dir="ltr">{fmtMoney(data.lifetimeOpexTotal)}</td>
+              <td className="num" dir="ltr">{fmtMoney(data.tcoTotal)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <SecTitle ar="مصادر التمويل" en="Funding Sources" />
+        <table className="sr-table sr-mini">
+          <thead><tr><th className="ar">المصدر</th><th className="num">عدد البنود</th><th className="num">القيمة (د.إ)</th><th className="num">الحصة</th></tr></thead>
+          <tbody>
+            {data.byFunding.map((f, i) => (
+              <tr key={i}>
+                <td className="ar">{f.source}</td><td className="num" dir="ltr">{f.count}</td>
+                <td className="num" dir="ltr">{fmtMoney(f.value)}</td>
+                <td className="num" dir="ltr">{k.totalPlanCost ? Math.round((f.value / k.totalPlanCost) * 100) : 0}%</td>
               </tr>
             ))}
           </tbody>
@@ -571,7 +834,7 @@ function PlanPages({ data, meta }) {
         <Insights items={data.insights} />
       </Page>
 
-      <Page type="plan" meta={meta} pageNo={3}>
+      <Page type="plan" meta={meta} pageNo={4}>
         <SecTitle ar="المنهجية والافتراضات" en="Methodology & Assumptions" />
         <NumberedList color="#0e7c5a" bg="#e6f7f0" items={[
           'تُحتسب سنة الاستبدال من العمر الافتراضي المعتمد لكل فئة، وتُقدَّم تلقائياً عند تدهور الحالة الفنية للأصل.',
@@ -654,6 +917,235 @@ function ExecutivePage({ data, meta }) {
   )
 }
 
+/* ═══════════════ REPORT 5 — AMS OVERVIEW (ISO 55001, 5 pages) ═══════════════ */
+function AmsPages({ data, meta }) {
+  const c = data.config
+  return (
+    <>
+      {/* P1 — Scope & Policy */}
+      <Page type="ams" meta={meta} pageNo={1}>
+        <p className="sr-intro">
+          توثّق هذه الوثيقة نظام إدارة الأصول لنادي الفجيرة للفنون القتالية بما يتوافق مع المتطلبات الهيكلية للمواصفة
+          الدولية ISO 55001، لتشكّل — إلى جانب استراتيجية الأصول وخريطة الربط والخطة متوسطة المدى — نظاماً متكاملاً وقابلاً للتدقيق.
+        </p>
+
+        <SecTitle ar="سياسة إدارة الأصول" en="Asset Management Policy" accent="#06b6d4" />
+        <TextBlock body={c.policy.statementAr} />
+        <div className="sr-principles">
+          {c.policy.principlesAr.map((p, i) => <span key={i} className="sr-principle">{p}</span>)}
+        </div>
+
+        <SecTitle ar="نطاق نظام إدارة الأصول" en="AMS Scope" />
+        <TextBlock body={c.scope.statementAr} />
+        <div className="sr-two-col">
+          <div>
+            <div className="sr-scope-h sr-scope-in">ضمن النطاق</div>
+            <ul className="sr-list">{c.scope.inScopeAr.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          </div>
+          <div>
+            <div className="sr-scope-h sr-scope-out">خارج النطاق</div>
+            <ul className="sr-list">{c.scope.outOfScopeAr.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          </div>
+        </div>
+        <div className="sr-quality">
+          <strong>الأصول الرقمية:</strong> {c.scope.digitalInScope ? 'مشمولة ضمن النطاق.' : <>غير مشمولة حالياً — مستهدف إدراجها بحلول <span dir="ltr">{c.scope.digitalTargetDate}</span>.</>}
+        </div>
+
+        <SecTitle ar="سجل الإصدارات" en="Revision History" />
+        <table className="sr-table sr-mini">
+          <thead><tr><th className="num">الإصدار</th><th className="num">التاريخ</th><th className="ar">المُعِد</th><th className="ar">الملخص</th></tr></thead>
+          <tbody>
+            {c.revisionHistory.map((r, i) => (
+              <tr key={i}>
+                <td className="num" dir="ltr">{r.version}</td>
+                <td className="num" dir="ltr">{r.date}</td>
+                <td className="ar">{r.author}</td>
+                <td className="ar">{r.summary}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Page>
+
+      {/* P2 — Roles & Objectives */}
+      <Page type="ams" meta={meta} pageNo={2}>
+        <SecTitle ar="الأدوار والمسؤوليات" en="Roles & Responsibilities" accent="#8b5cf6" />
+        <p className="sr-note-plain">توزيع مسؤوليات الأصول لكل فئة وفق نموذج المالك / المدير / الحارس.</p>
+        <table className="sr-table">
+          <thead>
+            <tr><th className="ar">فئة الأصل</th><th className="ar">المالك (Owner)</th><th className="ar">المدير (Manager)</th><th className="ar">الحارس (Custodian)</th></tr>
+          </thead>
+          <tbody>
+            {c.roles.map((r, i) => (
+              <tr key={i}>
+                <td className="ar sr-strong">{cAr(r.category)}</td>
+                <td className="ar">{r.owner || <Pending />}</td>
+                <td className="ar">{r.manager || <Pending />}</td>
+                <td className="ar">{r.custodian || <Pending />}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <SecTitle ar="أهداف إدارة الأصول" en="Asset Management Objectives" accent="#06b6d4" />
+        <table className="sr-table">
+          <thead>
+            <tr><th>الهدف</th><th className="ar">المؤشر</th><th className="num">المرجعي</th><th className="num">المستهدف</th><th className="num">الفعلي</th><th className="num">الموعد</th></tr>
+          </thead>
+          <tbody>
+            {data.objectives.map((o, i) => (
+              <tr key={i}>
+                <td>{o.goal ? <Chip label={o.goal.code} color={o.goal.color} /> : '—'}</td>
+                <td className="ar sr-small">{o.metricAr}</td>
+                <td className="num" dir="ltr">{o.baseline != null ? o.baseline : '—'}</td>
+                <td className="num" dir="ltr">{o.target}</td>
+                <td className="num" dir="ltr">{o.hasActual ? o.actual : <Pending label="قيد الجمع" />}</td>
+                <td className="num sr-small" dir="ltr">{o.targetDate}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Page>
+
+      {/* P3 — Risk methodology + Compliance */}
+      <Page type="ams" meta={meta} pageNo={3}>
+        <SecTitle ar="منهجية إدارة المخاطر" en="Risk Management Methodology" accent="#f43f5e" />
+        <div className="sr-two-col sr-risk-intro">
+          <div>
+            <p className="sr-note-plain">درجة المخاطر = الاحتمال (١–٥) × الأثر (١–٥)، مصنّفة ضمن أربعة نطاقات. متوسط درجة مخاطر المحفظة الحالية <b dir="ltr">{data.avgRiskScore}</b> من ٢٥.</p>
+            <div className="sr-risk-bands">
+              {data.riskBands.map((b, i) => (
+                <div key={i} className="sr-risk-band-row">
+                  <span className="sr-rm-swatch" style={{ background: b.color }} />
+                  <span className="sr-risk-band-name">{b.ar}</span>
+                  <span className="sr-risk-band-range" dir="ltr">≤{b.max}</span>
+                  <span className="sr-risk-band-count"><b dir="ltr">{b.count}</b> أصل</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <RiskMatrix matrix={c.riskMatrix} />
+        </div>
+
+        <SecTitle ar="سجل الالتزام القانوني والتنظيمي" en="Legal & Regulatory Compliance Register" accent="#f59e0b" />
+        <table className="sr-table">
+          <thead>
+            <tr><th className="ar">الفئة / النطاق</th><th className="ar">المتطلب</th><th className="ar">التكرار</th><th className="num">آخر تحقق</th><th className="num">الاستحقاق القادم</th><th>الحالة</th></tr>
+          </thead>
+          <tbody>
+            {data.compliance.map((r, i) => (
+              <tr key={i}>
+                <td className="ar sr-small">{r.category === 'All' ? 'جميع الفئات' : cAr(r.category)}</td>
+                <td className="ar">{r.requirementAr}</td>
+                <td className="ar sr-small">{r.freqAr}</td>
+                <td className="num" dir="ltr">{r.lastVerified || <Pending />}</td>
+                <td className="num" dir="ltr">{r.nextDue || <Pending />}</td>
+                <td><Pill label={r.status.ar} color={r.status.color} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="sr-quality">
+          <strong>ملاحظة:</strong> جميع متطلبات الالتزام موثّقة بتواريخ تحقق واستحقاق، وتُحدَّث حالتها تلقائياً
+          (متأخر / يستحق قريباً / مطابق) بنفس آلية تنبيهات الاستبدال. البنود المطابقة حالياً: <b dir="ltr">{data.compliance.length - data.complianceOpen}</b> من <b dir="ltr">{data.compliance.length}</b>.
+        </div>
+      </Page>
+
+      {/* P4 — Maintenance strategy + Whole-life */}
+      <Page type="ams" meta={meta} pageNo={4}>
+        <SecTitle ar="استراتيجية الصيانة" en="Maintenance Strategy" accent="#10b981" />
+        <table className="sr-table">
+          <thead>
+            <tr><th className="ar">الفئة</th><th className="ar">أسلوب الصيانة</th><th className="ar">دورية الفحص</th><th className="ar">المعيار المرجعي</th></tr>
+          </thead>
+          <tbody>
+            {c.maintenance.map((m, i) => (
+              <tr key={i}>
+                <td className="ar sr-strong">{cAr(m.category)}</td>
+                <td className="ar">{m.approachAr}</td>
+                <td className="ar">{m.intervalAr}</td>
+                <td className="ar sr-small" dir="rtl">{m.standardAr}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <TextBlock ar="قطع الغيار الحرجة وخطة الطوارئ" body={c.criticalSparesAr} />
+
+        <SecTitle ar="ملخص التكلفة الإجمالية للملكية" en="Whole-Life Cost Summary" accent="#10b981" />
+        <table className="sr-table sr-mini">
+          <thead>
+            <tr><th className="ar">الفئة</th><th className="num">رأسمالي (د.إ)</th><th className="num">تشغيل/سنة (د.إ)</th><th className="num">إجمالي الملكية (د.إ)</th></tr>
+          </thead>
+          <tbody>
+            {data.wholeLife.map((w, i) => (
+              <tr key={i}>
+                <td className="ar">{cAr(w.category)}</td>
+                <td className="num" dir="ltr">{fmtMoney(w.capex)}</td>
+                <td className="num" dir="ltr">{fmtMoney(w.annualOpex)}</td>
+                <td className="num" dir="ltr"><b>{fmtMoney(w.totalCostOfOwnership)}</b></td>
+              </tr>
+            ))}
+            <tr className="sr-total">
+              <td className="ar">الإجمالي</td>
+              <td className="num" dir="ltr">{fmtMoney(data.capexTotal)}</td>
+              <td />
+              <td className="num" dir="ltr">{fmtMoney(data.tcoTotal)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </Page>
+
+      {/* P5 — Governance, nonconformity, disposal, data quality */}
+      <Page type="ams" meta={meta} pageNo={5}>
+        <SecTitle ar="الحوكمة ودورة المراجعة" en="Governance & Review Cycle" accent="#8b5cf6" />
+        <div className="sr-two-col">
+          <TextBlock ar="المراجعة الإدارية" body={c.governance.managementReviewAr} />
+          <TextBlock ar="التدقيق الداخلي" body={c.governance.internalAuditAr} />
+        </div>
+
+        <SecTitle ar="سجل حالات عدم المطابقة والإجراءات التصحيحية" en="Nonconformity & Corrective Action Log" accent="#f59e0b" />
+        {(!c.nonconformities || c.nonconformities.length === 0) ? (
+          <div className="sr-pending-box">
+            <b>لا توجد حالات مسجّلة.</b> بنية السجل معتمدة ضمن النظام وجاهزة لاستقبال أي ملاحظات ناتجة عن التدقيق الداخلي أو الجرد الميداني
+            (تاريخ الملاحظة، الوصف، الإجراء التصحيحي، المسؤول، الحالة).
+          </div>
+        ) : (
+          <table className="sr-table sr-mini">
+            <thead><tr><th className="num">التاريخ</th><th className="ar">الملاحظة</th><th className="ar">الإجراء التصحيحي</th><th className="ar">المسؤول</th><th>الحالة</th></tr></thead>
+            <tbody>
+              {c.nonconformities.map((n, i) => (
+                <tr key={i}>
+                  <td className="num" dir="ltr">{n.date}</td>
+                  <td className="ar">{n.findingAr}</td>
+                  <td className="ar">{n.actionAr}</td>
+                  <td className="ar">{n.owner}</td>
+                  <td className="ar">{n.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <SecTitle ar="سياسة الاستبعاد والتخلص" en="Disposal & Decommissioning Policy" />
+        <TextBlock body={c.disposal.statementAr} />
+
+        <SecTitle ar="منهجية جودة البيانات والإفصاح" en="Data Quality & Methodology Disclosure" />
+        <table className="sr-table sr-mini">
+          <tbody>
+            <tr><td className="ar sr-strong">أسلوب الفحص</td><td className="ar">{c.dataQuality.inspectionMethodAr}</td></tr>
+            <tr><td className="ar sr-strong">تاريخ الفحص</td><td className="ar" dir="ltr">{c.dataQuality.inspectionDate}</td></tr>
+            <tr><td className="ar sr-strong">مستوى الثقة بالتكاليف</td><td className="ar">{c.dataQuality.costConfidenceAr}</td></tr>
+            <tr><td className="ar sr-strong">دورية تحديث السجل</td><td className="ar">{c.dataQuality.refreshFrequencyAr}</td></tr>
+            <tr><td className="ar sr-strong">الجهة المسؤولة عن دقة البيانات</td><td className="ar">{c.dataQuality.accountableAr}</td></tr>
+          </tbody>
+        </table>
+
+        <ApprovalBlock />
+      </Page>
+    </>
+  )
+}
+
 export default function StrategicReportDoc({ type, data, meta }) {
   return (
     <div className="ast-report-root sr-root" id="ast-report-root">
@@ -661,6 +1153,7 @@ export default function StrategicReportDoc({ type, data, meta }) {
       {type === 'linkage' && <LinkagePages data={data} meta={meta} />}
       {type === 'plan' && <PlanPages data={data} meta={meta} />}
       {type === 'executive' && <ExecutivePage data={data} meta={meta} />}
+      {type === 'ams' && <AmsPages data={data} meta={meta} />}
     </div>
   )
 }

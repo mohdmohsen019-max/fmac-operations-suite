@@ -110,8 +110,8 @@ export default function FuelVehicleDetail({ vehicle, onBack }) {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#8888AA', fontSize: 12}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#8888AA', fontSize: 12}} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: 'var(--theme-text-muted)', fontSize: 12}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--theme-text-muted)', fontSize: 12}} />
                 <Tooltip 
                   contentStyle={{ background: 'var(--fuel-surface)', border: '1px solid var(--fuel-amber)', borderRadius: '8px', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}
                 />
@@ -130,7 +130,7 @@ export default function FuelVehicleDetail({ vehicle, onBack }) {
             <DetailItem label={t('Maintenance Status', 'حالة الصيانة')} value={t('Healthy', 'سليمة')} color="#10B981" />
             <DetailItem label={t('Cost Variance', 'تباين التكلفة')} value={t('-4.2% Monthly', '-4.2% شهرياً')} color="#10B981" />
             <DetailItem label={t('Risk Profile', 'ملف المخاطر')} value={t('Minimal', 'أدنى حد')} />
-            <div style={{ marginTop: '12px', padding: '16px', background: 'rgba(212,175,55,0.05)', border: '1px solid var(--fuel-border)', borderRadius: '12px', fontSize: '0.8rem', lineHeight: 1.6, color: 'var(--fuel-text-muted)' }}>
+            <div style={{ marginTop: '12px', padding: '16px', background: 'var(--theme-surface-pearl)', border: '1px solid var(--fuel-border)', borderRadius: '12px', fontSize: '0.8rem', lineHeight: 1.6, color: 'var(--fuel-text-muted)' }}>
               <strong style={{ color: 'var(--fuel-amber)' }}>{t('AI INSIGHT:', 'رؤية الذكاء الاصطناعي:')}</strong> {t('This vehicle is currently operating at peak efficiency. Fuel consumption matches historical utilization patterns within 5% tolerance.', 'هذه المركبة تعمل حالياً بأقصى كفاءة. استهلاك الوقود يطابق أنماط الاستخدام التاريخية ضمن تفاوت 5%.')}
             </div>
           </div>

@@ -363,7 +363,7 @@ export default function ProfileModule({ user, userProfile, onUpdateProfile }) {
                 <div className="pf-access-grid">
                   {Object.entries(MODULE_LABELS).map(([key, label]) => {
                     const level = permissions?.[key];
-                    const color = level === 'edit' ? '#10b981' : level === 'view' ? '#f59e0b' : '#6b7280';
+                    const color = level === 'edit' ? 'var(--status-safe)' : level === 'view' ? 'var(--status-warn)' : 'var(--theme-text-ghost)';
                     const levelLabel = level === 'edit'
                       ? t('Can Edit', 'تعديل')
                       : level === 'view'

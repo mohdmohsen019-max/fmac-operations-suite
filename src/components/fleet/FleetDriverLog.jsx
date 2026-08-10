@@ -1,7 +1,9 @@
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { cartrackService } from '../../services/cartrackService';
 
 export default function FleetDriverLog() {
   const { t, locale } = useLanguage();
@@ -21,18 +23,7 @@ export default function FleetDriverLog() {
     date: format(new Date(), 'yyyy-MM-dd')
   });
 
-  useEffect(() => {
-    fetchVehicles();
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const fetchVehicles = async () => {
+  async function fetchVehicles() {
     setLoading(true);
     try {
       const [liveData, firestoreSnap] = await Promise.all([
@@ -58,7 +49,19 @@ export default function FleetDriverLog() {
       console.error('Error fetching vehicles:', err);
     }
     setLoading(false);
-  };
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchVehicles();
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSelectVehicle = (v) => {
     setFormData({
@@ -102,7 +105,7 @@ export default function FleetDriverLog() {
     <div className="fleet-view-container" style={{ alignItems: 'center' }}>
       <div className="fleet-form-container" style={{ maxWidth: '600px', width: '100%', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
         <SectionTitle title={t('Log New Trip', 'تسجيل رحلة جديدة')} icon={Navigation} />
-        <p style={{ color: '#8888AA', fontSize: '0.85rem', marginBottom: '32px' }}>
+        <p style={{ color: 'var(--theme-text-muted)', fontSize: '0.85rem', marginBottom: '32px' }}>
           {t('Please ensure all odometer readings are accurate before submitting.', 'يرجى التأكد من أن جميع قراءات عداد المسافة دقيقة قبل الإرسال.')}
         </p>
 
@@ -114,10 +117,10 @@ export default function FleetDriverLog() {
               style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', flexDirection: locale === 'ar-SA' ? 'row-reverse' : 'row' }}
               onClick={() => setIsOpen(!isOpen)}
             >
-              <span style={{ color: formData.vehicle ? '#FFFFFF' : '#8888AA' }}>
+              <span style={{ color: formData.vehicle ? '#FFFFFF' : 'var(--theme-text-muted)' }}>
                 {formData.vehicle ? `${formData.vehicle.busNumber} — ${formData.vehicle.plateNumber}` : t('Select a vehicle...', 'اختر مركبة...')}
               </span>
-              <ChevronDown size={16} style={{ color: '#8888AA' }} />
+              <ChevronDown size={16} style={{ color: 'var(--theme-text-muted)' }} />
               
               {isOpen && (
                 <div style={{
@@ -142,9 +145,9 @@ export default function FleetDriverLog() {
                     >
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontWeight: 700, color: '#FFFFFF' }}>{v.busNumber} — {v.plateNumber}</span>
-                        <span style={{ fontSize: '0.75rem', color: '#8888AA' }}>{v.driverName}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--theme-text-muted)' }}>{v.driverName}</span>
                       </div>
-                      {formData.vehicle?.id === v.id && <Check size={16} color="#D4AF37" />}
+                      {formData.vehicle?.id === v.id && <Check size={16} color="var(--theme-accent)" />}
                     </div>
                   ))}
                 </div>
@@ -160,7 +163,7 @@ export default function FleetDriverLog() {
                 className="fleet-input" 
                 value={formData.startOdo > 0 ? `${formData.startOdo.toLocaleString(locale)} ${t('km', 'كم')}` : t('Select Bus...', 'اختر الحافلة...')} 
                 readOnly 
-                style={{ background: 'rgba(255,255,255,0.02)', color: '#8888AA', cursor: 'not-allowed', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}
+                style={{ background: 'rgba(255,255,255,0.02)', color: 'var(--theme-text-muted)', cursor: 'not-allowed', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}
               />
             </div>
             <div className="fleet-input-group">
@@ -185,9 +188,9 @@ export default function FleetDriverLog() {
                 className="fleet-btn-primary" 
                 style={{ 
                   flex: 1, 
-                  background: formData.tripType === 'Internal' ? 'rgba(212, 175, 55, 0.15)' : 'transparent', 
-                  color: formData.tripType === 'Internal' ? '#D4AF37' : '#8888AA', 
-                  border: formData.tripType === 'Internal' ? '1px solid #D4AF37' : '1px solid transparent',
+                  background: formData.tripType === 'Internal' ? 'var(--theme-accent-soft)' : 'transparent', 
+                  color: formData.tripType === 'Internal' ? 'var(--theme-accent)' : 'var(--theme-text-muted)', 
+                  border: formData.tripType === 'Internal' ? '1px solid var(--theme-accent)' : '1px solid transparent',
                   height: '40px'
                 }}
                 onClick={() => setFormData({...formData, tripType: 'Internal'})}
@@ -197,9 +200,9 @@ export default function FleetDriverLog() {
                 className="fleet-btn-primary" 
                 style={{ 
                   flex: 1, 
-                  background: formData.tripType === 'External' ? 'rgba(212, 175, 55, 0.15)' : 'transparent', 
-                  color: formData.tripType === 'External' ? '#D4AF37' : '#8888AA', 
-                  border: formData.tripType === 'External' ? '1px solid #D4AF37' : '1px solid transparent',
+                  background: formData.tripType === 'External' ? 'var(--theme-accent-soft)' : 'transparent', 
+                  color: formData.tripType === 'External' ? 'var(--theme-accent)' : 'var(--theme-text-muted)', 
+                  border: formData.tripType === 'External' ? '1px solid var(--theme-accent)' : '1px solid transparent',
                   height: '40px'
                 }}
                 onClick={() => setFormData({...formData, tripType: 'External'})}
@@ -211,7 +214,7 @@ export default function FleetDriverLog() {
             <div className="fleet-input-group animate-in">
               <label className="fleet-label">{t('Destination / Location', 'الوجهة / الموقع')}</label>
               <div style={{ position: 'relative' }}>
-                <MapPin style={{ position: 'absolute', [locale === 'ar-SA' ? 'right' : 'left']: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8888AA' }} size={16} />
+                <MapPin style={{ position: 'absolute', [locale === 'ar-SA' ? 'right' : 'left']: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--theme-text-muted)' }} size={16} />
                 <input 
                   type="text" 
                   className="fleet-input" 
@@ -232,7 +235,7 @@ export default function FleetDriverLog() {
               className="fleet-input" 
               value={new Intl.DateTimeFormat(locale, { dateStyle: 'full' }).format(new Date())} 
               readOnly 
-              style={{ background: 'rgba(255,255,255,0.02)', color: '#8888AA', cursor: 'not-allowed', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}
+              style={{ background: 'rgba(255,255,255,0.02)', color: 'var(--theme-text-muted)', cursor: 'not-allowed', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}
             />
           </div>
 
@@ -267,7 +270,7 @@ export default function FleetDriverLog() {
 
       <style dangerouslySetInnerHTML={{ __html: `
         .dropdown-item:hover {
-          background: rgba(212, 175, 55, 0.1) !important;
+          background: var(--theme-accent-soft) !important;
           cursor: pointer;
         }
         .animate-in {

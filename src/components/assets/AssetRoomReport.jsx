@@ -9,7 +9,7 @@ function RoomPage({ room, assets, lang }) {
   return (
     <div className="ast-report-page">
       <div className="ast-report-head">
-        <img src="/fmac-report-logo.png" alt="FMAC" className="ast-report-logo" />
+        <img src="/fmac-ops-logo.png" alt="FMAC" className="ast-report-logo" />
         <div className="ast-report-head-text">
           <div className="ast-report-title-en">Assets Report</div>
           <div className="ast-report-title-ar">تقرير الأصول</div>

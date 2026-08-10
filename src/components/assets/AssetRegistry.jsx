@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Search, Filter, X, ChevronRight, Pencil, Printer, ScanLine, Building2,
+  Search, Filter, X, ChevronRight, Pencil, Printer, Building2, Download, Zap, ZapOff,
 } from 'lucide-react'
 import { db } from '../../firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import CustomSelect from '../CustomSelect'
+import exportCsv from '../../utils/exportCsv'
 import {
   ASSET_STATUSES, STATUS_META, statusLabel, roomLabel, fmtDate, logAudit,
 } from './shared'
@@ -22,10 +23,13 @@ function StatusBadge({ status, lang }) {
 export default function AssetRegistry({
   assets, rooms, canManage, lang, t, isRTL,
   actorUid, actorName,
+  scanMode, setScanMode,
   onOpenDetail, onOpenEdit, onOpenBarcode,
   roomFilter, setRoomFilter,
 }) {
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(
+    () => new URLSearchParams(window.location.search).get('q') || ''
+  )
   const [category, setCategory] = useState('all')
   const [type, setType] = useState('all')
   const [status, setStatus] = useState('all')
@@ -66,6 +70,17 @@ export default function AssetRegistry({
 
   const clearAll = () => {
     setRoomFilter('all'); setCategory('all'); setType('all'); setStatus('all'); setAssignment('all')
+  }
+
+  const exportAssets = () => {
+    exportCsv(
+      `fmac-assets-${new Date().toISOString().slice(0, 10)}`,
+      ['Name (EN)', 'Name (AR)', 'SKU', 'Barcode', 'Category', 'Type', 'Status', 'Room', 'Assigned To'],
+      filtered.map(a => [
+        a.name_en, a.name_ar, a.sku, a.barcode, a.category, a.type, a.status,
+        roomLabel(roomById[a.location_room], lang), a.assigned_to,
+      ])
+    )
   }
 
   // Quick inline status change (manager only).
@@ -138,9 +153,23 @@ export default function AssetRegistry({
             <button className="ast-search-clear" onClick={() => setSearch('')}><X size={14} /></button>
           )}
         </div>
-        <div className="ast-scan-hint" title={t('USB scanner ready — scan a barcode to open an asset', 'الماسح جاهز — امسح باركود لفتح الأصل')}>
-          <ScanLine size={15} /> <span>{t('Scan ready', 'جاهز للمسح')}</span>
-        </div>
+        <button
+          className={`ast-filter-toggle ast-scan-toggle${scanMode ? ' active' : ''}`}
+          onClick={() => setScanMode(v => !v)}
+          title={t('Scan Mode', 'وضع المسح')}
+        >
+          {scanMode ? <Zap size={15} /> : <ZapOff size={15} />}
+          {scanMode ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span className="ast-scan-dot" />
+              {t('Scan Mode ON', 'وضع المسح مفعّل')}
+            </span>
+          ) : t('Scan Mode', 'وضع المسح')}
+        </button>
+        <button className="ast-filter-toggle" onClick={exportAssets} disabled={filtered.length === 0}
+          title={t('Export the current view as CSV', 'تصدير العرض الحالي كملف CSV')}>
+          <Download size={15} /> CSV
+        </button>
         <button className="ast-filter-toggle" onClick={() => setFiltersOpen(true)}>
           <Filter size={15} /> {t('Filter', 'تصفية')}
           {activeFilterCount > 0 && <span className="ast-filter-count">{activeFilterCount}</span>}

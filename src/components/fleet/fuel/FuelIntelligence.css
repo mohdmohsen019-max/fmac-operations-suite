@@ -40,8 +40,8 @@
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; height: 2px;
-  background: linear-gradient(90deg, transparent, var(--fuel-amber), transparent);
-  opacity: 0.3;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.55;
 }
 
 .fuel-kpi-label {
@@ -113,7 +113,7 @@
 }
 
 .fuel-table tr:hover {
-  background: rgba(212, 175, 55, 0.05);
+  background: var(--theme-surface-pearl);
 }
 
 .fuel-table td {
@@ -123,13 +123,13 @@
 }
 
 .fuel-table td:first-child {
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: 1px solid var(--theme-border-light);
   border-top-left-radius: 8px;
   border-bottom-left-radius: 8px;
 }
 
 .fuel-table td:last-child {
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid var(--theme-border-light);
   border-top-right-radius: 8px;
   border-bottom-right-radius: 8px;
 }
@@ -184,22 +184,23 @@
 }
 
 .fuel-btn-action {
-  background: linear-gradient(135deg, var(--fuel-amber), #B8860B);
-  color: #000;
+  background: var(--theme-ink);
+  color: var(--theme-ink-text);
   border: none;
   padding: 12px 24px;
-  border-radius: 8px;
+  border-radius: 999px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   cursor: pointer;
   transition: all 0.3s;
+  box-shadow: var(--shadow-sm);
 }
 
 .fuel-btn-action:hover {
   transform: translateY(-1px);
-  filter: brightness(1.1);
-  box-shadow: 0 4px 15px var(--fuel-orange-glow);
+  background: var(--theme-ink-hover);
+  box-shadow: var(--shadow-md);
 }
 
 @media (max-width: 768px) {
@@ -260,9 +261,9 @@
 .fuel-grid-bg {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background-image: 
-    linear-gradient(rgba(212, 175, 55, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(212, 175, 55, 0.02) 1px, transparent 1px);
+  background-image:
+    linear-gradient(rgba(25, 28, 17, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(25, 28, 17, 0.015) 1px, transparent 1px);
   background-size: 40px 40px;
   pointer-events: none;
   z-index: -1;

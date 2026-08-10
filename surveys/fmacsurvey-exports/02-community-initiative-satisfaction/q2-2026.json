@@ -1,0 +1,99 @@
+{
+  "survey": {
+    "id": "q05-community-happiness-q2-2026",
+    "platform": "fmacsurvey.com",
+    "kpiCode": "Q-05",
+    "kpiNameEn": "Participant happiness rate in community initiatives",
+    "kpiNameAr": "نسبة سعادة المشاركين في المبادرات المجتمعية",
+    "titleEn": "Community Initiative Satisfaction Survey — Q2 2026",
+    "titleAr": "استبيان رضا المشاركين في المبادرات المجتمعية — Q2 2026",
+    "descriptionEn": "Sent to participants after a community initiative to measure satisfaction.",
+    "descriptionAr": "يُرسل للمشاركين بعد انتهاء المبادرة المجتمعية لقياس مستوى رضاهم.",
+    "language": [
+      "en",
+      "ar"
+    ],
+    "period": {
+      "type": "quarterly",
+      "label": "Q2 2026",
+      "opensOn": "2026-04-01",
+      "closesOn": "2026-06-30"
+    },
+    "target": {
+      "value": 90,
+      "unit": "%",
+      "direction": "up",
+      "formula": "share of respondents answering 'Satisfied' or 'Very satisfied' on Q2"
+    },
+    "questions": [
+      {
+        "id": "initiative_name",
+        "type": "short_text",
+        "labelEn": "Which community initiative did you attend?",
+        "labelAr": "ما المبادرة المجتمعية التي شاركت فيها؟",
+        "required": true
+      },
+      {
+        "id": "overall_satisfaction",
+        "type": "scale_5",
+        "labelEn": "Overall, how satisfied were you with this initiative?",
+        "labelAr": "بشكل عام، ما مدى رضاك عن هذه المبادرة؟",
+        "required": true,
+        "scaleLabelsEn": [
+          "Very dissatisfied",
+          "Dissatisfied",
+          "Neutral",
+          "Satisfied",
+          "Very satisfied"
+        ],
+        "scaleLabelsAr": [
+          "غير راضٍ إطلاقاً",
+          "غير راضٍ",
+          "محايد",
+          "راضٍ",
+          "راضٍ جداً"
+        ]
+      },
+      {
+        "id": "best_part",
+        "type": "long_text",
+        "labelEn": "What did you enjoy most?",
+        "labelAr": "ما الذي أعجبك أكثر؟",
+        "required": false
+      },
+      {
+        "id": "improve",
+        "type": "long_text",
+        "labelEn": "What could be improved?",
+        "labelAr": "ما الذي يمكن تحسينه؟",
+        "required": false
+      },
+      {
+        "id": "would_return",
+        "type": "single_choice",
+        "labelEn": "Would you participate again?",
+        "labelAr": "هل ترغب بالمشاركة مرة أخرى؟",
+        "required": true,
+        "options": [
+          "Yes",
+          "Maybe",
+          "No"
+        ]
+      }
+    ],
+    "scoringNotes": "Satisfaction rate = (# respondents choosing 'Satisfied' or 'Very satisfied' on overall_satisfaction) ÷ (total respondents) × 100."
+  },
+  "formatReference": {
+    "note": "EXAMPLE ONLY — illustrates the expected shape of one respondent's answer for training and format-review purposes. This is not a real submission and must not be counted toward the KPI reading.",
+    "noteAr": "مثال توضيحي فقط — يوضح شكل إجابة مستجيب واحد لأغراض التدريب ومراجعة الصيغة. ليست إجابة حقيقية ولا تُحتسب ضمن قراءة المؤشر.",
+    "exampleContextEn": "Example response from a participant in a community fitness day.",
+    "exampleContextAr": "مثال إجابة من مشارك في يوم اللياقة المجتمعي.",
+    "exampleResponse": {
+      "initiative_name": "FMAC Community Fitness Day",
+      "overall_satisfaction": 5,
+      "best_part": "The coaches were very encouraging with beginners.",
+      "improve": "More parking would help.",
+      "would_return": "Yes"
+    }
+  }
+}

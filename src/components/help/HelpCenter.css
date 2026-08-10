@@ -8,18 +8,18 @@
   --hc-border: var(--theme-border, rgba(0, 0, 0, 0.08));
   --hc-border-hover: rgba(0, 0, 0, 0.15);
   --hc-text-primary: var(--theme-text-main, #0f172a);
-  --hc-text-secondary: var(--theme-text-muted, #64748b);
-  --hc-text-muted: #94a3b8;
-  --hc-accent: var(--theme-accent, #e11d48);
-  --hc-accent-hover: #be123c;
-  --hc-success: #10b981;
-  --hc-warning: #f59e0b;
+  --hc-text-secondary: var(--theme-text-muted, var(--theme-text-muted));
+  --hc-text-muted: var(--theme-text-ghost);
+  --hc-accent: var(--theme-accent);
+  --hc-accent-hover: var(--theme-accent-bright);
+  --hc-success: var(--status-safe);
+  --hc-warning: var(--status-warn);
   --hc-radius-sm: 8px;
   --hc-radius-md: 16px;
   --hc-radius-lg: 24px;
   --hc-font: var(--font-family);
   --hc-shadow: var(--shadow-md);
-  --hc-shadow-glow: 0 0 40px rgba(225, 29, 72, 0.1);
+  --hc-shadow-glow: var(--glass-glow);
   --hc-transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -116,18 +116,18 @@
 }
 
 .hc-btn-primary {
-  background: var(--hc-text-primary);
-  color: #ffffff;
+  background: var(--theme-ink);
+  color: var(--theme-ink-text);
 }
 
 .hc-btn-primary:hover {
-  background: #334155;
+  background: var(--theme-ink-hover);
   transform: translateY(-1px);
 }
 
 .hc-btn-accent {
-  background: var(--hc-accent);
-  color: #FFFFFF;
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .hc-btn-accent:hover {
@@ -382,7 +382,7 @@
 }
 
 .hc-portal-card:hover svg {
-  color: #ff1a42;
+  color: var(--status-risk);
 }
 
 /* Utilities */
@@ -396,6 +396,13 @@
   background: radial-gradient(ellipse at top, var(--hc-bg-accent), transparent 70%);
   pointer-events: none;
   z-index: 0;
+}
+
+/* Ticket detail: two columns on desktop, stacked (rail below) on tablet down */
+@media (max-width: 1024px) {
+  .hc-ticket-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (max-width: 768px) {
@@ -416,6 +423,16 @@
   .hc-admin-search {
     width: 100% !important;
     flex: 1 1 100% !important;
+  }
+  /* Action buttons: wrap and share the row instead of overflowing */
+  .hc-admin-actions {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+  }
+  .hc-admin-actions > button {
+    flex: 1 1 auto;
+    justify-content: center;
+    white-space: nowrap;
   }
   /* Force admin table to be wide enough to trigger scroll on its container */
   .hc-table {

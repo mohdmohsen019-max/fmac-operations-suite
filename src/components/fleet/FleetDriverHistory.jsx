@@ -48,7 +48,7 @@ export default function FleetDriverHistory() {
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <div style={{ position: 'relative' }}>
-            <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8888AA' }} size={16} />
+            <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--theme-text-muted)' }} size={16} />
             <input 
               type="text" 
               placeholder={t('Search my trips...', 'البحث في رحلاتي...')}
@@ -89,28 +89,28 @@ export default function FleetDriverHistory() {
             const dist = (parseFloat(trip.endOdo) || 0) - (parseFloat(trip.startOdo) || 0);
             return (
               <tr key={trip.id}>
-                <td className="mono" style={{ color: '#8888AA' }}>{trip.date}</td>
+                <td className="mono" style={{ color: 'var(--theme-text-muted)' }}>{trip.date}</td>
                 <td style={{ fontWeight: 800 }}>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span>{trip.busNumber}</span>
-                    <span style={{ fontSize: '0.7rem', color: '#8888AA' }}>{trip.plateNumber}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--theme-text-muted)' }}>{trip.plateNumber}</span>
                   </div>
                 </td>
                 <td>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <span style={{
-                      background: trip.tripType === 'Internal' ? 'rgba(212, 175, 55, 0.1)' : 'rgba(255,255,255,0.05)',
-                      color: trip.tripType === 'Internal' ? '#D4AF37' : '#FFFFFF',
+                      background: trip.tripType === 'Internal' ? 'var(--theme-accent-soft)' : 'var(--theme-surface-hover)',
+                      color: trip.tripType === 'Internal' ? 'var(--theme-accent)' : 'var(--theme-text-main)',
                       padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', alignSelf: 'flex-start'
                     }}>
                       {trip.tripType === 'Internal' ? t('Internal', 'داخلي') : t('External', 'خارجي')}
                     </span>
-                    {trip.tripType === 'External' && <span style={{ fontSize: '0.7rem', color: '#8888AA' }}>{t('to', 'إلى')}: {trip.destination}</span>}
+                    {trip.tripType === 'External' && <span style={{ fontSize: '0.7rem', color: 'var(--theme-text-muted)' }}>{t('to', 'إلى')}: {trip.destination}</span>}
                   </div>
                 </td>
                 <td className="mono">{parseFloat(trip.startOdo).toLocaleString()}</td>
                 <td className="mono">{parseFloat(trip.endOdo).toLocaleString()}</td>
-                <td className="mono" style={{ fontWeight: 800, color: '#D4AF37' }}>{dist > 0 ? dist.toLocaleString() : 0} km</td>
+                <td className="mono" style={{ fontWeight: 800, color: 'var(--theme-accent)' }}>{dist > 0 ? dist.toLocaleString() : 0} km</td>
               </tr>
             );
           }}

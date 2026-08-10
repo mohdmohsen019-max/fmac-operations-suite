@@ -109,21 +109,21 @@ export default function InventoryDashboard({ items, settings, onViewItem, onOpen
           icon={AlertTriangle}
           label={t('Low Stock', 'المخزون المنخفض')}
           value={lowStock}
-          color="#f59e0b"
+          color="var(--status-warn)"
           bg="rgba(245,158,11,0.1)"
         />
         <KPICard i={2}
           icon={XCircle}
           label={t('Out of Stock', 'نفذ من المخزون')}
           value={outOfStock}
-          color="#f43f5e"
+          color="var(--status-risk)"
           bg="rgba(244,63,94,0.1)"
         />
         <KPICard i={3}
           icon={TrendingDown}
           label={t('Issued This Month', 'صرف هذا الشهر')}
           value={issuedThisMonth}
-          color="#10b981"
+          color="var(--status-safe)"
           bg="rgba(16,185,129,0.1)"
         />
       </div>
@@ -137,14 +137,14 @@ export default function InventoryDashboard({ items, settings, onViewItem, onOpen
           </div>
           {alertItems.length === 0 ? (
             <div className="inv-alerts-ok">
-              <span style={{ color: '#10b981', fontSize: '1.4rem' }}>✓</span>
+              <span style={{ color: 'var(--status-safe)', fontSize: '1.4rem' }}>✓</span>
               <span>{t('Stock levels are good', 'المخزون في وضع جيد')}</span>
             </div>
           ) : (
             <div className="inv-alerts-list">
               {alertItems.map(item => {
                 const st = getItemStatus(item)
-                const color = st === 'out' ? '#f43f5e' : '#f59e0b'
+                const color = st === 'out' ? 'var(--status-risk)' : 'var(--status-warn)'
                 const bg = st === 'out' ? 'rgba(244,63,94,0.08)' : 'rgba(245,158,11,0.08)'
                 return (
                   <div key={item.id} className="inv-alert-row" style={{ '--al-color': color, '--al-bg': bg }}>
@@ -184,7 +184,7 @@ export default function InventoryDashboard({ items, settings, onViewItem, onOpen
               {recentMovements.map(mv => {
                 const isIn = mv.type === 'stock_in'
                 const isAdj = mv.type === 'adjustment'
-                const color = isAdj ? '#3b82f6' : isIn ? '#10b981' : '#f43f5e'
+                const color = isAdj ? 'var(--theme-accent)' : isIn ? 'var(--status-safe)' : 'var(--status-risk)'
                 const Icon = isAdj ? RefreshCw : isIn ? ArrowUpRight : ArrowDownRight
                 return (
                   <div key={mv.id} className="inv-recent-row">

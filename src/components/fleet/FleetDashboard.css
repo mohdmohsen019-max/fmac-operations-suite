@@ -19,23 +19,24 @@
 }
 
 .stat-card {
-  padding: 32px;
+  padding: 24px 26px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 160px;
-  background: var(--theme-surface-glass);
-  border-radius: 24px;
+  min-height: 170px;
+  background: var(--theme-surface);
+  border-radius: 18px;
   border: 1px solid var(--theme-border-light);
-  box-shadow: var(--shadow-luxe-md);
-  transition: all 0.4s var(--ease-spring);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.4s var(--ease-spring),
+              box-shadow 0.4s var(--ease-spring),
+              border-color 0.4s ease;
 }
 
 .stat-card:hover {
-  transform: translateY(-8px);
-  background: var(--theme-surface);
-  box-shadow: var(--shadow-luxe-lg);
-  border-color: var(--theme-accent-border);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--theme-border);
 }
 
 .stat-header {
@@ -46,19 +47,27 @@
 }
 
 .stat-header h3 {
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.13em;
   color: var(--theme-text-muted);
 }
 
+.stat-header svg {
+  color: var(--theme-text-ghost);
+}
+
 .stat-value {
-  font-size: 3rem;
-  font-weight: 800;
-  letter-spacing: -0.05em;
+  font-family: var(--font-display);
+  font-size: 2.8rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
   color: var(--theme-text-main);
-  margin-top: 12px;
+  margin-top: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .stat-label {
@@ -71,6 +80,80 @@
   font-size: 1rem;
   color: var(--theme-text-muted);
   font-weight: 500;
+}
+
+/* ── % badge (lime pill next to the big number) ── */
+.stat-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-family);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  transform: translateY(-6px);
+}
+
+/* ── Capsule utilization strip ── */
+.stat-capsules {
+  display: flex;
+  gap: 5px;
+  margin-top: 14px;
+}
+
+.stat-capsule {
+  flex: 1;
+  height: 26px;
+  max-width: 18px;
+  border-radius: 99px;
+  border: 1.5px dashed var(--theme-border-strong);
+  background: transparent;
+}
+
+.stat-capsule.filled {
+  background: var(--theme-ink);
+  border-color: transparent;
+}
+
+.stat-capsule.filled.warn {
+  background: var(--status-warn);
+}
+
+/* ── Accent feature card (the highlight card) ── */
+.stat-card.stat-card-accent {
+  background: var(--accent);
+  border-color: transparent;
+}
+
+.stat-card.stat-card-accent .stat-header h3,
+.stat-card.stat-card-accent .stat-label,
+.stat-card.stat-card-accent .unit-label {
+  color: rgba(34, 18, 4, 0.66);
+}
+
+.stat-card.stat-card-accent .stat-header svg {
+  color: rgba(34, 18, 4, 0.75);
+}
+
+.stat-card.stat-card-accent .stat-value {
+  color: var(--accent-ink);
+}
+
+.stat-card.stat-card-accent .stat-badge {
+  background: var(--accent-ink);
+  color: var(--accent);
+}
+
+.stat-card.stat-card-accent .stat-capsule {
+  border-color: rgba(34, 18, 4, 0.35);
+}
+
+.stat-card.stat-card-accent .stat-capsule.filled {
+  background: var(--accent-ink);
+  border-color: transparent;
 }
 
 /* CHART PANELS */
@@ -147,29 +230,32 @@
 
 .feed-item {
   display: flex;
-  gap: 20px;
-  padding: 16px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
   background: var(--theme-surface-pearl);
   border-radius: 16px;
-  border: 1px solid var(--theme-border);
-  transition: all 0.3s var(--ease-spring);
+  border: 1px solid transparent;
+  transition: transform 0.3s var(--ease-spring),
+              box-shadow 0.3s var(--ease-spring),
+              border-color 0.3s ease;
 }
 
 .feed-item:hover {
-  background: var(--theme-surface);
   transform: translateX(4px);
-  border-color: var(--theme-accent-border);
-  box-shadow: var(--shadow-luxe-sm);
+  border-color: var(--theme-border);
+  box-shadow: var(--shadow-sm);
 }
 
 .feed-time {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8rem;
-  color: var(--theme-accent);
+  font-size: 0.75rem;
+  color: var(--accent-ink);
   font-weight: 800;
-  padding: 4px 8px;
-  background: var(--theme-accent-glow);
-  border-radius: 6px;
+  padding: 4px 9px;
+  background: var(--accent);
+  border-radius: 99px;
+  flex-shrink: 0;
 }
 
 .feed-info {
@@ -225,9 +311,9 @@
   border-radius: 50%;
 }
 
-.dot.safe { background: #10b981; }
-.dot.caution { background: #f59e0b; }
-.dot.risk { background: #ef4444; }
+.dot.safe { background: var(--status-safe); }
+.dot.caution { background: var(--status-warn); }
+.dot.risk { background: var(--status-risk); }
 
 /* RECHARTS */
 .recharts-cartesian-grid-horizontal line {

@@ -5,7 +5,7 @@ import { db } from '../../firebase'
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import CustomSelect from '../CustomSelect'
 import {
-  ASSET_STATUSES, statusLabel, roomLabel, logAudit,
+  ASSET_STATUSES, statusLabel, roomLabel, logAudit, nextAssetCode,
   CONDITIONS, CRITICALITIES, UTILIZATIONS, STRATEGIC_GOALS,
   conditionLabel, criticalityLabel, utilizationLabel, goalByCode, deriveDefaults,
 } from './shared'
@@ -33,6 +33,41 @@ export default function AssetEditModal({
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  // Highest FMAC-#### currently in memory — used both for the placeholder
+  // preview and (on save) as the seed passed to the atomic code allocator.
+  const scannedMax = useMemo(() => {
+    let max = 0
+    for (const a of (assets || [])) {
+      for (const v of [a.barcode, a.sku, a.asset_code]) {
+        const m = /^FMAC-(\d+)$/.exec(String(v || '').trim())
+        if (m) max = Math.max(max, parseInt(m[1], 10))
+      }
+    }
+    return max
+  }, [assets])
+
+  // Non-authoritative preview of the likely next code (shown in the placeholder).
+  // The real, collision-safe code is reserved via nextAssetCode() on save — two
+  // users adding in the same snapshot window would otherwise compute this same
+  // string and, if both leave the identifiers blank, save duplicate codes.
+  const nextCodePreview = useMemo(
+    () => `FMAC-${String(scannedMax + 1).padStart(4, '0')}`,
+    [scannedMax],
+  )
+
+  // Duplicate-barcode warning (same guard as Inventory's ItemEditModal; the
+  // full register is already in memory, so no query is needed).
+  const barcodeWarning = useMemo(() => {
+    const v = (form.barcode || '').trim()
+    if (!v) return ''
+    const dup = (assets || []).find(a => a.id !== asset?.id
+      && [a.barcode, a.sku].some(x => String(x || '').trim() === v))
+    if (!dup) return ''
+    return lang === 'ar'
+      ? `هذا الباركود مستخدم لأصل آخر: ${dup.name_ar || dup.name_en}`
+      : `This barcode is already used by: ${dup.name_en || dup.name_ar}`
+  }, [form.barcode, assets, asset, lang])
+
   const handleSave = async () => {
     if (!form.name_en.trim() && !form.name_ar.trim()) {
       setError(t('Please enter an asset name.', 'يرجى إدخال اسم الأصل.')); return
@@ -48,12 +83,19 @@ export default function AssetEditModal({
         est_replacement_cost: form.est_replacement_cost,
         funding_source: form.funding_source, utilization: form.utilization,
       })
+      // New assets always end up with a scannable code: any of the three
+      // identifiers left blank falls back to an atomically-allocated FMAC-####
+      // (a Firestore counter transaction, so two concurrent adds never collide).
+      const explicitCode = form.barcode.trim() || form.sku.trim() || (form.asset_code || '').trim()
+      const code = isNew
+        ? (explicitCode || await nextAssetCode(scannedMax))
+        : null
       const payload = {
-        asset_code: (form.asset_code || '').trim(),
+        asset_code: isNew ? ((form.asset_code || '').trim() || code) : (form.asset_code || '').trim(),
         name_en: form.name_en.trim(),
         name_ar: form.name_ar.trim(),
-        sku: form.sku.trim(),
-        barcode: form.barcode.trim(),
+        sku: isNew ? (form.sku.trim() || code) : form.sku.trim(),
+        barcode: isNew ? (form.barcode.trim() || code) : form.barcode.trim(),
         category: form.category.trim(),
         type: form.type.trim(),
         department: (form.department || '').trim(),
@@ -156,7 +198,9 @@ export default function AssetEditModal({
             </div>
             <div className="ast-field">
               <label>{t('Barcode', 'الباركود')}</label>
-              <input value={form.barcode} onChange={e => set('barcode', e.target.value)} />
+              <input value={form.barcode} onChange={e => set('barcode', e.target.value)}
+                placeholder={isNew ? `${t('Auto', 'تلقائي')}: ${nextCodePreview}` : ''} />
+              {barcodeWarning && <span className="ast-field-warning">⚠ {barcodeWarning}</span>}
             </div>
             <div className="ast-field">
               <label>{t('Category', 'الفئة')}</label>

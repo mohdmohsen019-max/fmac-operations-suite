@@ -5,7 +5,7 @@
 //
 // All HTML is INLINE-CSS only — email clients strip <style>/external sheets.
 
-const APP_URL = 'https://fmac.space';
+const APP_URL = 'https://operations.fmac.space';
 
 const COLORS = {
   bg: '#080810',

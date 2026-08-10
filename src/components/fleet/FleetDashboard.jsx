@@ -2,22 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell, LabelList, AreaChart, Area
+  BarChart, Bar, Cell
 } from 'recharts';
-import { Truck, Activity, ShieldAlert, Navigation, Clock, Zap, AlertTriangle } from 'lucide-react';
+import { Truck, Activity, ShieldAlert, Navigation, Clock, Zap, AlertTriangle, Car } from 'lucide-react';
 import { useFleetSettings, convertDistance } from './FleetSettingsContext';
+import { useFleetScope } from './FleetScopeContext';
 import { cartrackService } from '../../services/cartrackService';
-import { getVehicleMeta } from '../../services/fleetMapping';
 import { useLanguage } from '../../contexts/LanguageContext';
 import useIsMobile from '../../hooks/useIsMobile';
 import { format, subDays, startOfDay, endOfDay, eachDayOfInterval } from 'date-fns';
 import './FleetDashboard.css';
+import './FleetScopeViews.css';
 
 export default function FleetDashboard() {
   const { settings } = useFleetSettings();
   const { t, locale } = useLanguage();
+  const { scope, inScope, classOf, displayName, metaOf } = useFleetScope();
   const isMobile = useIsMobile();
   const unit = settings.measurementUnit;
+  const lang = locale === 'ar-SA' ? 'ar' : 'en';
 
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -36,7 +39,7 @@ export default function FleetDashboard() {
     fetchDashboardData();
     const timer = setTimeout(() => setIsMounted(true), 600);
     return () => clearTimeout(timer);
-  }, [locale]); // Refresh on locale change to update chart names
+  }, [locale, scope]); // Refresh on locale change (chart names) and on fleet-scope change
 
   const safeFormat = (dateStr, formatStr) => {
     if (!dateStr) return '';
@@ -81,18 +84,12 @@ export default function FleetDashboard() {
 
   const fetchDashboardData = async () => {
     setLoading(true);
-    
-    const FLEET_PLATES = [
-      'A21248', 'A33867', 'A33876', 'C29769', 'C37069',
-      'C37072', 'C37074', 'C37075', 'M85750', 'M85751',
-      'M85756', 'M85759', 'M99268', 'M99270'
-    ];
 
     try {
-      // 1. Fetch Vehicles
+      // 1. Fetch Vehicles (already filtered to the active fleet scope)
       let vehicles = [];
       try {
-        vehicles = await cartrackService.getVehicles() || [];
+        vehicles = await cartrackService.getVehicles(scope) || [];
       } catch (e) { console.error("FleetDashboard: Vehicles fetch failed", e); }
 
       // 2. Define Time Range
@@ -112,28 +109,20 @@ export default function FleetDashboard() {
         rawTrips = await cartrackService.getTrips(rangeStart, rangeEnd) || [];
       } catch (e) { console.error("FleetDashboard: Trips fetch failed", e); }
 
-      // 4. Map Trips
+      // 4. Map Trips (scope-filtered via the shared classifier)
       const tripMap = new Map();
       rawTrips.forEach(t => {
         const reg = t.registration?.trim().toUpperCase().replace(/\s/g, '');
         const dist = parseFloat(t.trip_distance) || 0;
-        const isFleet = FLEET_PLATES.some(p => reg === p || reg === p.replace(/\s/g, ''));
-        if (!isFleet || dist <= 0) return;
+        if (!reg || !inScope(reg) || dist <= 0) return;
         const key = t.trip_id ? String(t.trip_id) : `${reg}-${t.start_timestamp}-${dist}`;
         if (!tripMap.has(key)) tripMap.set(key, t);
       });
       const allTrips = Array.from(tripMap.values());
 
-      // 5. Calculate Stats
-      const activeUnits = vehicles.filter(v => {
-        const reg = v.registration?.trim().toUpperCase().replace(/\s/g, '');
-        return !v.is_under_maintenance && FLEET_PLATES.some(p => reg === p || reg === p.replace(/\s/g, ''));
-      }).length;
-
-      const inMaintenance = vehicles.filter(v => {
-        const reg = v.registration?.trim().toUpperCase().replace(/\s/g, '');
-        return v.is_under_maintenance && FLEET_PLATES.some(p => reg === p || reg === p.replace(/\s/g, ''));
-      }).length;
+      // 5. Calculate Stats — `vehicles` is already the scoped set
+      const activeUnits = vehicles.filter(v => !v.is_under_maintenance).length;
+      const inMaintenance = vehicles.filter(v => v.is_under_maintenance).length;
 
       const totalDistance7D = Math.round(allTrips.reduce((sum, t) => sum + (t.trip_distance || 0), 0) / 1000);
 
@@ -163,27 +152,34 @@ export default function FleetDashboard() {
       const recentActivity = [...allTrips]
         .sort((a, b) => (b.start_timestamp || '').localeCompare(a.start_timestamp || ''))
         .slice(0, 6)
-        .map(t => {
-          const meta = getVehicleMeta(t.registration);
+        .map(trip => {
+          const meta = metaOf(trip.registration);
           return {
-            distance: Math.round((t.trip_distance || 0) / 1000),
-            plate: t.registration,
-            driver: meta.driverName || t.driver_name || t('System Driver', 'سائق النظام'),
-            time: safeFormat(t.start_timestamp, 'HH:mm')
+            distance: Math.round((trip.trip_distance || 0) / 1000),
+            plate: trip.registration,
+            name: displayName(trip.registration, lang),
+            vClass: classOf(trip.registration),
+            driver: meta.driverName || trip.driver_name || t('System Driver', 'سائق النظام'),
+            time: safeFormat(trip.start_timestamp, 'HH:mm')
           };
         });
 
-      // 8. Scorecards
+      // 8. Scorecards (scoped)
       let scorecards = [];
       try {
         scorecards = await cartrackService.getDriverScorecards(7, {
           speedingLimit: settings.speedingLimit,
           brakingMultiplier: settings.brakingSensitivity,
-        }) || [];
+        }, scope) || [];
       } catch (e) { console.error("FleetDashboard: Scorecards fetch failed", e); }
+      scorecards = scorecards.map(s => ({
+        ...s,
+        label: displayName(s.plate, lang),
+        vClass: classOf(s.plate),
+      }));
 
       setStats({
-        totalVehicles: FLEET_PLATES.length,
+        totalVehicles: vehicles.length || (scope === 'buses' ? 14 : 0),
         activeUnits: activeUnits || 0,
         inMaintenance: inMaintenance || 0,
         totalDistance7D,
@@ -208,8 +204,24 @@ export default function FleetDashboard() {
     );
   }
 
+  const capsuleCount = Math.min(stats.totalVehicles, 14);
+  const activePct = stats.totalVehicles > 0 ? Math.round((stats.activeUnits / stats.totalVehicles) * 100) : 0;
+  const renderCapsules = (filled, warn = false) => (
+    <div className="stat-capsules">
+      {Array.from({ length: capsuleCount }).map((_, i) => (
+        <span key={i} className={`stat-capsule${i < filled ? ' filled' : ''}${warn && i < filled ? ' warn' : ''}`} />
+      ))}
+    </div>
+  );
+
   return (
     <div className="fleet-dashboard">
+      {scope === 'others' && (
+        <div className="fsv-scope-note">
+          <Car size={14} />
+          <span>{t('Other Vehicles — not part of the bus fleet', 'مركبات أخرى — ليست ضمن أسطول الحافلات')}</span>
+        </div>
+      )}
       <div className="stats-bento">
         <motion.div className="stat-card glass-panel" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <div className="stat-header">
@@ -218,27 +230,33 @@ export default function FleetDashboard() {
           </div>
           <div className="stat-value">{stats.totalVehicles.toLocaleString(locale)}</div>
           <p className="stat-label">{t('Total Registrations', 'إجمالي التسجيلات')}</p>
+          {renderCapsules(capsuleCount)}
         </motion.div>
 
         <motion.div className="stat-card glass-panel" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <div className="stat-header">
             <h3>{t('Operational', 'تشغيلي')}</h3>
-            <Zap size={16} className="text-safe" />
+            <Zap size={16} />
           </div>
-          <div className="stat-value text-safe">{stats.activeUnits.toLocaleString(locale)}</div>
+          <div className="stat-value">
+            {stats.activeUnits.toLocaleString(locale)}
+            <span className="stat-badge">{activePct.toLocaleString(locale)}%</span>
+          </div>
           <p className="stat-label">{t('Active Transponders', 'أجهزة الإرسال النشطة')}</p>
+          {renderCapsules(Math.round((stats.activeUnits / Math.max(stats.totalVehicles, 1)) * capsuleCount))}
         </motion.div>
 
         <motion.div className="stat-card glass-panel" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
           <div className="stat-header">
             <h3>{t('Maintenance', 'الصيانة')}</h3>
-            <AlertTriangle size={16} className="text-caution" />
+            <AlertTriangle size={16} />
           </div>
-          <div className="stat-value text-caution">{stats.inMaintenance.toLocaleString(locale)}</div>
+          <div className="stat-value">{stats.inMaintenance.toLocaleString(locale)}</div>
           <p className="stat-label">{t('Units in Drydock', 'وحدات في الصيانة')}</p>
+          {renderCapsules(Math.round((stats.inMaintenance / Math.max(stats.totalVehicles, 1)) * capsuleCount), true)}
         </motion.div>
 
-        <motion.div className="stat-card glass-panel" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+        <motion.div className="stat-card stat-card-accent glass-panel" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
           <div className="stat-header">
             <h3>{t('Deployment', 'الانتشار')}</h3>
             <Navigation size={16} />
@@ -256,22 +274,24 @@ export default function FleetDashboard() {
           <h3 className="chart-title"><Activity size={18} /> {t('Mileage Velocity Trend', 'اتجاه سرعة المسافة')}</h3>
           <div className="chart-container" style={{ minHeight: '240px' }}>
             <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={stats.mileageTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorAmber" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--theme-accent)" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="var(--theme-accent)" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
+              <BarChart data={stats.mileageTrend} barCategoryGap="30%" margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--theme-border)" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: 'var(--theme-text-muted)', fontSize: 12}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--theme-text-muted)', fontSize: 12}} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border-strong)', borderRadius: '14px', boxShadow: 'var(--shadow-luxe-md)', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}
-                  itemStyle={{ color: 'var(--theme-accent)', fontWeight: 700 }}
+                <Tooltip
+                  cursor={{ fill: 'var(--theme-surface-hover)' }}
+                  contentStyle={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: '14px', boxShadow: 'var(--shadow-md)', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}
+                  itemStyle={{ color: 'var(--theme-text-main)', fontWeight: 700 }}
                 />
-                <Area type="monotone" dataKey="distance" stroke="var(--theme-accent)" strokeWidth={3} fillOpacity={1} fill="url(#colorAmber)" />
-              </AreaChart>
+                <Bar dataKey="distance" radius={[99, 99, 99, 99]} maxBarSize={22}>
+                  {(() => {
+                    const peak = stats.mileageTrend.reduce((m, d, i) => (d.distance > stats.mileageTrend[m].distance ? i : m), 0);
+                    return stats.mileageTrend.map((d, i) => (
+                      <Cell key={`mile-${i}`} fill={i === peak ? 'var(--theme-ink)' : 'var(--accent)'} />
+                    ));
+                  })()}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </div>
           <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--theme-border)' }}>
@@ -305,7 +325,14 @@ export default function FleetDashboard() {
               <div key={i} className="feed-item">
                 <div className="feed-time">{act.time}</div>
                 <div className="feed-info">
-                  <span className="feed-plate">{act.plate}</span>
+                  <span className="feed-plate">
+                    {act.name}
+                    {scope === 'all' && (
+                      <span className={`fsv-class-badge ${act.vClass === 'bus' ? 'fsv-badge-bus' : 'fsv-badge-other'}`}>
+                        {act.vClass === 'bus' ? t('Bus', 'حافلة') : t('Vehicle', 'مركبة')}
+                      </span>
+                    )}
+                  </span>
                   <span className="feed-dist">{t(`+${act.distance}km Trip Logged`, `+${act.distance}كم رحلة مسجلة`)}</span>
                 </div>
               </div>
@@ -331,13 +358,13 @@ export default function FleetDashboard() {
             <ResponsiveContainer width="100%" height={isMobile ? 200 : 240}>
               <BarChart data={stats.scorecards} barCategoryGap="35%" margin={{ top: 10, right: 10, left: -20, bottom: isMobile ? 18 : 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--theme-border)" />
-                <XAxis dataKey="plate" axisLine={false} tickLine={false} interval={0} angle={isMobile ? -45 : 0} textAnchor={isMobile ? 'end' : 'middle'} height={isMobile ? 44 : 30} tick={{fill: 'var(--theme-text-muted)', fontSize: 10}} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} interval={0} angle={isMobile ? -45 : 0} textAnchor={isMobile ? 'end' : 'middle'} height={isMobile ? 44 : 30} tick={{fill: 'var(--theme-text-muted)', fontSize: 10}} />
                 <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{fill: 'var(--theme-text-muted)', fontSize: 10}} width={30} />
-                <Tooltip 
-                  cursor={{fill: 'rgba(0,0,0,0.02)'}}
-                  contentStyle={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border-strong)', borderRadius: '14px', boxShadow: 'var(--shadow-luxe-md)', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}
+                <Tooltip
+                  cursor={{fill: 'var(--theme-surface-hover)'}}
+                  contentStyle={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: '14px', boxShadow: 'var(--shadow-md)', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}
                 />
-                <Bar dataKey="riskScore" radius={[6, 6, 0, 0]}>
+                <Bar dataKey="riskScore" radius={[99, 99, 99, 99]} maxBarSize={18}>
                   {stats.scorecards.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.riskScore < 60 ? 'var(--status-risk)' : entry.riskScore < 80 ? 'var(--status-warn)' : 'var(--status-safe)'} />
                   ))}

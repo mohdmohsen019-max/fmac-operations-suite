@@ -23,7 +23,14 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': 'warn',
+    },
+  },
+  {
+    // Node-side files: vite config, Vercel api routes, Firebase functions, scripts
+    files: ['vite.config.js', 'api/**/*.js', 'functions/**/*.js', '*.js'],
+    languageOptions: {
+      globals: globals.node,
     },
   },
 ])

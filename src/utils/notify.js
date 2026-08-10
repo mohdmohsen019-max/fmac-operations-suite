@@ -55,11 +55,17 @@ export async function sendNotification(type, payload = {}, opts = {}) {
     });
 
     let results = [];
+    let data = null;
     try {
-      const data = await res.json();
-      results = Array.isArray(data?.results) ? data.results : [];
-    } catch {
-      results = recipients.map(r => ({ email: r.email, status: 'failed', error: 'No response from server' }));
+      data = await res.json();
+    } catch { /* non-JSON response (e.g. proxy error page) */ }
+    results = Array.isArray(data?.results) ? data.results : [];
+
+    // We only fetch when recipients exist, so zero results = the server never
+    // attempted a send. Log the reason per recipient instead of logging nothing.
+    if (results.length === 0 && recipients.length > 0) {
+      const reason = data?.error || `No response from server (HTTP ${res.status})`;
+      results = recipients.map(r => ({ email: r.email, status: 'failed', error: reason }));
     }
 
     const subject = (opts.test ? '[TEST] ' : '') + buildSubject(type, payload);

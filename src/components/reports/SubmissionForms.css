@@ -90,11 +90,11 @@
 }
 
 .sf-autosave-indicator.sf-saving {
-  color: #f59e0b;
+  color: var(--status-warn);
 }
 
 .sf-autosave-indicator.sf-saved {
-  color: #10b981;
+  color: var(--status-safe);
 }
 
 /* ── Modal Body ───────────────────────────────────────────────── */
@@ -169,7 +169,7 @@
 }
 
 .sf-field-label .sf-required {
-  color: #f43f5e;
+  color: var(--status-risk);
   margin-left: 2px;
 }
 
@@ -209,7 +209,7 @@
 }
 
 .sf-input.sf-input-error {
-  border-color: #f43f5e;
+  border-color: var(--status-risk);
   box-shadow: 0 0 0 3px rgba(244,63,94,0.12);
 }
 
@@ -401,7 +401,7 @@
 
 .sf-row-remove-btn:hover {
   background: rgba(244,63,94,0.12);
-  color: #f43f5e;
+  color: var(--status-risk);
 }
 
 .sf-add-row-btn {
@@ -443,13 +443,13 @@
 
 .sf-budget-under {
   background: rgba(16,185,129,0.12);
-  color: #10b981;
+  color: var(--status-safe);
   border: 1px solid rgba(16,185,129,0.25);
 }
 
 .sf-budget-over {
   background: rgba(244,63,94,0.12);
-  color: #f43f5e;
+  color: var(--status-risk);
   border: 1px solid rgba(244,63,94,0.25);
 }
 
@@ -516,14 +516,14 @@
   border-radius: 8px;
   background: rgba(244,63,94,0.08);
   border: 1px solid rgba(244,63,94,0.2);
-  color: #f43f5e;
+  color: var(--status-risk);
   font-size: 0.78rem;
   font-weight: 500;
 }
 
 .sf-field-error-text {
   font-size: 0.68rem;
-  color: #f43f5e;
+  color: var(--status-risk);
   margin-top: 2px;
 }
 
@@ -615,12 +615,12 @@
 }
 
 .sf-btn-submit {
-  background: #10b981;
+  background: var(--status-safe);
   color: #fff;
 }
 
 .sf-btn-submit:hover:not(:disabled) {
-  background: #059669;
+  background: var(--status-safe);
   transform: translateY(-1px);
 }
 
@@ -636,7 +636,7 @@
 .sf-btn-danger {
   background: transparent;
   border: 1px solid rgba(244,63,94,0.25);
-  color: #f43f5e;
+  color: var(--status-risk);
 }
 
 .sf-btn-danger:hover {
@@ -827,7 +827,7 @@
 
 .rsu-file-remove:hover {
   background: rgba(244,63,94,0.12);
-  color: #f43f5e;
+  color: var(--status-risk);
 }
 
 /* ── Analyzing State ──────────────────────────────────────────── */

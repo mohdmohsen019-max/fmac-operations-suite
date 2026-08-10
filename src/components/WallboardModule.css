@@ -1,0 +1,281 @@
+/* ═══════════════════════════════════════════════════════════
+   OPS WALLBOARD — TV / mission-control mode.
+   Always dark, fills the viewport above the app shell.
+═══════════════════════════════════════════════════════════ */
+
+.wb {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  background: #0a0a0a;
+  color: #f2f2f4;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(16px, 3vw, 40px);
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+.wb * { min-width: 0; }
+
+/* Top strip */
+.wb-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.wb-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #9a9aa2;
+}
+.wb-brand img { width: 26px; height: 26px; object-fit: contain; }
+
+.wb-ambient {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.wb-wx, .wb-prayer {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #9a9aa2;
+  white-space: nowrap;
+}
+.wb-prayer { color: #d9b45c; }
+
+.wb-ctl {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #26262b;
+  background: transparent;
+  color: #9a9aa2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.wb-ctl:hover { color: #f2f2f4; border-color: #3c3c44; }
+
+/* Clock — trimmed to leave room for the live map below */
+.wb-clockzone {
+  text-align: center;
+  margin: clamp(6px, 1.6vh, 16px) 0 clamp(8px, 1.8vh, 18px);
+}
+
+.wb-clock {
+  font-size: clamp(48px, 8.5vw, 104px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: #f2f2f4;
+}
+.wb-sec {
+  font-size: 0.35em;
+  font-weight: 500;
+  color: #52525a;
+  vertical-align: baseline;
+}
+
+.wb-date {
+  margin-top: 8px;
+  font-size: clamp(14px, 1.8vw, 19px);
+  color: #9a9aa2;
+}
+
+/* Main region — KPI column + live map */
+.wb-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: clamp(12px, 1.6vw, 20px);
+}
+
+.wb-kpis {
+  flex: 1 1 38%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
+  gap: clamp(12px, 1.6vw, 20px);
+}
+
+/* Live map panel */
+.wb-map-panel {
+  flex: 1.35 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #131316;
+  border: 1px solid #1e1e22;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.wb-map-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 18px;
+  flex-shrink: 0;
+}
+.wb-map-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #d9b45c;
+}
+.wb-map-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+.wb-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #9a9aa2;
+}
+.wb-map-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.wb-map-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: #0B1021;
+}
+/* Force the Google Map container to fill regardless of %-height resolution */
+.wb-map-canvas > div { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.wb-map-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  text-align: center;
+  padding: 20px;
+  color: #6b6b74;
+}
+.wb-map-fallback span { font-size: 14px; font-weight: 600; color: #9a9aa2; }
+.wb-map-fallback small { font-size: 11.5px; color: #52525a; max-width: 240px; }
+.wb-map-spin { animation: wb-spin 0.9s linear infinite; }
+@keyframes wb-spin { to { transform: rotate(360deg); } }
+
+.wb-tile {
+  background: #131316;
+  border: 1px solid #1e1e22;
+  border-radius: 20px;
+  padding: clamp(16px, 2vw, 26px);
+  display: flex;
+  flex-direction: column;
+}
+
+.wb-tile-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.wb-tile-num {
+  margin-top: clamp(8px, 1.6vh, 18px);
+  font-size: clamp(44px, 5.4vw, 78px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: #f2f2f4;
+}
+
+.wb-tile-label {
+  margin-top: 6px;
+  font-size: clamp(12px, 1.1vw, 14px);
+  color: #9a9aa2;
+}
+
+.wb-tile-sub {
+  margin-top: auto;
+  padding-top: 12px;
+  font-size: clamp(11px, 1vw, 13px);
+  color: #52525a;
+}
+.wb-alert { color: #e58a82; font-weight: 600; }
+
+/* Activity ribbon */
+.wb-feed {
+  border-top: 1px solid #1e1e22;
+  padding-top: 14px;
+  margin-top: clamp(12px, 2vh, 22px);
+}
+
+.wb-feed-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #52525a;
+  margin-bottom: 9px;
+}
+
+.wb-feed-list {
+  display: flex;
+  gap: 22px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.wb-feed-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #9a9aa2;
+  flex-shrink: 0;
+}
+
+.wb-feed-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.wb-feed-empty { font-size: 12.5px; color: #52525a; }
+
+@media (max-width: 1000px) {
+  /* Stack: KPIs on top, map below — keep the map a usable height */
+  .wb-main { flex-direction: column; }
+  .wb-kpis { flex: 0 0 auto; }
+  .wb-map-panel { flex: 1 1 auto; min-height: 300px; }
+}
+@media (max-width: 560px) {
+  .wb-kpis { grid-template-columns: 1fr; }
+  .wb-feed-list { flex-direction: column; gap: 8px; }
+}

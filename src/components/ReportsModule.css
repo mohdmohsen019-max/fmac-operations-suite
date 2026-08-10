@@ -169,7 +169,7 @@
   border-radius: 7px;
   border: 1px solid rgba(16,185,129,0.3);
   background: rgba(16,185,129,0.1);
-  color: #10b981;
+  color: var(--status-safe);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
@@ -186,7 +186,7 @@
   border-radius: 7px;
   border: 1px solid rgba(244,63,94,0.3);
   background: rgba(244,63,94,0.1);
-  color: #f43f5e;
+  color: var(--status-risk);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
@@ -208,7 +208,7 @@
   border-radius: 8px;
   border: 1px solid rgba(139, 92, 246, 0.3);
   background: rgba(139, 92, 246, 0.08);
-  color: #a78bfa;
+  color: var(--theme-accent);
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
@@ -461,7 +461,7 @@
   border-radius: 8px;
   background: rgba(245,158,11,0.1);
   border: 1px solid rgba(245,158,11,0.25);
-  color: #f59e0b;
+  color: var(--status-warn);
   font-size: 0.78rem;
   font-weight: 500;
 }
@@ -471,7 +471,7 @@
   border-radius: 8px;
   background: rgba(244,63,94,0.1);
   border: 1px solid rgba(244,63,94,0.25);
-  color: #f43f5e;
+  color: var(--status-risk);
   font-size: 0.78rem;
 }
 
@@ -605,7 +605,7 @@
 
 .rpt-type-auto {
   background: rgba(139,92,246,0.12);
-  color: #a78bfa;
+  color: var(--theme-accent);
   border: 1px solid rgba(139,92,246,0.2);
 }
 
@@ -619,6 +619,77 @@
   font-size: 0.65rem;
   color: var(--theme-text-ghost);
   font-style: italic;
+}
+
+/* ── Include-in-final-report switch ─────────────────────────────── */
+.rpt-inc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 3px;
+  border: 1px solid var(--theme-border);
+  border-radius: 99px;
+  background: var(--theme-surface-hover);
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--theme-text-ghost);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+[dir="rtl"] .rpt-inc { padding: 2px 3px 2px 8px; }
+.rpt-inc:hover { border-color: var(--theme-border-strong); }
+.rpt-inc.on {
+  color: var(--status-safe);
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.1);
+}
+.rpt-inc-track {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  border-radius: 99px;
+  background: var(--theme-border-strong);
+  flex-shrink: 0;
+  transition: background 0.18s ease;
+}
+.rpt-inc.on .rpt-inc-track { background: var(--status-safe); }
+.rpt-inc-knob {
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: inset-inline-start 0.18s ease;
+}
+.rpt-inc.on .rpt-inc-knob { inset-inline-start: 12px; }
+.rpt-inc-text { white-space: nowrap; }
+
+/* Read-only marker for staff who cannot change the selection */
+.rpt-inc-static {
+  padding: 2px 8px;
+  border: 1px dashed var(--theme-border-strong);
+  border-radius: 99px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--theme-text-ghost);
+}
+
+/* An excluded section stays readable but visibly out of the report */
+.rpt-sec-card.rpt-sec-excluded {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.rpt-sec-card.rpt-sec-excluded:hover { opacity: 0.85; }
+
+.rpt-excluded-note {
+  margin: 10px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--theme-text-ghost);
 }
 
 .rpt-sec-meta {
@@ -897,11 +968,11 @@
 
 /* ── Section card status variants ───────────────────────────────── */
 .rpt-sec-card.rpt-sec-approved {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid var(--status-safe);
 }
 
 .rpt-sec-card.rpt-sec-rejected {
-  border-left: 3px solid #f43f5e;
+  border-left: 3px solid var(--status-risk);
 }
 
 .rpt-sec-state-approved {
@@ -910,7 +981,7 @@
   gap: 4px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #10b981;
+  color: var(--status-safe);
 }
 
 .rpt-sec-state-rejected {
@@ -919,7 +990,7 @@
   gap: 4px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #f43f5e;
+  color: var(--status-risk);
 }
 
 /* ── HOD read-only note display ──────────────────────────────────── */
@@ -933,12 +1004,12 @@
 
 .rpt-hod-note-approved {
   background: rgba(16, 185, 129, 0.08);
-  border-left: 2px solid #10b981;
+  border-left: 2px solid var(--status-safe);
 }
 
 .rpt-hod-note-rejected {
   background: rgba(244, 63, 94, 0.08);
-  border-left: 2px solid #f43f5e;
+  border-left: 2px solid var(--status-risk);
 }
 
 .rpt-hod-note-label {
@@ -976,12 +1047,12 @@
 
 /* ── Compile button — gold when all sections approved ────────────── */
 .rpt-compile-ready {
-  background: #f59e0b !important;
+  background: var(--status-warn) !important;
   box-shadow: 0 0 16px rgba(245, 158, 11, 0.35);
 }
 
 .rpt-compile-ready:hover:not(:disabled) {
-  background: #d97706 !important;
+  background: var(--status-warn) !important;
   opacity: 1 !important;
 }
 
@@ -995,7 +1066,7 @@
   border: none;
   background: rgba(16, 185, 129, 0.15);
   border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #10b981;
+  color: var(--status-safe);
   font-size: 0.83rem;
   font-weight: 600;
   cursor: pointer;
@@ -1010,4 +1081,103 @@
 .rpt-btn-publish.rpt-published {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ══════════════════════════════════════════════════════════
+   Final-report preview overlay
+   Portaled to <body> so it is never trapped by the module's
+   framer-motion transform. Styled from the suite's tokens —
+   bone canvas, white surfaces, ink type — so it reads as part
+   of the console rather than a separate window.
+   ══════════════════════════════════════════════════════════ */
+.rpt-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  background: var(--theme-bg);
+  color: var(--theme-text-main);
+}
+
+/* ── Top bar ── */
+.rpt-preview-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 22px;
+  background: var(--theme-surface);
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.rpt-preview-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.rpt-preview-heading > svg {
+  flex-shrink: 0;
+  color: var(--theme-accent);
+}
+.rpt-preview-heading > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rpt-preview-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--theme-text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rpt-preview-sub {
+  font-size: 0.75rem;
+  color: var(--theme-text-muted);
+}
+
+.rpt-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* ── Document area — bone canvas, A4 pages float on it ── */
+.rpt-preview-scroll {
+  flex: 1;
+  /* Required: a flex child will not shrink below its content height without
+     this, so the area grew to fit all 17 A4 pages instead of scrolling them. */
+  min-height: 0;
+  overflow: auto;
+  /* Pages are a fixed 794px wide — center when there's room, allow horizontal
+     scroll when the window is narrower, never clip. */
+  display: block;
+  text-align: center;
+  padding: 26px 20px 44px;
+  background: var(--theme-bg-secondary);
+  -webkit-overflow-scrolling: touch;
+}
+
+.rpt-preview-doc {
+  display: inline-block;
+  text-align: initial;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(17, 17, 20, 0.14),
+              0 1px 3px rgba(17, 17, 20, 0.10);
+}
+
+@media (max-width: 900px) {
+  .rpt-preview-bar { padding: 11px 13px; gap: 10px; }
+  .rpt-preview-title { font-size: 0.85rem; }
+  .rpt-preview-sub { font-size: 0.68rem; }
+  .rpt-preview-actions { gap: 7px; }
+  .rpt-preview-scroll { padding: 13px 8px 30px; }
 }

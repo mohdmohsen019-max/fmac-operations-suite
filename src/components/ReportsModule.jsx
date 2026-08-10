@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   BarChart2, Plus, ChevronLeft, Check, X, RefreshCw,
   Truck, Wrench, Users, MessageSquare, Package,
   Image, Fuel, Receipt, FolderOpen, FileText, AlertCircle,
-  GripVertical, RotateCcw, BookOpen, Download
+  GripVertical, RotateCcw, BookOpen, Download, BellRing
 } from 'lucide-react'
+import { sendNotification } from '../utils/notify'
+import ConfirmModal from './ConfirmModal'
 import { db } from '../firebase'
 import { reportGenerationService } from '../services/reportGenerationService'
 import {
@@ -32,6 +35,11 @@ const MANUAL_SECTIONS = new Set(['player_registration', 'admin_costs', 'media', 
 // ── Constants ──────────────────────────────────────────────────────
 const HOD_EMAIL = import.meta.env.VITE_HOD_EMAIL
 
+/* Head of Operations — the post-holder who signs off the monthly report.
+   Kept here (not read from the signed-in account) so the signature block is
+   the department's, not whoever happened to compile the file. */
+const HOD_NAME_AR = 'ايهاب استيته'
+
 const ICON_MAP = { Truck, Wrench, Users, MessageSquare, Package, Image, Fuel, Receipt, FolderOpen }
 
 const REPORT_SECTIONS = [
@@ -51,16 +59,16 @@ const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو
 
 const RS = {
   draft:       { en: 'Draft',       ar: 'مسودة',       color: 'var(--theme-text-ghost)', bg: 'var(--theme-surface-hover)' },
-  in_progress: { en: 'In Progress', ar: 'قيد التنفيذ', color: '#f59e0b',                 bg: 'rgba(245,158,11,0.12)' },
-  ready:       { en: 'Ready',       ar: 'جاهز',        color: '#3b82f6',                 bg: 'rgba(59,130,246,0.12)' },
-  published:   { en: 'Published',   ar: 'منشور',       color: '#10b981',                 bg: 'rgba(16,185,129,0.12)' },
+  in_progress: { en: 'In Progress', ar: 'قيد التنفيذ', color: 'var(--status-warn)',                 bg: 'rgba(245,158,11,0.12)' },
+  ready:       { en: 'Ready',       ar: 'جاهز',        color: 'var(--theme-accent)',      bg: 'var(--theme-accent-soft)' },
+  published:   { en: 'Published',   ar: 'منشور',       color: 'var(--status-safe)',                 bg: 'rgba(16,185,129,0.12)' },
 }
 
 const SS = {
   pending:   { en: 'Pending',   ar: 'قيد الانتظار', color: 'var(--theme-text-ghost)', bg: 'var(--theme-surface-hover)',  dot: 'var(--theme-border-strong)' },
-  submitted: { en: 'Submitted', ar: 'مُقدَّم',       color: '#f59e0b',                 bg: 'rgba(245,158,11,0.12)',      dot: '#f59e0b' },
-  approved:  { en: 'Approved',  ar: 'معتمد',         color: '#10b981',                 bg: 'rgba(16,185,129,0.12)',      dot: '#10b981' },
-  rejected:  { en: 'Rejected',  ar: 'مرفوض',         color: '#f43f5e',                 bg: 'rgba(244,63,94,0.12)',       dot: '#f43f5e' },
+  submitted: { en: 'Submitted', ar: 'مُقدَّم',       color: 'var(--status-warn)',                 bg: 'rgba(245,158,11,0.12)',      dot: 'var(--status-warn)' },
+  approved:  { en: 'Approved',  ar: 'معتمد',         color: 'var(--status-safe)',                 bg: 'rgba(16,185,129,0.12)',      dot: 'var(--status-safe)' },
+  rejected:  { en: 'Rejected',  ar: 'مرفوض',         color: 'var(--status-risk)',                 bg: 'rgba(244,63,94,0.12)',       dot: 'var(--status-risk)' },
 }
 
 function monthLabel(monthStr, lang) {
@@ -77,12 +85,19 @@ function fmtDate(ts) {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+/* Is this section part of the final compiled report?
+   Sections created before the include/exclude switch existed have no `included`
+   field — those count as included, so nothing silently drops out of a report
+   that was already being prepared. Only an explicit `false` excludes. */
+const isIncluded = (sec) => sec?.included !== false
+
 function computeStatus(sections) {
   if (!sections?.length) return 'draft'
   const requiredKeys = REPORT_SECTIONS.filter(r => r.required).map(r => r.key)
-  const reqSecs = sections.filter(s => requiredKeys.includes(s.sectionKey))
+  // Excluded sections are not part of the report, so they can never hold it back.
+  const reqSecs = sections.filter(s => requiredKeys.includes(s.sectionKey) && isIncluded(s))
   if (reqSecs.length && reqSecs.every(s => s.status === 'approved')) return 'ready'
-  if (sections.some(s => s.status === 'submitted' || s.status === 'approved')) return 'in_progress'
+  if (sections.some(s => isIncluded(s) && (s.status === 'submitted' || s.status === 'approved'))) return 'in_progress'
   return 'draft'
 }
 
@@ -137,8 +152,31 @@ function DashboardView({ user, isHOD, lang, t, onOpen }) {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [filter, setFilter] = useState('all')
+  const [nudgeOpen, setNudgeOpen] = useState(false)
+  const [nudgeState, setNudgeState] = useState('idle') // idle | sending | sent
 
   useEffect(() => { load() }, [])
+
+  /* Current month with unapproved sections → one-click reminder email */
+  const currentMonthId = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  const currentReport = reports.find(r => (r.month || r.id) === currentMonthId)
+  const unapprovedNow = currentReport
+    ? (currentReport._sections || []).filter(s => s.status !== 'approved').length
+    : 0
+
+  const sendNudge = async () => {
+    setNudgeOpen(false)
+    setNudgeState('sending')
+    try {
+      await sendNotification('monthly_report_reminder', {
+        monthLabel: monthLabel(currentMonthId, lang),
+      })
+      setNudgeState('sent')
+    } catch {
+      setNudgeState('idle')
+    }
+    setTimeout(() => setNudgeState('idle'), 4000)
+  }
 
   const load = async () => {
     setLoading(true)
@@ -181,7 +219,35 @@ function DashboardView({ user, isHOD, lang, t, onOpen }) {
         <button className="rpt-btn-ghost rpt-btn-sm" onClick={load}>
           <RefreshCw size={13} /> {t('Refresh', 'تحديث')}
         </button>
+        {unapprovedNow > 0 && (
+          <button
+            className="rpt-btn-ghost rpt-btn-sm"
+            onClick={() => setNudgeOpen(true)}
+            disabled={nudgeState !== 'idle'}
+            title={t('Email the configured recipients a reminder for this month', 'إرسال تذكير بالبريد للمستلمين المحددين لهذا الشهر')}
+          >
+            <BellRing size={13} />
+            {nudgeState === 'sending'
+              ? t('Sending…', 'جارٍ الإرسال…')
+              : nudgeState === 'sent'
+                ? t('Reminder sent', 'تم إرسال التذكير')
+                : `${t('Send reminder', 'إرسال تذكير')} · ${unapprovedNow}`}
+          </button>
+        )}
       </div>
+
+      <ConfirmModal
+        isOpen={nudgeOpen}
+        onClose={() => setNudgeOpen(false)}
+        onConfirm={sendNudge}
+        title={t('Send approval reminder?', 'إرسال تذكير بالاعتماد؟')}
+        message={t(
+          `Emails the configured recipients that ${unapprovedNow} section(s) of the ${monthLabel(currentMonthId, lang)} report still need approval. The send is recorded in the notification log.`,
+          `سيتم إرسال بريد للمستلمين المحددين بأن ${unapprovedNow} قسمًا من تقرير ${monthLabel(currentMonthId, lang)} لا يزال بانتظار الاعتماد. يُسجَّل الإرسال في سجل الإشعارات.`
+        )}
+        confirmText={t('Send', 'إرسال')}
+        cancelText={t('Cancel', 'إلغاء')}
+      />
 
       {loading ? (
         <div className="rpt-center"><RefreshCw size={22} className="rpt-spin" /></div>
@@ -219,8 +285,10 @@ function DashboardView({ user, isHOD, lang, t, onOpen }) {
 // ── Report card ────────────────────────────────────────────────────
 function ReportCard({ report, lang, t, onOpen }) {
   const secs = report._sections || []
-  const submitted = secs.filter(s => s.status === 'submitted' || s.status === 'approved').length
-  const total = REPORT_SECTIONS.length
+  // Progress is measured against the sections actually going into this report.
+  const included = secs.filter(isIncluded)
+  const submitted = included.filter(s => s.status === 'submitted' || s.status === 'approved').length
+  const total = included.length || REPORT_SECTIONS.length
   const pct = total > 0 ? Math.round((submitted / total) * 100) : 0
   const status = computeStatus(secs)
   const si = RS[status] || RS.draft
@@ -245,6 +313,7 @@ function ReportCard({ report, lang, t, onOpen }) {
       <div className="rpt-dots">
         {REPORT_SECTIONS.map(def => {
           const sec = secs.find(s => s.sectionKey === def.key)
+          if (!isIncluded(sec)) return null
           return (
             <div key={def.key} className="rpt-dot"
               style={{ background: SS[sec?.status || 'pending']?.dot }}
@@ -396,6 +465,19 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
 
   useEffect(() => { if (reportId) loadDetail() }, [reportId])
 
+  /* Preview overlay: close on Escape and stop the page behind it scrolling. */
+  useEffect(() => {
+    if (!showTemplatePreview) return
+    const onKey = (e) => { if (e.key === 'Escape') setShowTemplatePreview(false) }
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [showTemplatePreview])
+
   const reshapeRecursive = (obj) => {
     // Disabled reshaping to rely on native Cairo font shaping
     return obj
@@ -410,11 +492,15 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
 
     const rawData = {
       monthName,
-      hodName: user?.displayName || user?.email || 'رئيس قسم العمليات',
+      /* The report is issued by the Head of Operations, whoever happens to be
+         compiling it — so the signature block carries the post-holder's name,
+         never the logged-in account (which fell back to a raw email address). */
+      hodName: HOD_NAME_AR,
       generatedDate,
       reportId,
       notes: reportNotes,
       sections: sections
+        .filter(isIncluded)
         .filter(s => s.status === 'approved' || s.status === 'submitted')
         .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
         .map(s => {
@@ -455,6 +541,39 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
   })
 
   const popToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000) }
+
+  /* Include / exclude a section from the final compiled report. Presentation
+     only — the section keeps its content, status and history either way, so
+     re-including it restores everything exactly as it was. */
+  const handleToggleIncluded = async (sectionDocId, def, next) => {
+    try {
+      // setDoc+merge (not updateDoc) so this still works for a section whose
+      // doc was never created, without clobbering existing fields.
+      await setDoc(doc(db, 'report_sections', sectionDocId), {
+        reportId, sectionKey: def.key, included: next,
+      }, { merge: true })
+
+      const exists = sections.some(s => s.id === sectionDocId)
+      const nextSecs = exists
+        ? sections.map(s => s.id === sectionDocId ? { ...s, included: next } : s)
+        : [...sections, { id: sectionDocId, reportId, sectionKey: def.key, status: 'pending', included: next }]
+      setSections(nextSecs)
+      // Any previously built preview no longer matches the selection.
+      setTemplateData(null)
+
+      const newStatus = computeStatus(nextSecs)
+      if (newStatus !== report?.status) {
+        await updateDoc(doc(db, 'monthly_reports', reportId), { status: newStatus })
+        setReport(r => ({ ...r, status: newStatus }))
+      }
+      popToast(next
+        ? t('Section added to the final report', 'تمت إضافة القسم إلى التقرير النهائي')
+        : t('Section removed from the final report', 'تم استثناء القسم من التقرير النهائي'))
+    } catch (e) {
+      console.error('[reports] toggle include failed:', e)
+      popToast(t('Could not update the section.', 'تعذّر تحديث القسم.'))
+    }
+  }
 
   const handleAction = async (sectionDocId, action) => {
     try {
@@ -636,19 +755,28 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
 
   const status = report.status || 'draft'
   const si = RS[status] || RS.draft
-  const approved  = sections.filter(s => s.status === 'approved').length
-  const submitted = sections.filter(s => s.status === 'submitted').length
-  const rejected  = sections.filter(s => s.status === 'rejected').length
-  const pending   = sections.filter(s => s.status === 'pending').length
-  const total = REPORT_SECTIONS.length
+  /* Every count below is scoped to the sections actually included in this
+     report — an excluded section is not part of the deliverable, so it must
+     not appear in the progress figures nor block compiling. */
+  const includedSecs = sections.filter(isIncluded)
+  const approved  = includedSecs.filter(s => s.status === 'approved').length
+  const submitted = includedSecs.filter(s => s.status === 'submitted').length
+  const rejected  = includedSecs.filter(s => s.status === 'rejected').length
+  const pending   = includedSecs.filter(s => s.status === 'pending').length
+  const includedDefs = REPORT_SECTIONS.filter(def =>
+    isIncluded(sections.find(s => s.sectionKey === def.key))
+  )
+  const excludedCount = REPORT_SECTIONS.length - includedDefs.length
+  const total = includedDefs.length
   const pct = total > 0 ? Math.round(((approved + submitted) / total) * 100) : 0
 
-  const allReqApproved = REPORT_SECTIONS.filter(r => r.required).every(def =>
-    sections.find(s => s.sectionKey === def.key)?.status === 'approved'
-  )
-  const pendingRequired = REPORT_SECTIONS.filter(r => r.required).filter(def =>
+  const requiredIncluded = includedDefs.filter(r => r.required)
+  const pendingRequired = requiredIncluded.filter(def =>
     sections.find(s => s.sectionKey === def.key)?.status !== 'approved'
   ).length
+  // A report with nothing in it is not "ready" — guard the empty case, since
+  // `every` on an empty list would otherwise report true.
+  const allReqApproved = total > 0 && pendingRequired === 0
 
   return (
     <>
@@ -698,6 +826,7 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
                   isHOD={isHOD}
                   isImporting={importingSecId === secDocId}
                   onAction={(action) => handleAction(secDocId, action)}
+                  onToggleIncluded={(next) => handleToggleIncluded(secDocId, def, next)}
                   onImport={(sectionKey) => handleImport(secDocId, sectionKey)}
                   onHodNotesBlur={(notes) => handleHodNotes(secDocId, notes)}
                   onOpenForm={(sectionKey) => openForm(sectionKey, sec ? { ...sec, type: def.type } : { id: secDocId, sectionKey: def.key, sectionNameAr: def.nameAr, sectionNameEn: def.nameEn, type: def.type, content: {}, status: 'pending' })}
@@ -735,6 +864,13 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
                 </div>
               ))}
             </div>
+
+            {excludedCount > 0 && (
+              <p className="rpt-excluded-note" dir="auto">
+                {t(`${excludedCount} section(s) left out of this report.`,
+                   `${excludedCount} قسم مستثنى من هذا التقرير.`)}
+              </p>
+            )}
 
             {isHOD && (
               <>
@@ -841,58 +977,42 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
         )}
       </AnimatePresence>
 
-      {/* ── Phase 5: Template preview overlay ── */}
-      {showTemplatePreview && templateData && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 9000,
-          background: 'rgba(0,0,0,0.85)',
-          overflowY: 'auto',
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', paddingTop: '20px', paddingBottom: '40px', gap: '16px',
-        }}>
-          {/* Close bar */}
-          <div style={{
-            position: 'sticky', top: 0, zIndex: 1,
-            background: '#0f1729', borderBottom: '2px solid #c9a84c',
-            width: '100%', padding: '12px 24px',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            fontFamily: "'Cairo', sans-serif", direction: 'rtl', boxSizing: 'border-box',
-          }}>
-            <span style={{ color: '#c9a84c', fontWeight: 700, fontSize: '16px' }}>
-              معاينة التقرير — تأكد من ظهور النص العربي بشكل صحيح
-            </span>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={handleExportPDF}
-                disabled={isCompiling}
-                style={{
-                  background: '#c9a84c', color: '#0f1729', border: 'none',
-                  borderRadius: '6px', padding: '6px 18px', cursor: 'pointer',
-                  fontFamily: "'Cairo', sans-serif", fontWeight: 700, fontSize: '14px',
-                  display: 'flex', alignItems: 'center', gap: '8px'
-                }}
-              >
+      {/* ── Template preview overlay ──
+          Rendered through a portal to <body>. The module tree sits inside a
+          framer-motion transform, and a transformed ancestor becomes the
+          containing block for position:fixed — which trapped this overlay
+          inside the module panel, letting the sidebar and header sit on top
+          of it. The portal escapes that stacking context entirely. */}
+      {showTemplatePreview && templateData && createPortal(
+        /* `theme-reports` is re-applied here: the portal mounts on <body>,
+           outside the shell that normally scopes the module's accent tokens. */
+        <div className="rpt-preview-overlay theme-reports">
+          <div className="rpt-preview-bar">
+            <div className="rpt-preview-heading">
+              <FileText size={16} />
+              <div>
+                <span className="rpt-preview-title">{t('Final Report Preview', 'معاينة التقرير النهائي')}</span>
+                <span className="rpt-preview-sub">{monthLabel(reportId, lang)}</span>
+              </div>
+            </div>
+            <div className="rpt-preview-actions">
+              <button className="rpt-btn-primary" onClick={handleExportPDF} disabled={isCompiling}>
                 {isCompiling ? <RefreshCw size={14} className="rpt-spin" /> : <Download size={14} />}
-                {isCompiling ? 'جاري التحميل...' : 'تحميل PDF'}
+                {isCompiling ? t('Generating…', 'جاري التحميل…') : t('Download PDF', 'تحميل PDF')}
               </button>
-              <button
-                onClick={() => setShowTemplatePreview(false)}
-                style={{
-                  background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '6px', padding: '6px 18px', cursor: 'pointer',
-                  fontFamily: "'Cairo', sans-serif", fontWeight: 700, fontSize: '14px',
-                }}
-              >
-                إغلاق
+              <button className="rpt-btn-outline" onClick={() => setShowTemplatePreview(false)}>
+                <X size={14} /> {t('Close', 'إغلاق')}
               </button>
             </div>
           </div>
 
-          {/* The actual template rendered visibly */}
-          <div id="report-preview-container" style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}>
-            <ReportTemplate data={templateData} />
+          <div className="rpt-preview-scroll">
+            <div id="report-preview-container" className="rpt-preview-doc">
+              <ReportTemplate data={templateData} />
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* ── Phase 5: Off-screen template for high-fidelity PDF capture ── */}
@@ -914,7 +1034,7 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
 }
 
 // ── Section card ───────────────────────────────────────────────────
-function SectionCard({ def, sec, lang, t, isHOD, onAction, onHodNotesBlur, onOpenForm, onImport, isImporting }) {
+function SectionCard({ def, sec, lang, t, isHOD, onAction, onToggleIncluded, onHodNotesBlur, onOpenForm, onImport, isImporting }) {
   const { canSubmitReport, isMasterAdmin } = usePermissions()
   const Icon = ICON_MAP[def.icon] || FileText
   const status = sec?.status || 'pending'
@@ -922,11 +1042,14 @@ function SectionCard({ def, sec, lang, t, isHOD, onAction, onHodNotesBlur, onOpe
   const [hodNotes, setHodNotes] = useState(sec?.hodNotes || '')
 
   const canEdit = canSubmitReport(def.key);
+  // Whoever compiles the report decides what goes into it.
+  const canChooseSections = isHOD || isMasterAdmin
+  const included = isIncluded(sec)
 
   useEffect(() => { setHodNotes(sec?.hodNotes || '') }, [sec?.id, sec?.hodNotes])
 
   return (
-    <div className={`rpt-sec-card rpt-sec-${status} ${!canEdit ? 'rpt-sec-locked' : ''}`}>
+    <div className={`rpt-sec-card rpt-sec-${status} ${!canEdit ? 'rpt-sec-locked' : ''}${included ? '' : ' rpt-sec-excluded'}`}>
       <div className="rpt-sec-main">
 
         {/* Drag handle — HOD only, purely visual (drag is on wrapper) */}
@@ -957,6 +1080,30 @@ function SectionCard({ def, sec, lang, t, isHOD, onAction, onHodNotesBlur, onOpe
             </span>
             {!def.required && (
               <span className="rpt-optional">{t('Optional', 'اختياري')}</span>
+            )}
+
+            {/* Include in the final report — the compiler's choice. */}
+            {canChooseSections ? (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={included}
+                className={`rpt-inc${included ? ' on' : ''}`}
+                onClick={() => onToggleIncluded?.(!included)}
+                title={included
+                  ? t('This section is included in the final report — click to leave it out',
+                      'هذا القسم مُدرج في التقرير النهائي — اضغط لاستثنائه')
+                  : t('This section is left out of the final report — click to include it',
+                      'هذا القسم مستثنى من التقرير النهائي — اضغط لتضمينه')}
+              >
+                <span className="rpt-inc-track"><span className="rpt-inc-knob" /></span>
+                <span className="rpt-inc-text">
+                  {included ? t('In final report', 'في التقرير النهائي') : t('Not included', 'غير مُدرج')}
+                </span>
+              </button>
+            ) : !included && (
+              /* Everyone else still needs to know it will not be submitted. */
+              <span className="rpt-inc-static">{t('Not in final report', 'غير مُدرج في التقرير')}</span>
             )}
           </div>
 

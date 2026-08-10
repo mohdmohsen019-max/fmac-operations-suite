@@ -266,7 +266,7 @@ export default function TransportationModule() {
                 const percentage = (m.count / total) * 100;
                 const offset = acc.totalOffset;
                 const dashArray = `${percentage} ${100 - percentage}`;
-                const colors = ['#0ea5e9', '#22d3ee', '#38bdf8', '#0284c7', '#0369a1'];
+                const colors = ['#a32d2d', '#8a6d1f', '#0c7a58', '#6d4fc4', '#2563eb'];
                 const color = colors[idx % colors.length];
                 
                 acc.elements.push(
@@ -297,7 +297,7 @@ export default function TransportationModule() {
             </svg>
             <div className="tm-donut-legend">
               {stats.methodSummary.slice(0, 5).map((m, idx) => {
-                const colors = ['#0ea5e9', '#22d3ee', '#38bdf8', '#0284c7', '#0369a1'];
+                const colors = ['#a32d2d', '#8a6d1f', '#0c7a58', '#6d4fc4', '#2563eb'];
                 return (
                   <div key={m.method} className="legend-item">
                     <span className="legend-dot" style={{ background: colors[idx % colors.length] }}></span>

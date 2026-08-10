@@ -1,0 +1,41 @@
+rules_version = '2';
+
+/*
+  FMAC Operations Suite — Firestore security rules.
+
+  PURPOSE: close the critical hole where the entire database was world-readable
+  with no authentication. The app authenticates every staff user via Firebase
+  Auth before they reach any data screen, so requiring auth does not break the
+  authenticated app.
+
+  The ONE unauthenticated surface is the public complaint/suggestion form
+  (HelpFormWizard → ticketService.submitTicket), which creates documents in
+  `requests`. That single path is allowed below; everything else requires a
+  signed-in account.
+
+  Firestore evaluates all matching rules and grants access if ANY allow is
+  true, so the specific `requests` create rule and the signed-in catch-all
+  coexist correctly.
+
+  NOT YET HARDENED (deliberate — needs the master-admin identity confirmed to
+  avoid locking admins out of User Management): per-collection role/permission
+  write rules that would stop a signed-in staff member from escalating their
+  own users/{uid}.role. Tracked as a follow-up.
+*/
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Public help-desk submissions: anyone (unauthenticated public) may create
+    // a ticket; only signed-in staff may read, update or delete them.
+    match /requests/{id} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // Everything else — signed-in staff only.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

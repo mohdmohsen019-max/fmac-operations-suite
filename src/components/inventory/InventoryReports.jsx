@@ -27,9 +27,9 @@ function buildStockReportHTML(itemsData, srStart, srEnd) {
 
   const statusInfo = (item) => {
     const s = getItemStatus(item)
-    if (s === 'out') return { text: 'نفذ المخزون', color: '#dc2626' }
-    if (s === 'low') return { text: 'مخزون منخفض', color: '#d97706' }
-    return { text: 'متوفر', color: '#16a34a' }
+    if (s === 'out') return { text: 'نفذ المخزون', color: '#de4a41' }
+    if (s === 'low') return { text: 'مخزون منخفض', color: '#d4a008' }
+    return { text: 'متوفر', color: '#2c9c5c' }
   }
 
   let itemSections = ''
@@ -50,8 +50,8 @@ function buildStockReportHTML(itemsData, srStart, srEnd) {
         movRows += `<tr style="border-bottom:1px solid #f3f4f6;">
           <td style="padding:7px 8px;">${fmtD(m.createdAt)}</td>
           <td style="padding:7px 8px;">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${isIn?'#16a34a':'#dc2626'};margin-left:5px;vertical-align:middle;"></span>
-            <span style="color:${isIn?'#16a34a':'#dc2626'};font-weight:600;">${isIn?'وارد':'صادر'}</span>
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${isIn?'#2c9c5c':'#de4a41'};margin-left:5px;vertical-align:middle;"></span>
+            <span style="color:${isIn?'#2c9c5c':'#de4a41'};font-weight:600;">${isIn?'وارد':'صادر'}</span>
           </td>
           <td style="padding:7px 8px;text-align:center;font-weight:700;">${m.quantity||0}</td>
           <td style="padding:7px 8px;text-align:center;color:#555;">${m.stockBefore??'—'}</td>
@@ -99,11 +99,11 @@ function buildStockReportHTML(itemsData, srStart, srEnd) {
           <tr style="background:#f9fafb;border-top:2px solid #e5e7eb;">
             <td colspan="2" style="padding:8px;font-weight:700;font-size:12px;">الإجماليات</td>
             <td colspan="5" style="padding:8px;font-size:12px;">
-              إجمالي الوارد: <strong style="color:#16a34a;">${stockIn}</strong>
+              إجمالي الوارد: <strong style="color:#2c9c5c;">${stockIn}</strong>
               &nbsp;|&nbsp;
-              إجمالي الصادر: <strong style="color:#dc2626;">${stockOut}</strong>
+              إجمالي الصادر: <strong style="color:#de4a41;">${stockOut}</strong>
               &nbsp;|&nbsp;
-              صافي الحركة: <strong style="color:${net>=0?'#16a34a':'#dc2626'};">${net>=0?'+':''}${net}</strong>
+              صافي الحركة: <strong style="color:${net>=0?'#2c9c5c':'#de4a41'};">${net>=0?'+':''}${net}</strong>
             </td>
           </tr>
         </tfoot>
@@ -113,8 +113,8 @@ function buildStockReportHTML(itemsData, srStart, srEnd) {
     summaryRows += `<tr style="border-bottom:1px solid #f3f4f6;">
       <td style="padding:9px 8px;">${item.nameAr||''}<div style="font-size:11px;color:#888;font-family:monospace;">${item.sku||''}</div></td>
       <td style="padding:9px 8px;text-align:center;font-weight:700;">${item.currentStock??0}</td>
-      <td style="padding:9px 8px;text-align:center;color:#16a34a;font-weight:700;">+${stockIn}</td>
-      <td style="padding:9px 8px;text-align:center;color:#dc2626;font-weight:700;">-${stockOut}</td>
+      <td style="padding:9px 8px;text-align:center;color:#2c9c5c;font-weight:700;">+${stockIn}</td>
+      <td style="padding:9px 8px;text-align:center;color:#de4a41;font-weight:700;">-${stockOut}</td>
       <td style="padding:9px 8px;text-align:center;font-weight:700;color:${si.color};">${si.text}</td>
     </tr>`
   })
@@ -587,9 +587,9 @@ export default function InventoryReports({ items, settings }) {
                       <tr key={i} className="inv-table-row">
                         <td><div className="inv-name-cell"><div className="inv-name-ar">{r.nameAr}</div><div className="inv-name-en">{r.nameEn}</div></div></td>
                         <td>{r.sport}</td>
-                        <td style={{ textAlign:'center', fontWeight:700, color: r.currentStock === 0 ? '#f43f5e' : '#f59e0b' }}>{r.currentStock}</td>
+                        <td style={{ textAlign:'center', fontWeight:700, color: r.currentStock === 0 ? '#de4a41' : '#d4a008' }}>{r.currentStock}</td>
                         <td style={{ textAlign:'center', color:'var(--theme-text-muted)' }}>{r.minThreshold}</td>
-                        <td style={{ textAlign:'center', fontWeight:700, color:'#f43f5e' }}>{r.diff}</td>
+                        <td style={{ textAlign:'center', fontWeight:700, color:'#de4a41' }}>{r.diff}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -603,8 +603,8 @@ export default function InventoryReports({ items, settings }) {
                   <thead><tr>
                     <th>{t('Item','الصنف')}</th>
                     <th>SKU</th>
-                    <th style={{ color:'#10b981' }}>{t('Stock In','وارد')}</th>
-                    <th style={{ color:'#f43f5e' }}>{t('Stock Out','صادر')}</th>
+                    <th style={{ color:'#2c9c5c' }}>{t('Stock In','وارد')}</th>
+                    <th style={{ color:'#de4a41' }}>{t('Stock Out','صادر')}</th>
                     <th>{t('Net','صافي')}</th>
                   </tr></thead>
                   <tbody>
@@ -612,8 +612,8 @@ export default function InventoryReports({ items, settings }) {
                       <tr key={i} className="inv-table-row">
                         <td><div className="inv-name-cell"><div className="inv-name-ar">{r.nameAr}</div><div className="inv-name-en">{r.nameEn}</div></div></td>
                         <td><span className="inv-sku-badge">{r.sku}</span></td>
-                        <td style={{ textAlign:'center', fontWeight:700, color:'#10b981' }}>+{r.stockIn}</td>
-                        <td style={{ textAlign:'center', fontWeight:700, color:'#f43f5e' }}>-{r.stockOut}</td>
+                        <td style={{ textAlign:'center', fontWeight:700, color:'#2c9c5c' }}>+{r.stockIn}</td>
+                        <td style={{ textAlign:'center', fontWeight:700, color:'#de4a41' }}>-{r.stockOut}</td>
                         <td style={{ textAlign:'center', fontWeight:700 }}>{r.stockIn - r.stockOut}</td>
                       </tr>
                     ))}

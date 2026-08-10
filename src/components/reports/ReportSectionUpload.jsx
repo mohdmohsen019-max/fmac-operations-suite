@@ -5,6 +5,7 @@ import {
   Edit3, RotateCcw, Send, ChevronDown, ChevronUp, Eye, Pencil, Save
 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
+import { detectKind, extractSheetText, extractDocxText, extractJsonText, ACCEPT_ATTR } from './fileExtract'
 import { db, storage } from '../../firebase'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
@@ -12,11 +13,16 @@ import ReportBlockEditor from './ReportBlockEditor'
 import { migrateToBlocks, blocksToLegacy } from '../../utils/reportBlocks'
 import './SubmissionForms.css'
 
-// PDF.js worker — same setup as pdfService.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.js',
-  import.meta.url
-).href
+/* PDF.js worker — served from /public so it is delivered byte-for-byte.
+   Anything resolved through the bundler (`new URL(..., import.meta.url)` or an
+   `?url` import) gets handed to Vite's JS transform in dev, which rewrites this
+   classic worker script into an ES module — a classic Worker cannot load that
+   ("Cannot use import statement outside a module"), and PDF.js then falls back
+   to a fake worker that also fails. Files in /public bypass the pipeline
+   entirely, so this works identically in dev and in the production build.
+   Keep public/pdf.worker.min.js in sync with the pdfjs-dist version in
+   package.json — `npm run sync-pdf-worker`. */
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
 
 const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
@@ -88,7 +94,7 @@ export default function ReportSectionUpload({ section, reportId, user, lang, t, 
     // If section already has content, go straight to preview
     let content = section?.content
     if (typeof content === 'string') {
-      try { content = JSON.parse(content) } catch (e) {}
+      try { content = JSON.parse(content) } catch (e) { /* ignore */ }
     }
     const hasBlocks = Array.isArray(content?.blocks) && content.blocks.length > 0
     const hasLegacy = !!content?.summary
@@ -129,8 +135,16 @@ export default function ReportSectionUpload({ section, reportId, user, lang, t, 
   // ── File selection ──────────────────────────────────────
   const handleFile = (f) => {
     if (!f) return
-    if (f.type !== 'application/pdf') {
-      setError(t('Please select a PDF file only.', 'يرجى اختيار ملف PDF فقط.'))
+    const kind = detectKind(f)
+    if (kind === 'legacy-doc') {
+      // mammoth/docx tooling only reads the modern XML format.
+      setError(t('The old .doc format is not supported. Please open it in Word and save as .docx.',
+                 'صيغة .doc القديمة غير مدعومة. افتح الملف في Word واحفظه بصيغة .docx.'))
+      return
+    }
+    if (kind === 'unknown') {
+      setError(t('Please select a PDF, Excel (.xlsx, .xls, .csv), Word (.docx) or JSON file.',
+                 'يرجى اختيار ملف PDF أو Excel (.xlsx, .xls, .csv) أو Word (.docx) أو JSON.'))
       return
     }
     if (f.size > 10 * 1024 * 1024) {
@@ -154,34 +168,63 @@ export default function ReportSectionUpload({ section, reportId, user, lang, t, 
     setError(null)
 
     try {
-      // Step 1: Render PDF pages to images
+      /* Step 1 — get the document in front of the model. A PDF is rendered to
+         page images; a spreadsheet or Word file is far better read as text
+         (and much cheaper than screenshotting it). */
+      const kind = detectKind(file)
       setStatusMsg(t('Reading document…', 'قراءة المستند…'))
-      const arrayBuffer = await file.arrayBuffer()
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-      const pagesBase64 = []
+      const imageContent = []
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        setStatusMsg(t(`Rendering page ${i} of ${pdf.numPages}…`, `تجهيز صفحة ${i} من ${pdf.numPages}…`))
-        const page = await pdf.getPage(i)
-        const viewport = page.getViewport({ scale: 3.0 })
-        const canvas = document.createElement('canvas')
-        const ctx = canvas.getContext('2d')
-        canvas.width = viewport.width
-        canvas.height = viewport.height
-        await page.render({ canvasContext: ctx, viewport }).promise
-        pagesBase64.push(canvas.toDataURL('image/png').split(',')[1])
+      if (kind === 'pdf') {
+        const arrayBuffer = await file.arrayBuffer()
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          setStatusMsg(t(`Rendering page ${i} of ${pdf.numPages}…`, `تجهيز صفحة ${i} من ${pdf.numPages}…`))
+          const page = await pdf.getPage(i)
+          const viewport = page.getViewport({ scale: 3.0 })
+          const canvas = document.createElement('canvas')
+          const ctx = canvas.getContext('2d')
+          canvas.width = viewport.width
+          canvas.height = viewport.height
+          await page.render({ canvasContext: ctx, viewport }).promise
+          imageContent.push({
+            type: 'image',
+            source: { type: 'base64', media_type: 'image/png', data: canvas.toDataURL('image/png').split(',')[1] },
+          })
+        }
+      } else {
+        let docText = ''
+        try {
+          if (kind === 'sheet') docText = await extractSheetText(file)
+          else if (kind === 'json') docText = await extractJsonText(file)
+          else docText = await extractDocxText(file)
+        } catch (exErr) {
+          const why = {
+            EMPTY_WORKBOOK: t('That spreadsheet has no data in any sheet.', 'جدول البيانات لا يحتوي على أي بيانات.'),
+            DOCX_EMPTY: t('That Word file appears to be empty.', 'ملف Word يبدو فارغاً.'),
+            JSON_EMPTY: t('That JSON file is empty.', 'ملف JSON فارغ.'),
+            JSON_INVALID: t(`That file is not valid JSON. ${exErr.detail || ''}`.trim(),
+                            `الملف ليس JSON صالحاً. ${exErr.detail || ''}`.trim()),
+          }[exErr?.message]
+          throw new Error(why || t(
+            'Could not read that file. Try re-saving it, or export it as PDF.',
+            'تعذّرت قراءة الملف. حاول حفظه من جديد أو تصديره بصيغة PDF.'))
+        }
+        // Keep well inside the model's context; these documents are tabular.
+        const MAX = 180_000
+        if (docText.length > MAX) docText = `${docText.slice(0, MAX)}\n…[truncated]`
+        imageContent.push({
+          type: 'text',
+          text: `Document file name: ${file.name}\n\n${docText}`,
+        })
       }
 
-      // Step 2: Call Claude Vision API
+      // Step 2: Call Claude API
       setStatusMsg(t('Analyzing with AI…', 'تحليل بالذكاء الاصطناعي…'))
 
       const monthName = monthLabel(reportId, 'en')
       const sectionName = nameEn
-
-      const imageContent = pagesBase64.map(img => ({
-        type: 'image',
-        source: { type: 'base64', media_type: 'image/png', data: img }
-      }))
 
       imageContent.push({
         type: 'text',
@@ -441,7 +484,7 @@ Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backtick
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".pdf"
+                      accept={ACCEPT_ATTR}
                       hidden
                       onChange={e => handleFile(e.target.files[0])}
                     />
@@ -463,10 +506,10 @@ Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backtick
                       <div className="rsu-drop-content">
                         <Upload size={36} style={{ opacity: 0.4, color: 'var(--theme-accent)' }} />
                         <p className="rsu-drop-title">
-                          {t('Drop PDF here or click to browse', 'أسقط ملف PDF هنا أو انقر للتصفح')}
+                          {t('Drop a file here or click to browse', 'أسقط الملف هنا أو انقر للتصفح')}
                         </p>
                         <p className="rsu-drop-hint">
-                          {t('PDF only, max 10MB', 'PDF فقط، بحد أقصى 10 ميجابايت')}
+                          {t('PDF, Excel, Word or JSON — max 10MB', 'PDF أو Excel أو Word أو JSON — بحد أقصى 10 ميجابايت')}
                         </p>
                       </div>
                     )}
@@ -489,7 +532,7 @@ Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backtick
                       onClick={() => { setAiResult({}); setBlocks(migrateToBlocks({})); setIsEditing(true); setStep('preview') }}
                     >
                       <Pencil size={14} />
-                      {t('Build manually (no PDF)', 'إنشاء يدوي (بدون PDF)')}
+                      {t('Build manually (no file)', 'إنشاء يدوي (بدون ملف)')}
                     </button>
                   )}
                 </>
@@ -683,7 +726,7 @@ Do NOT include a rawText field. Return ONLY valid JSON, no markdown, no backtick
                     className="rsu-pdf-link"
                   >
                     <Eye size={13} />
-                    {t('View Original PDF', 'عرض ملف PDF الأصلي')}
+                    {t('View original file', 'عرض الملف الأصلي')}
                   </a>
                 </div>
               )}

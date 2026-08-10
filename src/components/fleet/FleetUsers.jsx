@@ -10,11 +10,7 @@ export default function FleetUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
+  async function fetchUsers() {
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'users'));
@@ -24,7 +20,12 @@ export default function FleetUsers() {
       console.error('Error fetching users:', err);
     }
     setLoading(false);
-  };
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchUsers();
+  }, []);
 
   const adminCount = users.filter(u => u.role === 'admin').length;
 
@@ -51,7 +52,7 @@ export default function FleetUsers() {
         </div>
         <div className="fleet-kpi-card">
           <div className="fleet-kpi-label">{t('Pending Approval', 'بانتظار الموافقة')}</div>
-          <div className="fleet-kpi-value" style={{ color: '#F59E0B' }}>0</div>
+          <div className="fleet-kpi-value" style={{ color: 'var(--status-warn)' }}>0</div>
         </div>
       </div>
 
@@ -64,11 +65,11 @@ export default function FleetUsers() {
           renderRow={(user) => (
             <tr key={user.uid}>
               <td style={{ fontWeight: 700 }}>{user.displayName || user.name || 'N/A'}</td>
-              <td style={{ color: '#8888AA' }}>{user.email}</td>
+              <td style={{ color: 'var(--theme-text-muted)' }}>{user.email}</td>
               <td>
                 <span style={{ 
-                  background: user.role === 'admin' ? 'rgba(212, 175, 55, 0.1)' : 'rgba(255,255,255,0.05)',
-                  color: user.role === 'admin' ? '#D4AF37' : '#FFFFFF',
+                  background: user.role === 'admin' ? 'var(--theme-accent-soft)' : 'var(--theme-surface-hover)',
+                  color: user.role === 'admin' ? 'var(--theme-accent)' : 'var(--theme-text-main)',
                   padding: '4px 10px',
                   borderRadius: '4px',
                   fontSize: '0.7rem',

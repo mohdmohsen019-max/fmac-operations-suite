@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { List, DoorOpen, ScrollText, SlidersHorizontal, RefreshCw, FileBarChart, ShieldCheck } from 'lucide-react'
 import { db } from '../firebase'
 import { collection, onSnapshot, doc, query, orderBy } from 'firebase/firestore'
 import { useLanguage } from '../contexts/LanguageContext'
 import { usePermissions } from '../hooks/usePermissions'
+import ModuleLock from './shared/ModuleLock'
 
 import AssetRegistry    from './assets/AssetRegistry'
 import AssetRooms       from './assets/AssetRooms'
@@ -14,6 +15,7 @@ import AssetAMS         from './assets/AssetAMS'
 import AssetSystem      from './assets/AssetSystem'
 import AssetDetailModal from './assets/AssetDetailModal'
 import AssetEditModal   from './assets/AssetEditModal'
+import AssetScanPopup   from './assets/AssetScanPopup'
 import BarcodePrintModal from './inventory/BarcodePrintModal'
 import { toMillis } from './assets/shared'
 import { mergeAmsConfig } from './assets/ams'
@@ -33,9 +35,13 @@ export default function AssetsModule() {
   const { userProfile, user, isMasterAdmin } = usePermissions()
 
   // ── Access control ────────────────────────────────────────────────
-  // Per spec: only Warehouse/Store Manager (role 'store_manager') + master admin
-  // get full edit access. Everyone else authenticated is view-only.
+  // Edit: master admin, store manager, HOD, or an explicit 'edit' grant from
+  // User Management. View: everyone unless explicitly set to 'none' (absent
+  // key = legacy account from before assets appeared in the permission grid).
+  const assetsPerm = userProfile?.permissions?.assets
   const canManage = isMasterAdmin || userProfile?.role === 'store_manager'
+    || userProfile?.role === 'hod' || assetsPerm === 'edit'
+  const canView = isMasterAdmin || userProfile?.role === 'hod' || assetsPerm !== 'none'
 
   const actorName = user?.displayName || userProfile?.displayName || user?.email || 'Unknown'
   const actorUid = user?.uid || ''
@@ -54,6 +60,11 @@ export default function AssetsModule() {
   const [detailAsset, setDetailAsset] = useState(null)
   const [editAsset, setEditAsset] = useState(null)       // null = closed, {} = new, asset = edit
   const [barcodeAsset, setBarcodeAsset] = useState(null)
+
+  // Barcode scanning — same contract as the Inventory module: an explicit
+  // armed scan mode; scanResult is null | asset | 'not_found'.
+  const [scanMode, setScanMode] = useState(false)
+  const [scanResult, setScanResult] = useState(null)
 
   // ── Real-time listeners (additive reads only) ─────────────────────
   useEffect(() => {
@@ -92,14 +103,24 @@ export default function AssetsModule() {
     return assets.find(a => a.id === detailAsset.id) || detailAsset
   }, [detailAsset, assets])
 
-  // ── Global USB barcode scanner (keyboard wedge, <50ms keystroke gap) ──
-  // On a complete scan, open the matched asset's detail modal immediately.
+  // Live ref to the latest assets so the scan listener can match against fresh
+  // data without listing `assets` in its deps (see the scan effect below).
+  const assetsRef = useRef(assets)
+  useEffect(() => { assetsRef.current = assets }, [assets])
+
+  // ── USB barcode scanner (keyboard wedge, <50ms keystroke gap) ──
+  // Mirrors the Inventory module exactly: active only while scan mode is
+  // armed; a match opens the quick-action popup, a miss shows "not found".
+  // Deps are [scanMode] only — `assets` is read via assetsRef so a live DB
+  // snapshot doesn't tear down/rebuild the listener and drop a mid-scan buffer.
   useEffect(() => {
+    if (!scanMode) return
     let buffer = ''
     let lastTime = Date.now()
 
     const onKey = (e) => {
-      // Ignore while typing in a field.
+      // Never capture keystrokes aimed at a field (e.g. the Registry search
+      // box) — only hardware-scanner input to the page body should be read.
       const tag = (e.target?.tagName || '').toLowerCase()
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable) return
 
@@ -110,8 +131,8 @@ export default function AssetsModule() {
       if (e.key === 'Enter') {
         if (buffer.length >= 3) {
           const code = buffer.trim()
-          const found = assets.find(a => a.barcode === code || a.sku === code)
-          if (found) { setEditAsset(null); setDetailAsset(found) }
+          const found = assetsRef.current.find(a => a.barcode === code || a.sku === code || a.asset_code === code)
+          setScanResult(found || 'not_found')
         }
         buffer = ''
         return
@@ -123,7 +144,7 @@ export default function AssetsModule() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [assets])
+  }, [scanMode])
 
   const visibleTabs = TABS.filter(tab => !tab.managerOnly || canManage)
 
@@ -145,10 +166,13 @@ export default function AssetsModule() {
   const tabProps = {
     assets, rooms, canManage, lang, t, isRTL,
     actorUid, actorName, amsConfig, snapshots,
+    scanMode, setScanMode,
     onOpenDetail: (a) => setDetailAsset(a),
     onOpenEdit: (a) => setEditAsset(a),
     onOpenBarcode: openBarcodeFor,
   }
+
+  if (!canView) return <ModuleLock />
 
   return (
     <div className="ast-module">
@@ -247,7 +271,33 @@ export default function AssetsModule() {
 
       <AnimatePresence>
         {barcodeAsset && (
-          <BarcodePrintModal item={barcodeAsset} onClose={() => setBarcodeAsset(null)} />
+          <BarcodePrintModal item={barcodeAsset} opts={{ boldCode: true }} onClose={() => setBarcodeAsset(null)} />
+        )}
+      </AnimatePresence>
+
+      {/* Scan result popup / not-found toast — same pattern as Inventory */}
+      <AnimatePresence>
+        {scanResult && scanResult !== 'not_found' && (
+          <AssetScanPopup
+            asset={scanResult}
+            rooms={rooms}
+            canManage={canManage}
+            onClose={() => setScanResult(null)}
+            onDetail={(a) => setDetailAsset(a)}
+            onEdit={(a) => setEditAsset(a)}
+            onBarcode={openBarcodeFor}
+          />
+        )}
+        {scanResult === 'not_found' && (
+          <motion.div
+            className="ast-scan-notfound"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            onAnimationComplete={() => setTimeout(() => setScanResult(null), 1800)}
+          >
+            {t('Asset not found', 'الأصل غير موجود')}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

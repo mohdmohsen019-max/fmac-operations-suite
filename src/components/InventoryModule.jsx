@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Package, PlusCircle, ArrowDownCircle,
-  History, BarChart2, Settings, Plus, RefreshCw, Lock
+  History, BarChart2, Settings, Plus, RefreshCw, Lock, ClipboardList
 } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { db, auth } from '../firebase'
 import {
   collection, query, where, orderBy, onSnapshot,
@@ -21,6 +22,7 @@ import InventoryStockIn    from './inventory/InventoryStockIn'
 import InventoryIssue      from './inventory/InventoryIssue'
 import InventoryHistory    from './inventory/InventoryHistory'
 import InventoryReports    from './inventory/InventoryReports'
+import InventoryReorder    from './inventory/InventoryReorder'
 import InventorySettings   from './inventory/InventorySettings'
 import BarcodePrintModal   from './inventory/BarcodePrintModal'
 import ItemEditModal       from './inventory/ItemEditModal'
@@ -34,8 +36,20 @@ const TABS = [
   { id: 'issue',     icon: ArrowDownCircle, en: 'Issue Items',      ar: 'صرف مخزون',    adminOnly: true  },
   { id: 'history',   icon: History,         en: 'Movement History', ar: 'السجلات',       adminOnly: false },
   { id: 'reports',   icon: BarChart2,       en: 'Reports',          ar: 'التقارير',      adminOnly: false },
+  { id: 'reorder',   icon: ClipboardList,   en: 'Reorder',          ar: 'إعادة الطلب',   adminOnly: false },
   { id: 'settings',  icon: Settings,        en: 'Settings',         ar: 'الإعدادات',     adminOnly: true  },
 ]
+
+/* URL slug ↔ tab (deep links from the palette / bell / dashboard) */
+const SLUG_TO_TAB = {
+  '': 'dashboard', 'dashboard': 'dashboard', 'stock': 'stock',
+  'stock-in': 'stockin', 'issue': 'issue', 'history': 'history',
+  'reports': 'reports', 'reorder': 'reorder', 'settings': 'settings',
+}
+const TAB_TO_SLUG = {
+  dashboard: '', stock: 'stock', stockin: 'stock-in', issue: 'issue',
+  history: 'history', reports: 'reports', reorder: 'reorder', settings: 'settings',
+}
 
 const SPORTS_VERSION = 2  // increment when DEFAULT_SPORTS changes
 
@@ -82,8 +96,22 @@ export default function InventoryModule() {
   const canEdit = can('inventory', 'edit')
   const isAdmin = canEdit
 
+  const navigate = useNavigate()
+  const location = useLocation()
   const [activeTab, setActiveTab] = useState('dashboard')
   const [displayedTab, setDisplayedTab] = useState('dashboard')
+
+  /* Sync active tab from the URL (deep links: /inventory/reorder etc.) */
+  useEffect(() => {
+    const segments = location.pathname.split('/').filter(Boolean)
+    if (segments[0] !== 'inventory') return
+    const tab = SLUG_TO_TAB[segments[1] || '']
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab)
+      setDisplayedTab(tab)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname])
   const [isTransitioning, setIsTransitioning] = useState(false)
 
   const [items, setItems] = useState([])
@@ -190,6 +218,8 @@ export default function InventoryModule() {
 
   const handleTabChange = (tabId) => {
     if (tabId === activeTab || isTransitioning) return
+    const slug = TAB_TO_SLUG[tabId] ?? tabId
+    navigate(slug ? `/inventory/${slug}` : '/inventory')
     setActiveTab(tabId)
     setIsTransitioning(true)
     setTimeout(() => {
@@ -255,6 +285,8 @@ export default function InventoryModule() {
         return <InventoryHistory {...sharedProps} />
       case 'reports':
         return <InventoryReports {...sharedProps} />
+      case 'reorder':
+        return <InventoryReorder {...sharedProps} />
       case 'settings':
         return (
           <InventorySettings

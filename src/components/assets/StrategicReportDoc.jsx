@@ -53,14 +53,14 @@ const cAr = (c) => catAr[c] || c
 // tints are pre-computed here as plain rgba() strings and injected as CSS
 // custom properties — never color-mix in anything under .ast-report-root.
 function hexToRgb(hex) {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '#06b6d4')
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '#e26a15')
   return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 6, g: 182, b: 212 }
 }
 function accentVars(color) {
   const { r, g, b } = hexToRgb(color)
   const rgba = (a) => `rgba(${r},${g},${b},${a})`
   return {
-    '--sr-accent': color || '#06b6d4',
+    '--sr-accent': color || '#e26a15',
     '--sr-accent-07': rgba(0.07),
     '--sr-accent-10': rgba(0.10),
     '--sr-accent-12': rgba(0.12),
@@ -82,17 +82,12 @@ function Page({ type, meta, pageNo, children }) {
   return (
     <div className="ast-report-page sr-page" dir="rtl" style={accentVars(meta.color)}>
       <div className="sr-head">
-        <img src="/fmac-report-logo.png" alt="FMAC" className="sr-logo" />
+        <img src="/fmac-ops-logo.png" alt="FMAC" className="sr-logo" />
         <div className="sr-head-mid">
           <div className="sr-title-ar">{ti.ar}</div>
           <div className="sr-title-en" dir="ltr">{ti.en}</div>
         </div>
         <div className="sr-head-right">
-          <div className="sr-badge">
-            <span>وثيقة معتمدة</span>
-            <span className="sr-badge-dot">·</span>
-            <span dir="ltr">APPROVED</span>
-          </div>
           <div className="sr-ref" dir="ltr">{meta.ref}</div>
           <div className="sr-date">{meta.dateAr}</div>
         </div>
@@ -126,7 +121,7 @@ function SecTitle({ ar, en, accent }) {
 }
 
 function Kpi({ value, ar, en, color }) {
-  const c = color || '#06b6d4'
+  const c = color || '#e26a15'
   return (
     <div className="sr-kpi" style={{ borderTopColor: c, background: `${c}0e` }}>
       <div className="sr-kpi-val" style={{ color: c }} dir="ltr">{value}</div>
@@ -159,7 +154,7 @@ function Bars({ rows }) {
         <div key={i} className="sr-bar-row">
           <span className="sr-bar-label">{r.label}</span>
           <div className="sr-bar-track">
-            <div className="sr-bar-fill" style={{ width: `${Math.max(2, (r.value / max) * 100)}%`, background: r.color || '#06b6d4' }} />
+            <div className="sr-bar-fill" style={{ width: `${Math.max(2, (r.value / max) * 100)}%`, background: r.color || '#e26a15' }} />
           </div>
           <span className="sr-bar-val" dir="ltr">{r.display != null ? r.display : fmtMoney(r.value)}</span>
         </div>
@@ -213,7 +208,7 @@ function Pending({ label = 'قيد الإدخال' }) {
 // Target-vs-actual progress bar.
 function Progress({ value }) {
   if (value == null) return <Pending label="قيد الجمع" />
-  const color = value >= 100 ? '#10b981' : value >= 60 ? '#06b6d4' : value >= 30 ? '#f59e0b' : '#f43f5e'
+  const color = value >= 100 ? '#2c9c5c' : value >= 60 ? '#e26a15' : value >= 30 ? '#d4a008' : '#de4a41'
   return (
     <div className="sr-prog">
       <div className="sr-prog-track"><div className="sr-prog-fill" style={{ width: `${Math.max(3, value)}%`, background: color }} /></div>
@@ -298,7 +293,7 @@ function TrendChart({ trend }) {
             <tr key={ri}>
               <td className="ar">{r.ar}</td>
               {pts.map((s, i) => <td key={i} className="num" dir="ltr">{r.fmt(s[r.key])}</td>)}
-              <td className="num" style={{ color: flat ? '#8b8b9e' : good ? '#10b981' : '#f43f5e', fontWeight: 800 }}>{arrow}</td>
+              <td className="num" style={{ color: flat ? '#8b8b9e' : good ? '#2c9c5c' : '#de4a41', fontWeight: 800 }}>{arrow}</td>
             </tr>
           )
         })}
@@ -346,11 +341,11 @@ function StrategyPages({ data, meta }) {
 
         <SecTitle ar="الملخص التنفيذي" en="Executive Summary" />
         <div className="sr-kpi-row">
-          <Kpi value={k.totalAssets} ar="سجل أصل" en="Asset records" color="#06b6d4" />
+          <Kpi value={k.totalAssets} ar="سجل أصل" en="Asset records" color="#e26a15" />
           <Kpi value={k.totalUnits} ar="إجمالي الوحدات" en="Total units" />
-          <Kpi value={fmtMoney(k.totalValue)} ar="القيمة التخطيطية (د.إ)" en="Planning value (AED)" color="#10b981" />
+          <Kpi value={fmtMoney(k.totalValue)} ar="القيمة التخطيطية (د.إ)" en="Planning value (AED)" color="#2c9c5c" />
           <Kpi value={k.locations} ar="موقعاً / غرفة" en="Locations" />
-          <Kpi value={`${k.goodShare}%`} ar="بحالة جيدة" en="Good condition" color="#10b981" />
+          <Kpi value={`${k.goodShare}%`} ar="بحالة جيدة" en="Good condition" color="#2c9c5c" />
         </div>
 
         <SecTitle ar="توزيع المحفظة حسب الفئة" en="Portfolio by Category" />
@@ -445,7 +440,7 @@ function StrategyPages({ data, meta }) {
       </Page>
 
       <Page type="strategy" meta={meta} pageNo={3}>
-        <SecTitle ar="أهداف إدارة الأصول" en="Asset Management Objectives (ISO 55001 §6.2)" accent="#06b6d4" />
+        <SecTitle ar="أهداف إدارة الأصول" en="Asset Management Objectives (ISO 55001 §6.2)" accent="#e26a15" />
         <p className="sr-note-plain">أهداف قابلة للقياس ومحددة زمنياً مرتبطة بأعمدة البيت الاستراتيجي، مع القيمة المرجعية والمستهدفة والفعلية الحيّة.</p>
         <table className="sr-table">
           <thead>
@@ -477,7 +472,7 @@ function StrategyPages({ data, meta }) {
       </Page>
 
       <Page type="strategy" meta={meta} pageNo={4}>
-        <SecTitle ar="سجل الصيانة المطلوبة" en="Maintenance Backlog" accent="#f59e0b" />
+        <SecTitle ar="سجل الصيانة المطلوبة" en="Maintenance Backlog" accent="#d4a008" />
         {data.maintenance.length === 0 ? (
           <p className="sr-note">لا توجد أصول تتطلب صيانة عاجلة — جميع الأصول بحالة جيدة وفق آخر تحديث للسجل. ✔</p>
         ) : (
@@ -498,7 +493,7 @@ function StrategyPages({ data, meta }) {
           </table>
         )}
 
-        <SecTitle ar="أولويات الصيانة والاستبدال" en="Renewal Priorities (balanced mix)" accent="#f43f5e" />
+        <SecTitle ar="أولويات الصيانة والاستبدال" en="Renewal Priorities (balanced mix)" accent="#de4a41" />
         <table className="sr-table">
           <thead>
             <tr><th className="num">#</th><th className="ar">الأصل</th><th>الفئة</th><th>الموقع</th><th>الأهمية</th><th className="num">سنة الاستبدال</th><th className="num">التكلفة (د.إ)</th></tr>
@@ -547,10 +542,10 @@ function LinkagePages({ data, meta }) {
 
         <SecTitle ar="مؤشرات الربط" en="Linkage Indicators" />
         <div className="sr-kpi-row">
-          <Kpi value={`${k.coverage}%`} ar="تغطية الربط" en="Coverage" color="#10b981" />
-          <Kpi value={k.totalAssets} ar="أصل مرتبط" en="Linked assets" color="#06b6d4" />
+          <Kpi value={`${k.coverage}%`} ar="تغطية الربط" en="Coverage" color="#2c9c5c" />
+          <Kpi value={k.totalAssets} ar="أصل مرتبط" en="Linked assets" color="#e26a15" />
           <Kpi value={k.goalsUsed} ar="أهداف مخدومة" en="Goals served" />
-          <Kpi value={k.criticalCareCount} ar="عناية خاصة" en="Special care" color="#f43f5e" />
+          <Kpi value={k.criticalCareCount} ar="عناية خاصة" en="Special care" color="#de4a41" />
         </div>
 
         <SecTitle ar="توزيع الأصول على الأهداف" en="Distribution Across Goals" />
@@ -612,7 +607,7 @@ function LinkagePages({ data, meta }) {
       </Page>
 
       <Page type="linkage" meta={meta} pageNo={3}>
-        <SecTitle ar="منهجية إدارة المخاطر" en="Risk Management Methodology (ISO 55001 §6.1)" accent="#f43f5e" />
+        <SecTitle ar="منهجية إدارة المخاطر" en="Risk Management Methodology (ISO 55001 §6.1)" accent="#de4a41" />
         <div className="sr-two-col sr-risk-intro">
           <div>
             <p className="sr-note-plain">
@@ -633,7 +628,7 @@ function LinkagePages({ data, meta }) {
           <RiskMatrix matrix={data.riskMatrix} />
         </div>
 
-        <SecTitle ar="سجل المخاطر" en="Risk Register" accent="#f43f5e" />
+        <SecTitle ar="سجل المخاطر" en="Risk Register" accent="#de4a41" />
         <table className="sr-table sr-risk-table">
           <thead>
             <tr>
@@ -663,7 +658,7 @@ function LinkagePages({ data, meta }) {
       </Page>
 
       <Page type="linkage" meta={meta} pageNo={4}>
-        <SecTitle ar="أصول غير مستغَلة بالكامل" en="Underutilized Assets" accent="#f59e0b" />
+        <SecTitle ar="أصول غير مستغَلة بالكامل" en="Underutilized Assets" accent="#d4a008" />
         {data.underutilized.length === 0 ? (
           <p className="sr-note">لا توجد أصول مصنّفة كغير مستغَلة حالياً — تُحدَّث هذه القائمة من سجل الأصول عند تقييم الاستغلال ميدانياً.</p>
         ) : (
@@ -702,10 +697,10 @@ function PlanPages({ data, meta }) {
 
         <SecTitle ar="مؤشرات الخطة" en="Plan Indicators" />
         <div className="sr-kpi-row">
-          <Kpi value={k.dueCount} ar="بند ضمن الخطة" en="Items in plan" color="#06b6d4" />
-          <Kpi value={fmtMoney(k.totalPlanCost)} ar="التكلفة الإجمالية (د.إ)" en="Total (AED)" color="#10b981" />
+          <Kpi value={k.dueCount} ar="بند ضمن الخطة" en="Items in plan" color="#e26a15" />
+          <Kpi value={fmtMoney(k.totalPlanCost)} ar="التكلفة الإجمالية (د.إ)" en="Total (AED)" color="#2c9c5c" />
           <Kpi value={fmtMoney(k.avgPerYear)} ar="متوسط سنوي (د.إ)" en="Avg / year" />
-          <Kpi value={k.urgentCount} ar="مستحق خلال سنتين" en="Due ≤ 2 yrs" color="#f43f5e" />
+          <Kpi value={k.urgentCount} ar="مستحق خلال سنتين" en="Due ≤ 2 yrs" color="#de4a41" />
         </div>
 
         <SecTitle ar="جدول الاستبدال حسب السنة" en="Replacement Schedule by Year" />
@@ -730,11 +725,11 @@ function PlanPages({ data, meta }) {
         </table>
 
         <SecTitle ar="منحنى الإنفاق المتوقع" en="Projected Spend Curve" />
-        <Bars rows={data.byYear.map(y => ({ label: String(y.year), value: y.value, color: '#f59e0b' }))} />
+        <Bars rows={data.byYear.map(y => ({ label: String(y.year), value: y.value, color: '#d4a008' }))} />
       </Page>
 
       <Page type="plan" meta={meta} pageNo={2}>
-        <SecTitle ar="منهجية ترتيب أولويات الاستثمار" en="Investment Prioritisation Methodology" accent="#f43f5e" />
+        <SecTitle ar="منهجية ترتيب أولويات الاستثمار" en="Investment Prioritisation Methodology" accent="#de4a41" />
         <div className="sr-formula">
           <span className="sr-formula-label">درجة الأولوية =</span>
           <span dir="ltr" className="sr-formula-eq">Criticality Weight × Risk Score × Goal Weight − (Cost Penalty × Cost Factor × 100)</span>
@@ -763,7 +758,7 @@ function PlanPages({ data, meta }) {
           </table>
         </div>
 
-        <SecTitle ar="أولويات الإنفاق الرأسمالي" en="Capital Priorities (method-scored)" accent="#f43f5e" />
+        <SecTitle ar="أولويات الإنفاق الرأسمالي" en="Capital Priorities (method-scored)" accent="#de4a41" />
         <table className="sr-table">
           <thead>
             <tr><th className="num">#</th><th className="ar">الأصل</th><th>الفئة</th><th>الأهمية</th><th className="num">المخاطر</th><th className="num">الدرجة</th><th className="num">السنة</th><th className="num">التكلفة (د.إ)</th></tr>
@@ -786,7 +781,7 @@ function PlanPages({ data, meta }) {
       </Page>
 
       <Page type="plan" meta={meta} pageNo={3}>
-        <SecTitle ar="التكلفة الإجمالية للملكية (دورة الحياة)" en="Whole-Life Cost / Total Cost of Ownership" accent="#10b981" />
+        <SecTitle ar="التكلفة الإجمالية للملكية (دورة الحياة)" en="Whole-Life Cost / Total Cost of Ownership" accent="#2c9c5c" />
         <p className="sr-note-plain">لا يقتصر التخطيط على تكلفة الاقتناء؛ يضيف هذا القسم التكلفة التشغيلية والصيانة السنوية على مدى العمر الافتراضي لكل فئة.</p>
         <table className="sr-table">
           <thead>
@@ -843,7 +838,7 @@ function PlanPages({ data, meta }) {
           'تُراجع الخطة سنوياً مع قسم الاستراتيجية وتُواءم مع الموازنة العامة للنادي.',
         ]} />
 
-        <SecTitle ar="المخاطر وإجراءات التخفيف" en="Risks & Mitigations" accent="#f59e0b" />
+        <SecTitle ar="المخاطر وإجراءات التخفيف" en="Risks & Mitigations" accent="#d4a008" />
         <table className="sr-table sr-mini">
           <thead><tr><th className="ar">الخطر</th><th className="ar">الأثر</th><th className="ar">إجراء التخفيف</th></tr></thead>
           <tbody>
@@ -880,11 +875,11 @@ function ExecutivePage({ data, meta }) {
       <VisionStrip />
 
       <div className="sr-kpi-row">
-        <Kpi value={s.kpi.totalAssets} ar="أصل مسجّل" en="Assets" color="#06b6d4" />
+        <Kpi value={s.kpi.totalAssets} ar="أصل مسجّل" en="Assets" color="#e26a15" />
         <Kpi value={s.kpi.totalUnits} ar="وحدة" en="Units" />
-        <Kpi value={fmtMoney(s.kpi.totalValue)} ar="القيمة (د.إ)" en="Value (AED)" color="#10b981" />
+        <Kpi value={fmtMoney(s.kpi.totalValue)} ar="القيمة (د.إ)" en="Value (AED)" color="#2c9c5c" />
         <Kpi value={`${l.kpi.coverage}%`} ar="ربط استراتيجي" en="Linked" color="#8b5cf6" />
-        <Kpi value={fmtMoney(p.kpi.totalPlanCost)} ar="خطة ٥ سنوات (د.إ)" en="5-yr plan" color="#f59e0b" />
+        <Kpi value={fmtMoney(p.kpi.totalPlanCost)} ar="خطة ٥ سنوات (د.إ)" en="5-yr plan" color="#d4a008" />
       </div>
 
       <div className="sr-two-col">
@@ -905,7 +900,7 @@ function ExecutivePage({ data, meta }) {
         p.insights[0],
       ].filter(Boolean)} />
 
-      <SecTitle ar="الإجراءات الموصى بها للإدارة" en="Recommended Executive Actions" accent="#f43f5e" />
+      <SecTitle ar="الإجراءات الموصى بها للإدارة" en="Recommended Executive Actions" accent="#de4a41" />
       <NumberedList color="#be123c" bg="#ffe4e6" items={data.actions} />
 
       <div className="sr-exec-sign">
@@ -929,7 +924,7 @@ function AmsPages({ data, meta }) {
           الدولية ISO 55001، لتشكّل — إلى جانب استراتيجية الأصول وخريطة الربط والخطة متوسطة المدى — نظاماً متكاملاً وقابلاً للتدقيق.
         </p>
 
-        <SecTitle ar="سياسة إدارة الأصول" en="Asset Management Policy" accent="#06b6d4" />
+        <SecTitle ar="سياسة إدارة الأصول" en="Asset Management Policy" accent="#e26a15" />
         <TextBlock body={c.policy.statementAr} />
         <div className="sr-principles">
           {c.policy.principlesAr.map((p, i) => <span key={i} className="sr-principle">{p}</span>)}
@@ -987,7 +982,7 @@ function AmsPages({ data, meta }) {
           </tbody>
         </table>
 
-        <SecTitle ar="أهداف إدارة الأصول" en="Asset Management Objectives" accent="#06b6d4" />
+        <SecTitle ar="أهداف إدارة الأصول" en="Asset Management Objectives" accent="#e26a15" />
         <table className="sr-table">
           <thead>
             <tr><th>الهدف</th><th className="ar">المؤشر</th><th className="num">المرجعي</th><th className="num">المستهدف</th><th className="num">الفعلي</th><th className="num">الموعد</th></tr>
@@ -1009,7 +1004,7 @@ function AmsPages({ data, meta }) {
 
       {/* P3 — Risk methodology + Compliance */}
       <Page type="ams" meta={meta} pageNo={3}>
-        <SecTitle ar="منهجية إدارة المخاطر" en="Risk Management Methodology" accent="#f43f5e" />
+        <SecTitle ar="منهجية إدارة المخاطر" en="Risk Management Methodology" accent="#de4a41" />
         <div className="sr-two-col sr-risk-intro">
           <div>
             <p className="sr-note-plain">درجة المخاطر = الاحتمال (١–٥) × الأثر (١–٥)، مصنّفة ضمن أربعة نطاقات. متوسط درجة مخاطر المحفظة الحالية <b dir="ltr">{data.avgRiskScore}</b> من ٢٥.</p>
@@ -1027,7 +1022,7 @@ function AmsPages({ data, meta }) {
           <RiskMatrix matrix={c.riskMatrix} />
         </div>
 
-        <SecTitle ar="سجل الالتزام القانوني والتنظيمي" en="Legal & Regulatory Compliance Register" accent="#f59e0b" />
+        <SecTitle ar="سجل الالتزام القانوني والتنظيمي" en="Legal & Regulatory Compliance Register" accent="#d4a008" />
         <table className="sr-table">
           <thead>
             <tr><th className="ar">الفئة / النطاق</th><th className="ar">المتطلب</th><th className="ar">التكرار</th><th className="num">آخر تحقق</th><th className="num">الاستحقاق القادم</th><th>الحالة</th></tr>
@@ -1053,7 +1048,7 @@ function AmsPages({ data, meta }) {
 
       {/* P4 — Maintenance strategy + Whole-life */}
       <Page type="ams" meta={meta} pageNo={4}>
-        <SecTitle ar="استراتيجية الصيانة" en="Maintenance Strategy" accent="#10b981" />
+        <SecTitle ar="استراتيجية الصيانة" en="Maintenance Strategy" accent="#2c9c5c" />
         <table className="sr-table">
           <thead>
             <tr><th className="ar">الفئة</th><th className="ar">أسلوب الصيانة</th><th className="ar">دورية الفحص</th><th className="ar">المعيار المرجعي</th></tr>
@@ -1071,7 +1066,7 @@ function AmsPages({ data, meta }) {
         </table>
         <TextBlock ar="قطع الغيار الحرجة وخطة الطوارئ" body={c.criticalSparesAr} />
 
-        <SecTitle ar="ملخص التكلفة الإجمالية للملكية" en="Whole-Life Cost Summary" accent="#10b981" />
+        <SecTitle ar="ملخص التكلفة الإجمالية للملكية" en="Whole-Life Cost Summary" accent="#2c9c5c" />
         <table className="sr-table sr-mini">
           <thead>
             <tr><th className="ar">الفئة</th><th className="num">رأسمالي (د.إ)</th><th className="num">تشغيل/سنة (د.إ)</th><th className="num">إجمالي الملكية (د.إ)</th></tr>
@@ -1103,7 +1098,7 @@ function AmsPages({ data, meta }) {
           <TextBlock ar="التدقيق الداخلي" body={c.governance.internalAuditAr} />
         </div>
 
-        <SecTitle ar="سجل حالات عدم المطابقة والإجراءات التصحيحية" en="Nonconformity & Corrective Action Log" accent="#f59e0b" />
+        <SecTitle ar="سجل حالات عدم المطابقة والإجراءات التصحيحية" en="Nonconformity & Corrective Action Log" accent="#d4a008" />
         {(!c.nonconformities || c.nonconformities.length === 0) ? (
           <div className="sr-pending-box">
             <b>لا توجد حالات مسجّلة.</b> بنية السجل معتمدة ضمن النظام وجاهزة لاستقبال أي ملاحظات ناتجة عن التدقيق الداخلي أو الجرد الميداني

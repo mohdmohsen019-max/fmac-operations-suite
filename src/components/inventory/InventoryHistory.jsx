@@ -113,9 +113,9 @@ export default function InventoryHistory({ items, settings }) {
   }
 
   const typeBadge = (type) => {
-    if (type === 'stock_in')    return { icon: ArrowUpRight,    color: '#10b981', bg: 'rgba(16,185,129,0.1)',  label: t('In', 'وارد') }
-    if (type === 'stock_out')   return { icon: ArrowDownRight,  color: '#f43f5e', bg: 'rgba(244,63,94,0.1)',  label: t('Out', 'صادر') }
-    return { icon: RefreshCw, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)', label: t('Adj', 'تسوية') }
+    if (type === 'stock_in')    return { icon: ArrowUpRight,    color: 'var(--status-safe)', bg: 'rgba(16,185,129,0.1)',  label: t('In', 'وارد') }
+    if (type === 'stock_out')   return { icon: ArrowDownRight,  color: 'var(--status-risk)', bg: 'rgba(244,63,94,0.1)',  label: t('Out', 'صادر') }
+    return { icon: RefreshCw, color: 'var(--theme-accent)', bg: 'var(--theme-accent-soft)', label: t('Adj', 'تسوية') }
   }
 
   return (

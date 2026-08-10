@@ -1,0 +1,55 @@
+
+C:\Users\mohdm\Desktop\Projects\FMAC Logistics Hub\src\components\fleet\FleetRidership.jsx
+   15:3   warning  'Users' is defined but never used               no-unused-vars
+   15:10  warning  'ClipboardList' is defined but never used       no-unused-vars
+   15:25  warning  'BarChart3' is defined but never used           no-unused-vars
+   15:36  warning  'CalendarCog' is defined but never used         no-unused-vars
+   15:49  warning  'Plus' is defined but never used                no-unused-vars
+   15:55  warning  'Pencil' is defined but never used              no-unused-vars
+   15:63  warning  'Trash2' is defined but never used              no-unused-vars
+   15:71  warning  'X' is defined but never used                   no-unused-vars
+   16:3   warning  'Check' is defined but never used               no-unused-vars
+   16:10  warning  'Download' is defined but never used            no-unused-vars
+   16:20  warning  'FileText' is defined but never used            no-unused-vars
+   16:63  warning  'Crown' is defined but never used               no-unused-vars
+   16:70  warning  'Moon' is defined but never used                no-unused-vars
+   17:3   warning  'Gauge' is defined but never used               no-unused-vars
+   17:10  warning  'Loader2' is defined but never used             no-unused-vars
+   29:8   warning  'CustomSelect' is defined but never used        no-unused-vars
+  188:10  warning  'EntryTab' is defined but never used            no-unused-vars
+  360:10  warning  'InsightsTab' is defined but never used         no-unused-vars
+  627:9   warning  'TrendIcon' is assigned a value but never used  no-unused-vars
+  741:10  warning  'ClassesTab' is defined but never used          no-unused-vars
+
+C:\Users\mohdm\Desktop\Projects\FMAC Logistics Hub\src\components\fleet\FleetRiskManagement.jsx
+    3:3   warning  'Activity' is defined but never used             no-unused-vars
+    3:13  warning  'AlertCircle' is defined but never used          no-unused-vars
+    3:26  warning  'User' is defined but never used                 no-unused-vars
+    3:32  warning  'ShieldAlert' is defined but never used          no-unused-vars
+    3:57  warning  'PieIcon' is defined but never used              no-unused-vars
+    3:66  warning  'Zap' is defined but never used                  no-unused-vars
+    4:3   warning  'Receipt' is defined but never used              no-unused-vars
+    4:12  warning  'Plus' is defined but never used                 no-unused-vars
+    4:18  warning  'Pencil' is defined but never used               no-unused-vars
+    4:26  warning  'Trash2' is defined but never used               no-unused-vars
+    4:34  warning  'Download' is defined but never used             no-unused-vars
+    4:44  warning  'X' is defined but never used                    no-unused-vars
+    4:47  warning  'Check' is defined but never used                no-unused-vars
+    4:54  warning  'Wallet' is defined but never used               no-unused-vars
+    4:62  warning  'RotateCcw' is defined but never used            no-unused-vars
+    7:3   warning  'ResponsiveContainer' is defined but never used  no-unused-vars
+    7:24  warning  'PieChart' is defined but never used             no-unused-vars
+    7:34  warning  'Pie' is defined but never used                  no-unused-vars
+    7:39  warning  'Cell' is defined but never used                 no-unused-vars
+    7:45  warning  'Tooltip' is defined but never used              no-unused-vars
+    7:54  warning  'Legend' is defined but never used               no-unused-vars
+    8:3   warning  'RadarChart' is defined but never used           no-unused-vars
+    8:15  warning  'PolarGrid' is defined but never used            no-unused-vars
+    8:26  warning  'PolarAngleAxis' is defined but never used       no-unused-vars
+    8:42  warning  'PolarRadiusAxis' is defined but never used      no-unused-vars
+    8:59  warning  'Radar' is defined but never used                no-unused-vars
+   20:8   warning  'CustomSelect' is defined but never used         no-unused-vars
+   65:10  warning  'BehaviorTab' is defined but never used          no-unused-vars
+  287:10  warning  'FinesTab' is defined but never used             no-unused-vars
+
+✖ 49 problems (0 errors, 49 warnings)

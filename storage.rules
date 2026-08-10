@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// FMAC Operations Suite — Storage rules.
+// Everything requires a signed-in staff account. KPI evidence gets an
+// explicit size cap; the catch-all preserves the existing upload flows
+// (maintenance invoices, issuance receipts, report images, profile photos).
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // KPI evidence attachments (Strategy module readings).
+    // request.resource is null on delete — allow it; cap size only on upload.
+    match /strategy_evidence/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && (request.resource == null
+                       || request.resource.size < 15 * 1024 * 1024);
+    }
+
+    // Crisis & Emergency Management evidence (incidents, actions, exercises,
+    // recovery tests, corrective actions…). 15MB cap; delete-tolerant.
+    match /crisis_evidence/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && (request.resource == null
+                       || request.resource.size < 15 * 1024 * 1024);
+    }
+
+    // Existing app uploads (receipts, maintenance docs, report images…)
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

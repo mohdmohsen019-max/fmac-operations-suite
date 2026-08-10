@@ -8,7 +8,7 @@ export default function ScanPopup({ item, settings, onClose, onStockIn, onIssue,
   const sports = settings?.sports || DEFAULT_SPORTS
   const status = getItemStatus(item)
 
-  const statusColor = status === 'out' ? '#f43f5e' : status === 'low' ? '#f59e0b' : '#10b981'
+  const statusColor = status === 'out' ? 'var(--status-risk)' : status === 'low' ? 'var(--status-warn)' : 'var(--status-safe)'
   const statusLabel = status === 'out'
     ? t('Out of Stock', 'نفذ')
     : status === 'low'

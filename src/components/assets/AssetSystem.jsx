@@ -368,7 +368,7 @@ export default function AssetSystem({ assets, rooms, lang, t, actorUid, actorNam
 
         {importResult && (
           <div className="ast-import-done">
-            <Check size={18} style={{ color: '#10b981' }} />
+            <Check size={18} style={{ color: '#2c9c5c' }} />
             <span>
               {t('Imported', 'تم استيراد')} {importResult.imported} {t('assets', 'أصل')}
               {importResult.rooms > 0 ? ` · ${importResult.rooms} ${t('rooms created & linked', 'غرفة أُنشئت ورُبطت')}` : ''}
@@ -392,7 +392,7 @@ export default function AssetSystem({ assets, rooms, lang, t, actorUid, actorNam
 
         {flagResult ? (
           <div className="ast-import-done">
-            <Check size={18} style={{ color: '#10b981' }} />
+            <Check size={18} style={{ color: '#2c9c5c' }} />
             <span>{t('Flagged', 'تم تمييز')} {flagResult.flagged} {t('asset(s) as Missing.', 'أصل كمفقود.')}</span>
             <button className="ast-btn ast-btn-ghost ast-btn-sm" onClick={() => setFlagResult(null)}>{t('Done', 'تم')}</button>
           </div>

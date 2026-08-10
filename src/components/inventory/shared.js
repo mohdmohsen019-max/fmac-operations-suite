@@ -15,6 +15,12 @@ export const DEFAULT_SPORTS = [
   { id: 'general',            en: 'General',            ar: 'عام' },
 ]
 
+/* Escape hatch offered at the end of every sport picker: lets staff issue to a
+   discipline that isn't on the configured list, naming it as free text on that
+   record only. Deliberately NOT part of DEFAULT_SPORTS — it must never be
+   saved into inventory_sports or treated as a real, selectable discipline. */
+export const OTHER_SPORT = { id: 'other', en: 'Other', ar: 'أخرى' }
+
 export const DEFAULT_CATEGORIES = [
   { id: 'equipment',    en: 'Equipment',    ar: 'معدات' },
   { id: 'uniforms',     en: 'Uniforms',     ar: 'زي رياضي' },

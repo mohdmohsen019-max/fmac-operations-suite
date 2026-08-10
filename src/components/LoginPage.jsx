@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
+/**
+ * Staff login — the door to the console.
+ * Presentation matches the suite's own frame language: black #0a0a0a frame,
+ * one rounded bone/white split panel, Inter + ink type, brand-red accents.
+ * All auth flows (login / signup→pending / forgot→reset request) unchanged.
+ */
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import LanguageToggle from './shared/LanguageToggle';
 import ThemeToggle from './shared/ThemeToggle';
-import FMACLogo from './FMACLogo';
-import CinematicBackdrop from './shared/CinematicBackdrop';
-import useIsMobile from '../hooks/useIsMobile';
 import CustomSelect from './CustomSelect';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 import { auth, db } from '../firebase';
@@ -19,450 +22,16 @@ import {
 import { doc, setDoc, getDoc, getDocs, updateDoc, serverTimestamp, collection, addDoc, query, where } from 'firebase/firestore';
 import { JOB_TITLES, MASTER_ADMIN_EMAIL } from '../utils/jobTitlePermissions';
 
-/* ── Geometric Pattern SVG ── */
-function LoginPatternSVG() {
-  const size = 120;
-  const half = size / 2;
-  const patternPaths = [];
-  for (let row = -3; row < 8; row++) {
-    for (let col = -3; col < 8; col++) {
-      const cx = col * size + (row % 2 === 0 ? 0 : half);
-      const cy = row * size;
-      const r = 40;
-      const points1 = [];
-      const points2 = [];
-      for (let i = 0; i < 4; i++) {
-        const angle1 = (i * 90) * Math.PI / 180;
-        const angle2 = (i * 90 + 45) * Math.PI / 180;
-        points1.push(`${cx + r * Math.cos(angle1)},${cy + r * Math.sin(angle1)}`);
-        points2.push(`${cx + r * Math.cos(angle2)},${cy + r * Math.sin(angle2)}`);
-      }
-      patternPaths.push(
-        <g key={`star-${row}-${col}`}>
-          <polygon points={points1.join(' ')} fill="none" stroke="rgba(201,168,76,0.04)" strokeWidth="0.5" />
-          <polygon points={points2.join(' ')} fill="none" stroke="rgba(201,168,76,0.04)" strokeWidth="0.5" />
-          <circle cx={cx} cy={cy} r={3} fill="none" stroke="rgba(201,168,76,0.03)" strokeWidth="0.5" />
-        </g>
-      );
-    }
-  }
-  return (
-    <svg viewBox="-400 -400 1200 1200" xmlns="http://www.w3.org/2000/svg">
-      {patternPaths}
-    </svg>
-  );
-}
-
-function CornerOrnament() {
-  return (
-    <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M0 0 L24 0 L24 3 L3 3 L3 24 L0 24 Z" fill="currentColor" />
-      <path d="M10 0 L10 10 L0 10" stroke="currentColor" strokeWidth="0.5" fill="none" />
-      <path d="M16 0 Q16 16 0 16" stroke="currentColor" strokeWidth="0.5" fill="none" />
-      <circle cx="8" cy="8" r="1.5" fill="currentColor" opacity="0.5" />
-    </svg>
-  );
-}
-
-/* ── Rotating martial virtues ticker (left panel) ── */
-const VIRTUES = [
-  { ar: 'انضباط', en: 'DISCIPLINE' },
-  { ar: 'قوة',    en: 'STRENGTH' },
-  { ar: 'احترام', en: 'RESPECT' },
-  { ar: 'شرف',    en: 'HONOR' },
-  { ar: 'إتقان',  en: 'MASTERY' },
-];
-
-function VirtueTicker() {
-  const [idx, setIdx] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setIdx(i => (i + 1) % VIRTUES.length), 2600);
-    return () => clearInterval(id);
-  }, []);
-  const v = VIRTUES[idx];
-  return (
-    <div className="login-virtues" aria-hidden="true">
-      <motion.div
-        key={idx}
-        initial={{ opacity: 0, y: 14, filter: 'blur(5px)' }}
-        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-        className="login-virtue"
-      >
-        <span className="login-virtue-ar">{v.ar}</span>
-        <span className="login-virtue-en">{v.en}</span>
-      </motion.div>
-      <div className="login-virtue-dots">
-        {VIRTUES.map((_, i) => (
-          <span key={i} className={`login-virtue-dot ${i === idx ? 'on' : ''}`} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ── NEXUS COMMAND: helper geometry ── */
-const _toRad = d => d * Math.PI / 180;
-
-const _arcPath = (cx, cy, r, s, e) => {
-  const x1 = cx + r * Math.cos(_toRad(s)), y1 = cy + r * Math.sin(_toRad(s));
-  const x2 = cx + r * Math.cos(_toRad(e)), y2 = cy + r * Math.sin(_toRad(e));
-  const lg = (e - s + 360) % 360 > 180 ? 1 : 0;
-  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${lg} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+const MODE_COPY = {
+  login:  { ar: 'دخول الموظفين',      en: 'Staff sign in' },
+  signup: { ar: 'إنشاء حساب جديد',    en: 'New staff account' },
+  forgot: { ar: 'استعادة كلمة المرور', en: 'Password recovery' },
 };
 
-const _hexPath = (cx, cy, r, rot = 0) => {
-  const pts = Array.from({ length: 6 }, (_, i) => {
-    const a = _toRad(i * 60 + rot);
-    return `${(cx + r * Math.cos(a)).toFixed(2)},${(cy + r * Math.sin(a)).toFixed(2)}`;
-  });
-  return `M ${pts[0]} L ${pts.slice(1).join(' L ')} Z`;
-};
-
-const NEXUS_NODES = [
-  { id: 'F', x: 150, y: 55,  arcStart: -128, arcEnd: -52 },
-  { id: 'M', x: 245, y: 150, arcStart:  -38, arcEnd:  38 },
-  { id: 'A', x: 150, y: 245, arcStart:   52, arcEnd: 128 },
-  { id: 'C', x:  55, y: 150, arcStart:  142, arcEnd: 218 },
-];
-
-const AMBIENT_PARTICLES = Array.from({ length: 16 }, (_, i) => {
-  const a = _toRad(i * 22.5 - 90);
-  return {
-    x: parseFloat((150 + 138 * Math.cos(a)).toFixed(2)),
-    y: parseFloat((150 + 138 * Math.sin(a)).toFixed(2)),
-    r: i % 4 === 0 ? 2.2 : 1.2,
-    delay: i * 0.19,
-    bright: i % 4 === 0,
-  };
-});
-
-function LoginMandala({ size = 280 }) {
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const [hoveredNode, setHoveredNode] = useState(null);
-  const [tappedNodes, setTappedNodes] = useState(new Set());
-  const [autoNode, setAutoNode] = useState('F');
-  const [scanLine, setScanLine] = useState(false);
-
-  const sc = { damping: 25, stiffness: 180, mass: 0.6 };
-  const rX = useSpring(useTransform(mouseY, [-size / 2, size / 2], [10, -10]), sc);
-  const rY = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-10, 10]), sc);
-  const p1x = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-4, 4]), sc);
-  const p1y = useSpring(useTransform(mouseY, [-size / 2, size / 2], [-4, 4]), sc);
-  const p3x = useSpring(useTransform(mouseX, [-size / 2, size / 2], [-14, 14]), sc);
-  const p3y = useSpring(useTransform(mouseY, [-size / 2, size / 2], [-14, 14]), sc);
-
-  const handleMouseMove = (e) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    mouseX.set(e.clientX - r.left - r.width / 2);
-    mouseY.set(e.clientY - r.top - r.height / 2);
-  };
-  const handleMouseLeave = () => { mouseX.set(0); mouseY.set(0); };
-
-  useEffect(() => {
-    const ids = ['F', 'M', 'A', 'C'];
-    let i = 0;
-    const t = setInterval(() => { i = (i + 1) % 4; setAutoNode(ids[i]); }, 1700);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setScanLine(true);
-      setTimeout(() => setScanLine(false), 1800);
-    }, 6500);
-    return () => clearInterval(t);
-  }, []);
-
-  const toggleTap = (nodeId) => {
-    setTappedNodes(prev => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId);
-      return next;
-    });
-  };
-
-  const isActive = (id) =>
-    hoveredNode === id ||
-    tappedNodes.has(id) ||
-    (hoveredNode == null && tappedNodes.size === 0 && autoNode === id);
-
-  /* Pre-compute radar sector path (static, no deps) */
-  const radarPath = [
-    'M 150 150',
-    `L ${(150 + 108 * Math.cos(_toRad(-28))).toFixed(2)} ${(150 + 108 * Math.sin(_toRad(-28))).toFixed(2)}`,
-    `A 108 108 0 0 1 ${(150 + 108).toFixed(2)} 150`,
-    'Z',
-  ].join(' ');
-
-  return (
-    <motion.div
-      className="fmac-logo-container"
-      style={{ width: size, height: size, rotateX: rX, rotateY: rY, transformStyle: 'preserve-3d' }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      whileHover={{ scale: 1.03 }}
-      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-    >
-      <div className="fmac-logo-glow" />
-      <div className="fmac-logo-glow-inner" />
-
-      <svg viewBox="0 0 300 300" className="fmac-logo-svg" overflow="visible">
-        <defs>
-          {NEXUS_NODES.map(n => (
-            <radialGradient key={`rg-${n.id}`} id={`nx-ng-${n.id}`} cx="50%" cy="50%" r="50%">
-              <stop offset="0%"   stopColor="#e74c3c" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#e74c3c" stopOpacity="0" />
-            </radialGradient>
-          ))}
-          <radialGradient id="nx-core" cx="50%" cy="50%" r="50%">
-            <stop offset="0%"   stopColor="#c0392b" stopOpacity="0.6" />
-            <stop offset="55%"  stopColor="#c0392b" stopOpacity="0.1" />
-            <stop offset="100%" stopColor="#c0392b" stopOpacity="0" />
-          </radialGradient>
-          <filter id="nx-blur" x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur stdDeviation="4" />
-          </filter>
-          <clipPath id="nx-clip">
-            <rect x="-10" y="-10" width="320" height="320" />
-          </clipPath>
-        </defs>
-
-        {/* ══ OUTER RING + TICK MARKS (slowest parallax) ══ */}
-        <motion.g style={{ x: p1x, y: p1y }}>
-          <circle cx="150" cy="150" r="140" fill="none"
-            stroke="rgba(212,160,23,0.06)" strokeWidth="0.5" />
-
-          {/* 4 glowing arc segments — one per letter */}
-          {NEXUS_NODES.map(n => (
-            <motion.path key={`arc-${n.id}`}
-              d={_arcPath(150, 150, 136, n.arcStart, n.arcEnd)}
-              fill="none" strokeLinecap="round"
-              animate={{
-                stroke: isActive(n.id) ? '#c0392b' : 'rgba(212,160,23,0.22)',
-                strokeWidth: isActive(n.id) ? 3.5 : 2,
-                opacity: isActive(n.id) ? 1 : 0.55,
-              }}
-              transition={{ duration: 0.32 }}
-            />
-          ))}
-
-          {/* 16 tick marks */}
-          {Array.from({ length: 16 }, (_, i) => {
-            const a = _toRad(i * 22.5 - 90);
-            const maj = i % 4 === 0;
-            return (
-              <line key={`tk-${i}`}
-                x1={(150 + (maj ? 130 : 133) * Math.cos(a)).toFixed(2)}
-                y1={(150 + (maj ? 130 : 133) * Math.sin(a)).toFixed(2)}
-                x2={(150 + (maj ? 143 : 140) * Math.cos(a)).toFixed(2)}
-                y2={(150 + (maj ? 143 : 140) * Math.sin(a)).toFixed(2)}
-                stroke={maj ? 'rgba(212,160,23,0.55)' : 'rgba(212,160,23,0.18)'}
-                strokeWidth={maj ? 1.6 : 0.7} strokeLinecap="round"
-              />
-            );
-          })}
-
-          {/* Slow-rotating dashed orbit ring */}
-          <g className="fmac-logo-hud-outer">
-            <circle cx="150" cy="150" r="118" fill="none"
-              stroke="rgba(212,160,23,0.1)" strokeWidth="0.7" strokeDasharray="3 13" />
-          </g>
-
-          {/* Diamond web (adjacent node connections) */}
-          {[[0,1],[1,2],[2,3],[3,0]].map(([ai, bi]) => {
-            const a = NEXUS_NODES[ai], b = NEXUS_NODES[bi];
-            const hot = isActive(a.id) || isActive(b.id);
-            return (
-              <motion.line key={`web-${ai}`}
-                x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                strokeLinecap="round"
-                animate={{
-                  stroke: hot ? 'rgba(231,76,60,0.38)' : 'rgba(212,160,23,0.07)',
-                  strokeWidth: hot ? 1.2 : 0.6,
-                }}
-                transition={{ duration: 0.4 }}
-              />
-            );
-          })}
-        </motion.g>
-
-        {/* ══ RADAR SWEEP ══ */}
-        <motion.g
-          animate={{ rotate: 360 }}
-          transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-          style={{ originX: '150px', originY: '150px' }}
-        >
-          <path d={radarPath} fill="rgba(192,57,43,0.09)" />
-          <line x1="150" y1="150" x2={(150 + 108).toFixed(2)} y2="150"
-            stroke="rgba(231,76,60,0.55)" strokeWidth="1" />
-        </motion.g>
-        <circle cx="150" cy="150" r="108" fill="none"
-          stroke="rgba(192,57,43,0.12)" strokeWidth="0.8" />
-
-        {/* ══ NEURAL LINKS + NODES + CORE (mid parallax) ══ */}
-        <motion.g style={{ x: p3x, y: p3y }}>
-
-          {/* Neural links center → each node */}
-          {NEXUS_NODES.map(n => (
-            <g key={`lnk-${n.id}`}>
-              <line x1="150" y1="150" x2={n.x} y2={n.y}
-                stroke="rgba(212,160,23,0.06)" strokeWidth="0.6" />
-              <motion.line
-                x1="150" y1="150" x2={n.x} y2={n.y}
-                strokeDasharray="5 5" strokeLinecap="round"
-                animate={{
-                  opacity: isActive(n.id) ? 1 : 0,
-                  stroke: '#e74c3c',
-                  strokeWidth: isActive(n.id) ? 1.6 : 0,
-                }}
-                transition={{ duration: 0.28 }}
-              />
-            </g>
-          ))}
-
-          {/* ── LETTER NODES ── */}
-          {NEXUS_NODES.map((n, idx) => {
-            const active = isActive(n.id);
-            return (
-              <motion.g
-                key={`nd-${n.id}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5, delay: 0.12 + idx * 0.1 }}
-                style={{ cursor: 'pointer' }}
-                onMouseEnter={() => setHoveredNode(n.id)}
-                onMouseLeave={() => setHoveredNode(null)}
-                onClick={() => toggleTap(n.id)}
-              >
-                {/* Outer glow halo */}
-                <motion.circle cx={n.x} cy={n.y}
-                  fill={`url(#nx-ng-${n.id})`}
-                  animate={{ r: active ? 34 : 20, opacity: active ? 0.9 : 0.05 }}
-                  transition={{ duration: 0.35 }}
-                />
-                {/* Outer orbit ring */}
-                <motion.circle cx={n.x} cy={n.y} r="22" fill="none"
-                  animate={{
-                    stroke: active ? 'rgba(231,76,60,0.5)' : 'rgba(212,160,23,0.1)',
-                    strokeWidth: active ? 1 : 0.5,
-                  }}
-                  transition={{ duration: 0.3 }}
-                />
-                {/* Main node ring */}
-                <motion.circle cx={n.x} cy={n.y} r="16" fill="none"
-                  animate={{
-                    stroke: active ? '#e74c3c' : 'rgba(212,160,23,0.38)',
-                    strokeWidth: active ? 2.2 : 1.2,
-                  }}
-                  transition={{ duration: 0.25 }}
-                />
-                {/* Node body */}
-                <motion.circle cx={n.x} cy={n.y}
-                  animate={{
-                    r: active ? 15 : 13.5,
-                    fill: active ? 'rgba(192,57,43,0.32)' : 'rgba(6,6,10,0.9)',
-                  }}
-                  transition={{ duration: 0.25 }}
-                />
-                {/* Letter glyph */}
-                <motion.text
-                  x={n.x} y={n.y}
-                  fontFamily="'Barlow Condensed','Impact',sans-serif"
-                  fontWeight="900" fontStyle="italic"
-                  fontSize="17" textAnchor="middle" dominantBaseline="central"
-                  animate={{
-                    fill: active ? '#ffffff' : 'rgba(255,255,255,0.7)',
-                    opacity: active ? 1 : 0.8,
-                  }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {n.id}
-                </motion.text>
-                {/* Active indicator pip */}
-                <motion.circle cx={n.x} cy={n.y}
-                  animate={{ r: active ? 2.8 : 0, fill: '#ff6b6b', opacity: active ? 1 : 0 }}
-                  transition={{ duration: 0.2 }}
-                />
-              </motion.g>
-            );
-          })}
-
-          {/* ══ CENTER CORE ══ */}
-          <g>
-            <motion.circle cx="150" cy="150"
-              fill="url(#nx-core)"
-              animate={{ r: [36, 44, 36] }}
-              transition={{ duration: 3.8, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <g className="fmac-logo-hud-inner">
-              <path d={_hexPath(150, 150, 28, 0)}
-                fill="none" stroke="rgba(212,160,23,0.3)" strokeWidth="0.9" />
-            </g>
-            <g className="fmac-logo-hud-outer">
-              <path d={_hexPath(150, 150, 19, 30)}
-                fill="none" stroke="rgba(192,57,43,0.45)" strokeWidth="0.9" />
-            </g>
-            <polygon
-              points={`150,${150-13} ${150+13},150 150,${150+13} ${150-13},150`}
-              fill="none" stroke="rgba(212,160,23,0.22)" strokeWidth="0.8"
-            />
-            <motion.circle cx="150" cy="150" fill="#c0392b"
-              animate={{ r: [4.5, 6.5, 4.5], opacity: [0.9, 0.45, 0.9] }}
-              transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <circle cx="150" cy="150" r="1.8" fill="rgba(255,255,255,0.85)" />
-          </g>
-        </motion.g>
-
-        {/* ══ AMBIENT PARTICLES ══ */}
-        <motion.g style={{ x: p1x, y: p1y }}>
-          {AMBIENT_PARTICLES.map((p, i) => (
-            <motion.circle key={`ap-${i}`}
-              cx={p.x} cy={p.y} r={p.r}
-              fill={p.bright ? 'rgba(212,160,23,0.9)' : 'rgba(192,57,43,0.55)'}
-              animate={{ opacity: [0.12, p.bright ? 1 : 0.7, 0.12], r: [p.r, p.r * 1.7, p.r] }}
-              transition={{ duration: 2 + (i % 5) * 0.4, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
-            />
-          ))}
-        </motion.g>
-
-        {/* ══ SCAN LINE ══ */}
-        {scanLine && (
-          <motion.rect x="-10" y="0" width="320" height="3"
-            fill="rgba(231,76,60,0.18)" rx="1.5"
-            clipPath="url(#nx-clip)"
-            initial={{ y: -10 }} animate={{ y: 310 }}
-            transition={{ duration: 1.6, ease: 'linear' }}
-          />
-        )}
-      </svg>
-    </motion.div>
-  );
-}
-
-function BottomOrnament() {
-  return (
-    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <polygon points="20,5 23,17 35,20 23,23 20,35 17,23 5,20 17,17"
-        fill="none" stroke="currentColor" strokeWidth="0.5" />
-      <polygon points="20,10 25,15 30,20 25,25 20,30 15,25 10,20 15,15"
-        fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.6" />
-      <circle cx="20" cy="20" r="3" fill="currentColor" opacity="0.3" />
-    </svg>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════
-   MAIN COMPONENT
-   ═══════════════════════════════════════════════════════ */
 export default function LoginPage() {
   const navigate = useNavigate();
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
-  const isMobile = useIsMobile(900);
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -654,206 +223,143 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-redesign">
-
-      {/* ══ LEFT COLUMN — decorative ════════════════ */}
+    <div className="lgn">
       <motion.div
-        className="login-left-col"
-        initial={{ opacity: 0, x: -40 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="lgn-panel"
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
-        <CinematicBackdrop intensity={0.85} />
-        <div className="login-ghost-word" aria-hidden="true">دخول</div>
-        <div className="login-corner tl"><CornerOrnament /></div>
-        <div className="login-corner tr"><CornerOrnament /></div>
-        <div className="login-corner bl"><CornerOrnament /></div>
-        <div className="login-corner br"><CornerOrnament /></div>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          style={{ position: 'relative', zIndex: 5 }}
-        >
-          <FMACLogo size="lg" />
-        </motion.div>
-        <VirtueTicker />
-        <button className="login-back-link" onClick={goToPortal}>
-          <ArrowLeft size={14} />
-          <span>{isAr ? 'العودة للبوابة' : 'Back to Portal'}</span>
-        </button>
-      </motion.div>
+        {/* ── Brand side ── */}
+        <div className="lgn-brand">
+          <button className="lgn-back" onClick={goToPortal}>
+            {isAr ? <ArrowRight size={13} /> : <ArrowLeft size={13} />}
+            {isAr ? 'العودة للبوابة' : 'Back to portal'}
+          </button>
 
-      {/* ══ RIGHT COLUMN — login form ══════════════ */}
-      <motion.div
-        className="login-right-col"
-        initial={{ opacity: 0, x: 40 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-      >
-        {/* On mobile the decorative left panel is hidden, so bring the
-            ember atmosphere into the form column instead. */}
-        {isMobile && <CinematicBackdrop intensity={0.6} spotlight={false} />}
-        <div className="login-noise" />
-
-        <div className="login-top-actions">
-          <LanguageToggle />
-          <ThemeToggle />
-        </div>
-
-        <div className="login-form-container">
-          <div className="login-brand-row">
-            <img src="/fmac-logo-new.png" alt="FMAC" className="login-brand-logo" />
-            <div className="login-brand-divider" />
-            <span className="login-brand-text">CONSOLE</span>
+          <div className="lgn-brand-center">
+            <img src="/fmac-ops-logo.png" alt="FMAC" className="lgn-logo" />
+            <div className="lgn-brand-rule" />
+            <h2 className="lgn-club-ar">نادي الفجيرة للفنون القتالية</h2>
+            <p className="lgn-club-en">Fujairah Martial Arts Club</p>
           </div>
 
-          <h1 className="login-heading-ar">
-            {mode === 'signup' ? 'إنشاء حساب جديد' : mode === 'forgot' ? 'استعادة كلمة المرور' : 'دخول الموظفين'}
-          </h1>
-          <p className="login-heading-en">
-            {mode === 'signup' ? 'NEW STAFF ACCOUNT' : mode === 'forgot' ? 'PASSWORD RECOVERY' : 'STAFF AUTHENTICATION'}
-          </p>
-          <div className="login-gold-line" />
+          <div className="lgn-brand-foot">
+            <span>{isAr ? 'منظومة العمليات الموحدة' : 'Unified operations console'}</span>
+          </div>
+        </div>
 
-          {info && (
-            <motion.div
-              className="login-info-msg"
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              style={{
-                background: 'rgba(16,185,129,0.08)',
-                border: '1px solid rgba(16,185,129,0.3)',
-                color: '#10b981',
-                borderRadius: '8px',
-                padding: '12px 16px',
-                fontSize: '0.85rem',
-                marginBottom: '16px',
-                lineHeight: 1.6,
-              }}
-            >
-              {info}
-            </motion.div>
-          )}
+        {/* ── Form side ── */}
+        <div className="lgn-form-col">
+          <div className="lgn-toggles">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
 
-          <form onSubmit={handleSubmit} className="login-form">
-            {mode === 'signup' && (
-              <div className="login-field">
-                <label className="login-label">
-                  {isAr ? 'الاسم الكامل' : 'Display Name'}
+          <div className="lgn-form-inner">
+            <p className="lgn-kicker">{isAr ? 'بوابة الموظفين' : 'Staff console'}</p>
+            <h1 className="lgn-title" dir="auto">
+              {isAr ? MODE_COPY[mode].ar : MODE_COPY[mode].en}
+            </h1>
+
+            {info && (
+              <motion.div className="lgn-msg lgn-msg--ok"
+                initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
+                {info}
+              </motion.div>
+            )}
+
+            <form onSubmit={handleSubmit} className="lgn-form">
+              {mode === 'signup' && (
+                <label className="lgn-field">
+                  <span>{isAr ? 'الاسم الكامل' : 'Display name'}</span>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder={isAr ? 'اسمك' : 'Your name'}
+                    required
+                    dir="auto"
+                  />
                 </label>
-                <input
-                  type="text"
-                  className="login-input"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder={isAr ? 'اسمك' : 'Your Name'}
-                  required
-                />
-              </div>
-            )}
-
-            {mode === 'forgot' && (
-              <p style={{ fontSize: '0.82rem', color: 'var(--theme-text-muted)', marginBottom: '12px', lineHeight: 1.6 }}>
-                {isAr
-                  ? 'أدخل بريدك الإلكتروني وسيتواصل معك المدير بعد مراجعة طلبك.'
-                  : 'Enter your email address and an admin will review your request and send you a reset link.'}
-              </p>
-            )}
-
-            <div className="login-field">
-              <label className="login-label">
-                {isAr ? 'البريد الإلكتروني' : 'Email Address'}
-              </label>
-              <input
-                type="email"
-                className="login-input"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="staff@fmac.ae"
-                required
-              />
-            </div>
-
-            {mode !== 'forgot' && (
-              <div className="login-field">
-                <label className="login-label">
-                  {isAr ? 'كلمة المرور' : 'Password'}
-                </label>
-                <input
-                  type="password"
-                  className="login-input"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-            )}
-
-            {mode === 'signup' && (
-              <div className="login-field">
-                <label className="login-label">
-                  {isAr ? 'المسمى الوظيفي / Job Title' : 'Job Title / المسمى الوظيفي'}
-                </label>
-                <CustomSelect
-                  value={jobTitle}
-                  onChange={setJobTitle}
-                  placeholder={isAr ? '— اختر المسمى الوظيفي —' : '— Select Job Title —'}
-                  options={JOB_TITLES.map(title => ({ value: title, label: title }))}
-                />
-              </div>
-            )}
-
-            <button type="submit" className="login-submit-btn" disabled={loading}>
-              {loading ? (
-                <div className="login-progress-bar">
-                  <div className="login-progress-fill" />
-                </div>
-              ) : mode === 'signup' ? (
-                isAr ? 'تقديم الطلب / SUBMIT REQUEST' : 'SUBMIT REQUEST / تقديم الطلب'
-              ) : mode === 'forgot' ? (
-                isAr ? 'إرسال الطلب / SEND REQUEST' : 'SEND REQUEST / إرسال الطلب'
-              ) : (
-                isAr ? 'دخول / ACCESS CONSOLE' : 'ACCESS CONSOLE / دخول'
               )}
-            </button>
 
-            {error && (
-              <motion.p
-                className="login-error-msg"
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-              >
-                {error}
-              </motion.p>
-            )}
+              {mode === 'forgot' && (
+                <p className="lgn-hint">
+                  {isAr
+                    ? 'أدخل بريدك الإلكتروني وسيتواصل معك المدير بعد مراجعة طلبك.'
+                    : 'Enter your email address and an admin will review your request and send you a reset link.'}
+                </p>
+              )}
 
-            {mode === 'login' && (
-              <button
-                type="button"
-                className="login-switch-link"
-                onClick={() => switchMode('forgot')}
-                style={{ fontSize: '0.78rem', opacity: 0.65, marginTop: '2px' }}
-              >
-                {isAr ? 'نسيت كلمة المرور؟ / Forgot Password?' : 'Forgot Password? / نسيت كلمة المرور؟'}
+              <label className="lgn-field">
+                <span>{isAr ? 'البريد الإلكتروني' : 'Email address'}</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="staff@fmac.ae"
+                  required
+                  dir="ltr"
+                />
+              </label>
+
+              {mode !== 'forgot' && (
+                <label className="lgn-field">
+                  <span>{isAr ? 'كلمة المرور' : 'Password'}</span>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    dir="ltr"
+                  />
+                </label>
+              )}
+
+              {mode === 'signup' && (
+                <div className="lgn-field">
+                  <span>{isAr ? 'المسمى الوظيفي' : 'Job title'}</span>
+                  <CustomSelect
+                    value={jobTitle}
+                    onChange={setJobTitle}
+                    placeholder={isAr ? '— اختر المسمى الوظيفي —' : '— Select job title —'}
+                    options={JOB_TITLES.map(title => ({ value: title, label: title }))}
+                  />
+                </div>
+              )}
+
+              <button type="submit" className="lgn-submit" disabled={loading}>
+                {loading
+                  ? (isAr ? 'جارٍ التحقق…' : 'Verifying…')
+                  : mode === 'signup'
+                    ? (isAr ? 'تقديم الطلب' : 'Submit request')
+                    : mode === 'forgot'
+                      ? (isAr ? 'إرسال الطلب' : 'Send request')
+                      : (isAr ? 'دخول' : 'Sign in')}
               </button>
-            )}
 
-            <button
-              type="button"
-              className="login-switch-link"
-              onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
-            >
-              {mode === 'login'
-                ? (isAr ? 'إنشاء حساب / Create Account' : 'Create Account / إنشاء حساب')
-                : (isAr ? 'العودة لتسجيل الدخول / Sign In' : 'Sign In / تسجيل الدخول')}
-            </button>
-          </form>
+              {error && (
+                <motion.p className="lgn-msg lgn-msg--err"
+                  initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
+                  {error}
+                </motion.p>
+              )}
 
-          <div className="login-bottom-ornament">
-            <BottomOrnament />
+              <div className="lgn-links">
+                {mode === 'login' && (
+                  <button type="button" onClick={() => switchMode('forgot')}>
+                    {isAr ? 'نسيت كلمة المرور؟' : 'Forgot password?'}
+                  </button>
+                )}
+                <button type="button" onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}>
+                  {mode === 'login'
+                    ? (isAr ? 'إنشاء حساب جديد' : 'Create an account')
+                    : (isAr ? 'العودة لتسجيل الدخول' : 'Back to sign in')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </motion.div>

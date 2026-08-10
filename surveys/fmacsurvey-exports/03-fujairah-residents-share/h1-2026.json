@@ -1,0 +1,82 @@
+{
+  "survey": {
+    "id": "h01-fujairah-share-h1-2026",
+    "platform": "fmacsurvey.com",
+    "kpiCode": "H-01",
+    "kpiNameEn": "Share of Fujairah residents among community-initiative participants",
+    "kpiNameAr": "نسبة سكان الفجيرة من المشاركين في المبادرات المجتمعية",
+    "titleEn": "Community Initiative Residency Sign-in — H1 2026",
+    "titleAr": "تسجيل إقامة المشاركين في المبادرات المجتمعية — H1 2026",
+    "descriptionEn": "A short sign-in completed once per participant to record home emirate, tallied afterward to compute the Fujairah-resident share.",
+    "descriptionAr": "نموذج تسجيل قصير يُعبأ مرة واحدة لكل مشارك لتسجيل إمارة الإقامة، وتُجمّع الإجابات لاحقاً لاحتساب نسبة سكان الفجيرة.",
+    "language": [
+      "en",
+      "ar"
+    ],
+    "period": {
+      "type": "semiannual",
+      "label": "H1 2026",
+      "opensOn": "2026-01-01",
+      "closesOn": "2026-06-30"
+    },
+    "target": {
+      "value": 80,
+      "unit": "%",
+      "direction": "up",
+      "formula": "(participants residing in Fujairah ÷ total participants) × 100"
+    },
+    "questions": [
+      {
+        "id": "full_name",
+        "type": "short_text",
+        "labelEn": "Full name",
+        "labelAr": "الاسم الكامل",
+        "required": true
+      },
+      {
+        "id": "initiative_name",
+        "type": "short_text",
+        "labelEn": "Which community initiative did you attend?",
+        "labelAr": "ما المبادرة المجتمعية التي شاركت فيها؟",
+        "required": true
+      },
+      {
+        "id": "home_emirate",
+        "type": "single_choice",
+        "labelEn": "Home emirate",
+        "labelAr": "إمارة الإقامة",
+        "required": true,
+        "options": [
+          "Fujairah",
+          "Dubai",
+          "Sharjah",
+          "Abu Dhabi",
+          "Ajman",
+          "Umm Al Quwain",
+          "Ras Al Khaimah",
+          "Other (outside UAE)"
+        ]
+      },
+      {
+        "id": "fujairah_area",
+        "type": "short_text",
+        "labelEn": "Area/neighborhood within Fujairah (if applicable)",
+        "labelAr": "المنطقة داخل الفجيرة (إن انطبق)",
+        "required": false
+      }
+    ],
+    "scoringNotes": "Fujairah share = (# respondents with home_emirate = 'Fujairah') ÷ (total respondents) × 100."
+  },
+  "formatReference": {
+    "note": "EXAMPLE ONLY — illustrates the expected shape of one respondent's answer for training and format-review purposes. This is not a real submission and must not be counted toward the KPI reading.",
+    "noteAr": "مثال توضيحي فقط — يوضح شكل إجابة مستجيب واحد لأغراض التدريب ومراجعة الصيغة. ليست إجابة حقيقية ولا تُحتسب ضمن قراءة المؤشر.",
+    "exampleContextEn": "Example sign-in from a Fujairah-resident participant.",
+    "exampleContextAr": "مثال تسجيل من مشارك مقيم في الفجيرة.",
+    "exampleResponse": {
+      "full_name": "Mariam Al Kaabi",
+      "initiative_name": "FMAC Community Fitness Day",
+      "home_emirate": "Fujairah",
+      "fujairah_area": "Al Faseel"
+    }
+  }
+}

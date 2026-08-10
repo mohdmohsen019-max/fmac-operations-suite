@@ -2,17 +2,18 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, Filter, Grid, List, Printer, Edit2, History,
-  Zap, ZapOff, CheckSquare, Square, Package
+  Zap, ZapOff, CheckSquare, Square, Package, Download
 } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { getItemStatus, getSportLabel, getCatLabel } from './shared'
 import CustomSelect from '../CustomSelect'
+import exportCsv from '../../utils/exportCsv'
 
 function StatusBadge({ status, t }) {
   const cfg = {
-    ok:  { label: t('Available', 'متوفر'),  color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-    low: { label: t('Low',       'منخفض'),  color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
-    out: { label: t('Out',       'نفذ'),    color: '#f43f5e', bg: 'rgba(244,63,94,0.1)' },
+    ok:  { label: t('Available', 'متوفر'),  color: 'var(--status-safe)', bg: 'rgba(16,185,129,0.1)' },
+    low: { label: t('Low',       'منخفض'),  color: 'var(--status-warn)', bg: 'rgba(245,158,11,0.1)' },
+    out: { label: t('Out',       'نفذ'),    color: 'var(--status-risk)', bg: 'rgba(244,63,94,0.1)' },
   }
   const c = cfg[status] || cfg.ok
   return (
@@ -31,7 +32,9 @@ export default function InventoryStock({
   onOpenBarcode, onEditItem, onViewHistory, selectedItems, setSelectedItems,
 }) {
   const { t, lang } = useLanguage()
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(
+    () => new URLSearchParams(window.location.search).get('q') || ''
+  )
   const [filterCat, setFilterCat] = useState('all')
   const [filterSport, setFilterSport] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -55,6 +58,18 @@ export default function InventoryStock({
       return true
     })
   }, [items, search, filterCat, filterSport, filterStatus])
+
+  const exportItems = () => {
+    exportCsv(
+      `fmac-stock-${new Date().toISOString().slice(0, 10)}`,
+      ['Name (EN)', 'Name (AR)', 'SKU', 'Barcode', 'Category', 'Sport', 'Current Stock', 'Min Threshold', 'Status'],
+      filtered.map(i => [
+        i.nameEn, i.nameAr, i.sku, i.barcode,
+        getCatLabel(i.category, categories, lang), getSportLabel(i.sport, sports, lang),
+        i.currentStock ?? 0, i.minThreshold ?? 5, getItemStatus(i),
+      ])
+    )
+  }
 
   const toggleSelect = (id) => {
     setSelectedItems(prev =>
@@ -102,6 +117,11 @@ export default function InventoryStock({
           </div>
         </div>
         <div className="inv-toolbar-right">
+          <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={exportItems}
+            disabled={filtered.length === 0}
+            title={t('Export the current view as CSV', 'تصدير العرض الحالي كملف CSV')}>
+            <Download size={14} /> CSV
+          </button>
           {selectedItems.length > 0 && (
             <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={() => {
               const sel = items.filter(i => selectedItems.includes(i.id))
@@ -200,7 +220,7 @@ export default function InventoryStock({
                       <td>{item.size || '—'}</td>
                       <td>
                         <span className="inv-stock-num" style={{
-                          color: st === 'out' ? '#f43f5e' : st === 'low' ? '#f59e0b' : 'var(--theme-text-main)'
+                          color: st === 'out' ? 'var(--status-risk)' : st === 'low' ? 'var(--status-warn)' : 'var(--theme-text-main)'
                         }}>
                           {item.currentStock}
                         </span>
@@ -253,7 +273,7 @@ export default function InventoryStock({
                 <div className="inv-card-sku">{item.sku}</div>
                 <div className="inv-card-stock-row">
                   <span className="inv-card-stock-num" style={{
-                    color: st === 'out' ? '#f43f5e' : st === 'low' ? '#f59e0b' : '#10b981'
+                    color: st === 'out' ? 'var(--status-risk)' : st === 'low' ? 'var(--status-warn)' : 'var(--status-safe)'
                   }}>
                     {item.currentStock}
                   </span>

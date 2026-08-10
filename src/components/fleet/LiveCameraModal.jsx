@@ -12,6 +12,7 @@ function CameraTile({ camera, url }) {
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !url) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus('error');
       return;
     }

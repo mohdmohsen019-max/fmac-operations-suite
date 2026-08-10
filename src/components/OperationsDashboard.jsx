@@ -1,25 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Bus, Package2, LifeBuoy, Users, BarChart2, Package, ArrowRight,
-  AlertTriangle, UserPlus, CheckCircle2, FileWarning, PackageX,
-  ArrowUpRight, ArrowDownRight, Activity, ChevronRight, Timer,
+  Search, Bell, Bus, Package, BarChart2, ChevronRight, MonitorPlay, FileText,
 } from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { useNavigate } from 'react-router-dom';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { db } from '../firebase';
 import { collection, getDocs, query } from 'firebase/firestore';
 import { cartrackService } from '../services/cartrackService';
 import { useLanguage } from '../contexts/LanguageContext';
+import LanguageToggle from './shared/LanguageToggle';
+import ThemeToggle from './shared/ThemeToggle';
 import './OperationsDashboard.css';
 
-const MODULE_CARDS_DEF = [
-  { id: 'fleet',     en: 'Fleet Management',  ar: 'إدارة الأسطول',    icon: Bus,      accent: '#f59e0b', accentSoft: 'rgba(245,158,11,0.10)', accentBorder: 'rgba(245,158,11,0.25)', accentGlow: 'rgba(245,158,11,0.18)', path: '/fleet/dashboard' },
-  { id: 'logistics', en: 'Logistics Hub',      ar: 'مركز اللوجستيات', icon: Package2, accent: '#3b82f6', accentSoft: 'rgba(59,130,246,0.10)', accentBorder: 'rgba(59,130,246,0.25)', accentGlow: 'rgba(59,130,246,0.18)', path: '/logistics/attendance' },
-  { id: 'help',      en: 'Help Desk',          ar: 'مركز الدعم',       icon: LifeBuoy, accent: '#f43f5e', accentSoft: 'rgba(244,63,94,0.10)',  accentBorder: 'rgba(244,63,94,0.25)',  accentGlow: 'rgba(244,63,94,0.18)',  path: '/help' },
-  { id: 'users',     en: 'User Management',    ar: 'إدارة المستخدمين', icon: Users,    accent: '#8b5cf6', accentSoft: 'rgba(139,92,246,0.10)', accentBorder: 'rgba(139,92,246,0.25)', accentGlow: 'rgba(139,92,246,0.18)', path: '/users/dashboard' },
-  { id: 'reports',   en: 'Dept. Reports',      ar: 'تقارير الأقسام',  icon: BarChart2,accent: '#10b981', accentSoft: 'rgba(16,185,129,0.10)', accentBorder: 'rgba(16,185,129,0.25)', accentGlow: 'rgba(16,185,129,0.18)', path: '/reports' },
-  { id: 'inventory', en: 'Inventory',           ar: 'المخزون',          icon: Package,  accent: '#f97316', accentSoft: 'rgba(249,115,22,0.10)', accentBorder: 'rgba(249,115,22,0.25)', accentGlow: 'rgba(249,115,22,0.18)', path: '/inventory' },
+/* Brand red — the ONLY place this hex exists in this file (chart line + dot). */
+const RED = '#c70017';
+
+/* Camera-group plates (mirrors the fleet module's registration filter). */
+const FLEET_PLATES = [
+  'A21248', 'A33867', 'A33876', 'C29769', 'C37069',
+  'C37072', 'C37074', 'C37075', 'M85750', 'M85751',
+  'M85756', 'M85759', 'M99268', 'M99270',
 ];
+
+const isFleetPlate = (registration) => {
+  const reg = (registration || '').trim().toUpperCase().replace(/\s/g, '');
+  return FLEET_PLATES.some(p => reg === p || reg === p.replace(/\s/g, ''));
+};
 
 const getGreeting = (t) => {
   const h = new Date().getHours();
@@ -35,511 +43,707 @@ const toMillis = (ts) => {
   return isNaN(ms) ? 0 : ms;
 };
 
-const timeAgo = (ts, lang) => {
+/* Compact age like Image B: "65d" / "3h" / "12m" */
+const ageShort = (ts) => {
   const ms = toMillis(ts);
   if (!ms) return '—';
-  const diff = Date.now() - ms;
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (lang === 'ar') {
-    if (mins < 1) return 'الآن';
-    if (mins < 60) return `منذ ${mins} د`;
-    if (hours < 24) return `منذ ${hours} س`;
-    return `منذ ${days} يوم`;
-  }
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  return `${days}d ago`;
+  const mins = Math.floor((Date.now() - ms) / 60000);
+  if (mins < 60) return `${Math.max(mins, 0)}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
 };
 
-const TICKET_STATUS = {
-  new:      { en: 'New',         ar: 'جديد',        color: '#f43f5e' },
-  progress: { en: 'In Progress', ar: 'قيد التنفيذ', color: '#f59e0b' },
-  closed:   { en: 'Closed',      ar: 'مغلق',        color: '#10b981' },
-};
+const RANGES = ['1D', '1W', '1M', '1Y'];
 
 export default function OperationsDashboard({ userProfile }) {
   const navigate = useNavigate();
   const { t, lang, locale } = useLanguage();
-  const MODULE_CARDS = MODULE_CARDS_DEF.map(mod => ({ ...mod, label: t(mod.en, mod.ar) }));
 
-  const [moduleData, setModuleData] = useState({
-    fleet:     { loading: true },
-    logistics: { loading: true },
-    help:      { loading: true },
-    users:     { loading: true },
-    reports:   { loading: true },
-    inventory: { loading: true },
-  });
+  /* ── State ── */
+  const [fleetStatus, setFleetStatus] = useState(null);      // { onRoute, total }
+  const [reportStats, setReportStats] = useState(null);      // { approved, total }
+  const [invStats, setInvStats] = useState(null);            // { total, out, low, topCats }
+  const [signals, setSignals] = useState({});                // bell + dark-card urgency
+  const [assetStats, setAssetStats] = useState(null);        // { total, missing, rooms }
+  const [movements, setMovements] = useState(null);
+  const [fleetRange, setFleetRange] = useState('1W');
+  const [tripData, setTripData] = useState(null);            // { points, totalKm } | null
+  const [bellOpen, setBellOpen] = useState(false);
+  const bellRef = useRef(null);
 
-  // Raw signals that drive the "Needs Attention" strip.
-  const [signals, setSignals] = useState({});
-  // Live feeds
-  const [ticketFeed, setTicketFeed] = useState(null);   // null = loading
-  const [movementFeed, setMovementFeed] = useState(null);
+  /* Close the bell dropdown on outside click */
+  useEffect(() => {
+    if (!bellOpen) return;
+    const onDown = (e) => {
+      if (bellRef.current && !bellRef.current.contains(e.target)) setBellOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [bellOpen]);
 
-  const displayName =
-    userProfile?.displayName ||
-    userProfile?.email?.split('@')[0] ||
-    t('there', 'هناك');
+  const mergeSignals = (patch) => setSignals(prev => ({ ...prev, ...patch }));
+
+  /* Real name only — placeholder accounts ("ADMIN", "ADMIN ADMIN ADMIN", empty)
+     greet with no name at all rather than rendering placeholder text. */
+  const rawName = (userProfile?.displayName || '').trim();
+  const isPlaceholderName =
+    !rawName || rawName.split(/\s+/).every(w => w.toLowerCase() === 'admin');
+  const displayName = isPlaceholderName ? null : rawName;
+  const firstName = displayName ? displayName.split(' ')[0] : null;
 
   useEffect(() => {
     Promise.allSettled([
-      fetchFleetData(),
-      fetchLogisticsData(),
-      fetchHelpData(),
-      fetchUsersData(),
+      fetchFleetStatus(),
+      fetchTripActivity('1W'),
       fetchReportsData(),
       fetchInventoryData(),
+      fetchUsersData(),
+      fetchHelpData(),
+      fetchAssetsData(),
       fetchMovements(),
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const setData = (id, data) =>
-    setModuleData(prev => ({ ...prev, [id]: { loading: false, ...data } }));
-
-  const mergeSignals = (patch) => setSignals(prev => ({ ...prev, ...patch }));
-
-  const fetchFleetData = async () => {
+  /* ── Fleet status (gold card) ── */
+  const fetchFleetStatus = async () => {
     try {
-      const [vehicles, maintSnap] = await Promise.all([
-        cartrackService.getVehicles(),
-        getDocs(query(collection(db, 'maintenance'))),
-      ]);
-      const active = vehicles ? vehicles.filter(v => v.ignition).length : 0;
-      setData('fleet', {
-        kpis: [
-          { label: t('On Route', 'في الطريق'),          value: active, hero: true },
-          { label: t('Total Fleet', 'إجمالي الأسطول'), value: vehicles ? vehicles.length : 14 },
-          { label: t('Maint. Jobs', 'مهام الصيانة'),    value: maintSnap.size },
-        ],
-      });
+      const vehicles = await cartrackService.getVehicles();
+      const onRoute = vehicles ? vehicles.filter(v => v.ignition).length : 0;
+      setFleetStatus({ onRoute, total: vehicles ? vehicles.length : 14 });
     } catch {
-      setData('fleet', {
-        kpis: [
-          { label: t('On Route', 'في الطريق'),          value: '—', hero: true },
-          { label: t('Total Fleet', 'إجمالي الأسطول'), value: 14 },
-          { label: t('Maint. Jobs', 'مهام الصيانة'),    value: '—' },
-        ],
-      });
+      setFleetStatus({ onRoute: null, total: 14 });
     }
   };
 
-  const fetchLogisticsData = async () => {
+  /* ── Trip activity (red chart card) ──
+     SUM of trip_distance divided by 1000, camera-group plates only, bucketed on the
+     trip's local (Asia/Dubai) start timestamp as returned by the API. */
+  const fetchTripActivity = async (range) => {
+    setTripData(null);
     try {
-      const today = new Date().toLocaleDateString('en-CA');
-      const [playersSnap, sessionsSnap] = await Promise.all([
-        getDocs(collection(db, 'players_v2')),
-        getDocs(collection(db, 'sessions')),
-      ]);
-      const todaySessions = sessionsSnap.docs.filter(d => d.id.startsWith(today));
-      setData('logistics', {
-        kpis: [
-          { label: t('Sessions Today', 'جلسات اليوم'), value: todaySessions.length, hero: true },
-          { label: t('Players Registered', 'لاعب مسجّل'), value: playersSnap.size },
-        ],
+      const now = new Date();
+      const daysBack = range === '1D' ? 0 : range === '1W' ? 6 : range === '1M' ? 29 : 364;
+      const start = format(startOfDay(subDays(now, daysBack)), 'yyyy-MM-dd HH:mm:ss');
+      const end = format(endOfDay(now), 'yyyy-MM-dd HH:mm:ss');
+      const raw = (await cartrackService.getTrips(start, end)) || [];
+
+      const seen = new Set();
+      const trips = raw.filter(trip => {
+        if (!isFleetPlate(trip.registration)) return false;
+        const dist = parseFloat(trip.trip_distance) || 0;
+        if (dist <= 0) return false;
+        const key = trip.trip_id
+          ? String(trip.trip_id)
+          : `${trip.registration}-${trip.start_timestamp}-${dist}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      /* Bucket keys from the API's local-time strings */
+      const bucketOf = (ts) => {
+        if (!ts) return null;
+        if (range === '1D') return ts.substring(11, 13);   // hour
+        if (range === '1Y') return ts.substring(0, 7);     // month
+        return ts.substring(0, 10);                        // day
+      };
+      const keys = [];
+      if (range === '1D') {
+        for (let h = 0; h <= now.getHours(); h++) keys.push(String(h).padStart(2, '0'));
+      } else if (range === '1Y') {
+        for (let m = 11; m >= 0; m--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+          keys.push(format(d, 'yyyy-MM'));
+        }
+      } else {
+        for (let d = daysBack; d >= 0; d--) keys.push(format(subDays(now, d), 'yyyy-MM-dd'));
+      }
+
+      const sums = Object.fromEntries(keys.map(k => [k, 0]));
+      let totalMeters = 0;
+      trips.forEach(trip => {
+        const dist = parseFloat(trip.trip_distance) || 0;
+        totalMeters += dist;
+        const b = bucketOf(trip.start_timestamp);
+        if (b != null && b in sums) sums[b] += dist;
+      });
+
+      setTripData({
+        points: keys.map(k => ({ k, v: Math.round(sums[k] / 1000) })),
+        totalKm: Math.round(totalMeters / 1000),
       });
     } catch {
-      setData('logistics', {
-        kpis: [
-          { label: t('Sessions Today', 'جلسات اليوم'),    value: '—', hero: true },
-          { label: t('Players Registered', 'لاعب مسجّل'), value: '—' },
-        ],
-      });
+      setTripData({ points: [], totalKm: null });
     }
   };
 
-  const fetchHelpData = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'requests'));
-      const requests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const open = requests.filter(r => r.status === 'new' || r.status === 'progress').length;
-      const overdue = requests.filter(
-        r => r.slaDeadline?.toDate && r.slaDeadline.toDate() < new Date() && r.status !== 'closed'
-      ).length;
-
-      setData('help', {
-        kpis: [
-          { label: t('Open', 'مفتوح'),    value: open, hero: true },
-          { label: t('Overdue', 'متأخر'), value: overdue, alert: overdue > 0 },
-          { label: t('Total', 'الإجمالي'), value: requests.length },
-        ],
-      });
-      mergeSignals({ openTickets: open, overdueTickets: overdue });
-
-      // Latest 5 tickets for the feed
-      const latest = [...requests]
-        .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
-        .slice(0, 5);
-      setTicketFeed(latest);
-    } catch {
-      setData('help', {
-        kpis: [
-          { label: t('Open', 'مفتوح'),     value: '—', hero: true },
-          { label: t('Overdue', 'متأخر'),  value: '—' },
-          { label: t('Total', 'الإجمالي'), value: '—' },
-        ],
-      });
-      setTicketFeed([]);
-    }
+  const changeRange = (r) => {
+    if (r === fleetRange) return;
+    setFleetRange(r);
+    fetchTripActivity(r);
   };
 
-  const fetchUsersData = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'users'));
-      const users = snap.docs.map(d => d.data());
-      // "Active" matches the login check + User Management badge:
-      // approved flag OR approved/active status.
-      const active = users.filter(u =>
-        u.approved === true || u.status === 'approved' || u.status === 'active'
-      ).length;
-      const pending = users.filter(u => u.status === 'pending').length;
-      setData('users', {
-        kpis: [
-          { label: t('Active', 'نشط'),     value: active, hero: true },
-          { label: t('Pending', 'معلق'),   value: pending, alert: pending > 0 },
-          { label: t('Total', 'الإجمالي'), value: users.length },
-        ],
-      });
-      mergeSignals({ pendingUsers: pending });
-    } catch {
-      setData('users', {
-        kpis: [
-          { label: t('Active', 'نشط'),     value: '—', hero: true },
-          { label: t('Pending', 'معلق'),   value: '—' },
-          { label: t('Total', 'الإجمالي'), value: '—' },
-        ],
-      });
-    }
-  };
-
+  /* ── Dept reports (purple card) ── */
   const fetchReportsData = async () => {
     try {
-      // Sections live in their own collection keyed by reportId 'YYYY-MM'.
       const now = new Date();
       const monthId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      const [reportsSnap, sectionsSnap] = await Promise.all([
-        getDocs(collection(db, 'monthly_reports')),
-        getDocs(query(collection(db, 'report_sections'))),
-      ]);
-      const reportsThisYear = reportsSnap.docs.filter(d => d.id.startsWith(String(now.getFullYear()))).length;
+      const sectionsSnap = await getDocs(query(collection(db, 'report_sections')));
       const monthSections = sectionsSnap.docs.map(d => d.data()).filter(s => s.reportId === monthId);
       const approved = monthSections.filter(s => s.status === 'approved').length;
       const total = monthSections.length;
-
-      setData('reports', {
-        kpis: [
-          {
-            label: t('This Month Approved', 'المعتمد هذا الشهر'),
-            value: total ? `${approved}/${total}` : t('Not started', 'لم يبدأ'),
-            hero: true,
-          },
-          { label: t('Reports This Year', 'تقارير هذا العام'), value: reportsThisYear },
-        ],
-      });
-      mergeSignals({ reportApproved: approved, reportTotal: total });
+      setReportStats({ approved, total });
+      mergeSignals({ unapproved: Math.max(total - approved, 0) });
     } catch {
-      setData('reports', {
-        kpis: [
-          { label: t('This Month Approved', 'المعتمد هذا الشهر'), value: '—', hero: true },
-          { label: t('Reports This Year', 'تقارير هذا العام'),    value: '—' },
-        ],
-      });
+      setReportStats({ approved: null, total: null });
     }
   };
 
+  /* ── Inventory (green card + dark anchor) ── */
   const fetchInventoryData = async () => {
     try {
       const snap = await getDocs(query(collection(db, 'inventory_items')));
       const items = snap.docs.map(d => d.data()).filter(i => i.isActive !== false);
-      const lowStock = items.filter(i => i.currentStock > 0 && i.currentStock <= (i.minThreshold ?? 5)).length;
-      const outStock = items.filter(i => i.currentStock === 0).length;
-      setData('inventory', {
-        kpis: [
-          { label: t('Total Items', 'إجمالي الأصناف'), value: items.length, hero: true },
-          { label: t('Low Stock', 'مخزون منخفض'),      value: lowStock, alert: lowStock > 0 },
-          { label: t('Out of Stock', 'نفذ المخزون'),   value: outStock, alert: outStock > 0 },
-        ],
+      const low = items.filter(i => i.currentStock > 0 && i.currentStock <= (i.minThreshold ?? 5)).length;
+      const outItems = items.filter(i => i.currentStock === 0);
+
+      const catCount = {};
+      outItems.forEach(i => {
+        const c = (i.category || '').toString().trim();
+        if (c) catCount[c] = (catCount[c] || 0) + 1;
       });
-      mergeSignals({ lowStock, outStock });
+      const topCats = Object.entries(catCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 2)
+        .map(([c]) => c);
+
+      setInvStats({ total: items.length, out: outItems.length, low, topCats });
+      mergeSignals({ outStock: outItems.length });
     } catch {
-      setData('inventory', {
-        kpis: [
-          { label: t('Total Items', 'إجمالي الأصناف'), value: '—', hero: true },
-          { label: t('Low Stock', 'مخزون منخفض'),      value: '—' },
-          { label: t('Out of Stock', 'نفذ المخزون'),   value: '—' },
-        ],
-      });
+      setInvStats({ total: null, out: null, low: null, topCats: [] });
     }
   };
 
+  /* ── Users (bell signal only) ── */
+  const fetchUsersData = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const pending = snap.docs.map(d => d.data()).filter(u => u.status === 'pending').length;
+      mergeSignals({ pendingUsers: pending });
+    } catch { /* signal stays unset */ }
+  };
+
+  /* ── Help desk (bell + dark-card signals) ── */
+  const fetchHelpData = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'requests'));
+      const requests = snap.docs.map(d => d.data());
+      const overdue = requests.filter(
+        r => r.slaDeadline?.toDate && r.slaDeadline.toDate() < new Date() && r.status !== 'closed'
+      ).length;
+      mergeSignals({ overdueTickets: overdue });
+    } catch { /* signal stays unset */ }
+  };
+
+  /* ── Assets (row-2 overview) ── */
+  const fetchAssetsData = async () => {
+    try {
+      const [assetsSnap, roomsSnap] = await Promise.all([
+        getDocs(collection(db, 'assets')),
+        getDocs(collection(db, 'asset_rooms')),
+      ]);
+      const roomNames = Object.fromEntries(roomsSnap.docs.map(d => [d.id, d.data()]));
+      const assets = assetsSnap.docs.map(d => d.data());
+      const missing = assets.filter(a => a.status === 'Missing').length;
+
+      const byRoom = {};
+      assets.forEach(a => {
+        if (a.location_room) byRoom[a.location_room] = (byRoom[a.location_room] || 0) + 1;
+      });
+      const rooms = Object.entries(byRoom)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([id, count]) => ({
+          key: id,
+          en: roomNames[id]?.name_en || roomNames[id]?.name_ar || '—',
+          ar: roomNames[id]?.name_ar || roomNames[id]?.name_en || '—',
+          count,
+        }));
+
+      setAssetStats({ total: assets.length, missing, rooms });
+    } catch {
+      setAssetStats({ total: null, missing: null, rooms: [] });
+    }
+  };
+
+  /* ── Stock movements ── */
   const fetchMovements = async () => {
     try {
       const snap = await getDocs(collection(db, 'inventory_movements'));
       const latest = snap.docs.map(d => ({ id: d.id, ...d.data() }))
         .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
         .slice(0, 5);
-      setMovementFeed(latest);
+      setMovements(latest);
     } catch {
-      setMovementFeed([]);
+      setMovements([]);
     }
   };
 
-  /* ── Needs-Attention items derived from signals ── */
-  const attention = [];
-  if (signals.overdueTickets > 0) {
-    attention.push({
-      key: 'overdue', urgent: true, icon: Timer, color: '#f43f5e', path: '/help',
-      count: signals.overdueTickets,
-      label: t('tickets past their SLA deadline', 'تذكرة تجاوزت موعد الحل'),
-    });
-  }
-  if (signals.pendingUsers > 0) {
-    attention.push({
-      key: 'pending-users', icon: UserPlus, color: '#8b5cf6', path: '/users/dashboard',
-      count: signals.pendingUsers,
-      label: t('account requests waiting for approval', 'طلب حساب بانتظار الموافقة'),
-    });
-  }
-  if (signals.outStock > 0) {
-    attention.push({
-      key: 'out-stock', icon: PackageX, color: '#f97316', path: '/inventory',
-      count: signals.outStock,
-      label: t('inventory items out of stock', 'صنف نفذ من المخزون'),
-    });
-  }
-  if (signals.openTickets > 0 && !signals.overdueTickets) {
-    attention.push({
-      key: 'open-tickets', icon: LifeBuoy, color: '#f59e0b', path: '/help',
-      count: signals.openTickets,
-      label: t('open support tickets to handle', 'تذكرة دعم مفتوحة للمعالجة'),
-    });
-  }
-  if (signals.reportTotal > 0 && signals.reportApproved < signals.reportTotal) {
-    attention.push({
-      key: 'report', icon: FileWarning, color: '#10b981', path: '/reports',
-      count: signals.reportTotal - signals.reportApproved,
-      label: t('report sections still unapproved this month', 'قسم تقرير غير معتمد هذا الشهر'),
-    });
-  }
-  const signalsReady = ['openTickets', 'pendingUsers', 'lowStock'].every(k => k in signals);
 
-  const dateString = new Date().toLocaleDateString(locale, {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
+  /* ── Daily Brief printout — composed from already-loaded dashboard state ── */
+  const printBrief = () => {
+    const w = window.open('', '_blank', 'width=780,height=920');
+    if (!w) return;
+    const rtl = lang === 'ar';
+    const dateLine = new Intl.DateTimeFormat(locale, {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    }).format(new Date());
+    const row = (label, value) =>
+      `<tr><td class="l">${label}</td><td class="v" dir="ltr">${value}</td></tr>`;
 
+    const opsRows = [
+      fleetStatus && row(t('Buses on route', 'حافلات في الخدمة'), `${fleetStatus.onRoute} / ${fleetStatus.total}`),
+      invStats && row(t('Inventory items', 'أصناف المخزون'), invStats.total),
+      invStats && row(t('Out of stock', 'نفذ من المخزون'), invStats.out),
+      invStats && row(t('Low stock', 'مخزون منخفض'), invStats.low),
+      assetStats?.total != null && row(t('Registered assets', 'الأصول المسجلة'), assetStats.total),
+      assetStats?.missing > 0 && row(t('Assets flagged missing', 'أصول مفقودة'), assetStats.missing),
+      reportStats && row(t('Report sections approved', 'أقسام التقرير المعتمدة'), `${reportStats.approved} / ${reportStats.total}`),
+    ].filter(Boolean).join('');
+
+    const flagRows = [
+      signals.overdueTickets > 0 && row(t('Overdue tickets', 'تذاكر متأخرة'), signals.overdueTickets),
+      signals.pendingUsers > 0 && row(t('Accounts awaiting approval', 'حسابات بانتظار الموافقة'), signals.pendingUsers),
+      signals.outStock > 0 && row(t('Items at zero stock', 'أصناف رصيدها صفر'), signals.outStock),
+      signals.unapproved > 0 && row(t('Unapproved report sections', 'أقسام غير معتمدة'), signals.unapproved),
+    ].filter(Boolean).join('');
+
+    const moveRows = (movements || []).map(mv => {
+      const name = mv.itemNameAr || mv.itemNameEn || mv.itemSku || '—';
+      const who = mv.issuedTo?.personName || mv.performedByName || '—';
+      const qty = `${mv.type === 'stock_in' ? '+' : '−'}${mv.quantity ?? ''}`;
+      const when = new Date(toMillis(mv.createdAt)).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
+      return `<tr><td class="l" dir="auto">${name}</td><td dir="auto">${who}</td><td class="v" dir="ltr">${qty}</td><td class="v">${when}</td></tr>`;
+    }).join('');
+
+    w.document.write(`<!doctype html><html dir="${rtl ? 'rtl' : 'ltr'}" lang="${lang}"><head>
+      <meta charset="utf-8"><title>FMAC — ${t('Daily Brief', 'الموجز اليومي')}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; color: #111114; margin: 36px 42px; }
+        h1 { font-size: 21px; margin: 0 0 2px; letter-spacing: -0.01em; }
+        .date { color: #6f6f78; font-size: 13px; margin-bottom: 26px; }
+        h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+             color: #6f6f78; margin: 26px 0 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        td { padding: 7px 4px; border-bottom: 1px solid #ececec; }
+        td.l { color: #111114; }
+        td.v { font-weight: 600; white-space: nowrap; }
+        .empty { color: #6f6f78; font-size: 13px; padding: 6px 4px; }
+        .foot { margin-top: 34px; color: #9a9aa2; font-size: 11px; }
+        @media print { body { margin: 18px 22px; } }
+      </style></head><body>
+      <h1>FMAC — ${t('Daily Operations Brief', 'موجز العمليات اليومي')}</h1>
+      <div class="date">${dateLine}</div>
+      <h2>${t('Operations snapshot', 'لمحة العمليات')}</h2>
+      <table>${opsRows || `<tr><td class="empty">${t('Data still loading — reopen in a moment.', 'البيانات قيد التحميل — أعد المحاولة بعد لحظة.')}</td></tr>`}</table>
+      <h2>${t('Needs attention', 'يتطلب الانتباه')}</h2>
+      <table>${flagRows || `<tr><td class="empty">${t('All clear — nothing needs attention.', 'كل شيء على ما يرام.')}</td></tr>`}</table>
+      <h2>${t('Latest stock movements', 'أحدث حركات المخزون')}</h2>
+      <table>${moveRows || `<tr><td class="empty">${t('No stock movements yet.', 'لا توجد حركات مخزون بعد.')}</td></tr>`}</table>
+      <div class="foot">${t('Generated from the live dashboard', 'أُنشئ من لوحة المعلومات المباشرة')} · ${new Date().toLocaleString(locale)}</div>
+      </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 350);
+  };
+
+  /* ── Derived ── */
+  const attentionCount =
+    (signals.overdueTickets > 0 ? 1 : 0) +
+    (signals.pendingUsers > 0 ? 1 : 0) +
+    (signals.outStock > 0 ? 1 : 0) +
+    (signals.unapproved > 0 ? 1 : 0);
+
+  /* Bell dropdown items — every live attention signal, tap-through */
+  const bellItems = [
+    signals.outStock > 0 && {
+      key: 'stock', n: signals.outStock,
+      label: t('items out of stock', 'صنف نفذ مخزونه'), path: '/inventory',
+    },
+    signals.unapproved > 0 && {
+      key: 'sections', n: signals.unapproved,
+      label: t('report sections unapproved', 'قسم تقرير غير معتمد'), path: '/reports',
+    },
+    signals.overdueTickets > 0 && {
+      key: 'overdue', n: signals.overdueTickets,
+      label: t('tickets past SLA', 'تذكرة تجاوزت الموعد'), path: '/help',
+    },
+    signals.pendingUsers > 0 && {
+      key: 'pending', n: signals.pendingUsers,
+      label: t('accounts awaiting approval', 'حساب بانتظار الموافقة'), path: '/users/dashboard',
+    },
+  ].filter(Boolean);
+
+  const rangeLabel = {
+    '1D': t('Distance today', 'المسافة اليوم'),
+    '1W': t('Distance this week', 'المسافة هذا الأسبوع'),
+    '1M': t('Distance this month', 'المسافة هذا الشهر'),
+    '1Y': t('Distance this year', 'المسافة هذه السنة'),
+  }[fleetRange];
+
+  const monthName = new Date().toLocaleDateString(locale, { month: 'long' });
+
+  /* Dark anchor card — single most urgent state, fixed priority order. */
+  const urgency = (() => {
+    if (signals.outStock > 0) {
+      const cats = invStats?.topCats || [];
+      return {
+        n: signals.outStock,
+        unit: t('items', 'صنفاً'),
+        pill: t('out of stock', 'نفذ مخزونها'),
+        line2: t('need reordering', 'بحاجة لإعادة الطلب'),
+        body: cats.length >= 2
+          ? t(`${cats[0]} and ${cats[1]} are the most affected categories this month.`,
+              `${cats[0]} و${cats[1]} هما الفئتان الأكثر تأثراً هذا الشهر.`)
+          : cats.length === 1
+            ? t(`${cats[0]} is the most affected category this month.`,
+                `${cats[0]} هي الفئة الأكثر تأثراً هذا الشهر.`)
+            : t('Restock is needed across the warehouse.', 'المستودع بحاجة لإعادة تعبئة المخزون.'),
+        cta: t('Review stock', 'مراجعة المخزون'),
+        path: '/inventory',
+      };
+    }
+    if (signals.unapproved > 0) {
+      return {
+        n: signals.unapproved,
+        unit: t('sections', 'أقسام'),
+        pill: t('unapproved', 'غير معتمدة'),
+        line2: t('block this month’s report', 'تعطّل تقرير هذا الشهر'),
+        body: t(`The ${monthName} report can only compile once every section is approved.`,
+                `لا يمكن تجميع تقرير ${monthName} إلا بعد اعتماد جميع الأقسام.`),
+        cta: t('Open reports', 'فتح التقارير'),
+        path: '/reports',
+      };
+    }
+    if (signals.overdueTickets > 0) {
+      return {
+        n: signals.overdueTickets,
+        unit: t('tickets', 'تذاكر'),
+        pill: t('overdue', 'متأخرة'),
+        line2: t('are past their SLA deadline', 'تجاوزت الموعد المحدد للحل'),
+        body: t('Overdue requests erode response-time commitments — clear them first.',
+                'الطلبات المتأخرة تضعف الالتزام بزمن الاستجابة — عالجها أولاً.'),
+        cta: t('Open help desk', 'فتح مركز الدعم'),
+        path: '/help',
+      };
+    }
+    return null;
+  })();
+
+  const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString(locale));
+
+  /* ── Render ── */
   return (
-    <div className="ops-dash">
+    <motion.div className="odx" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
       {/* ── Header ── */}
-      <motion.div
-        className="ops-dash-header"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div className="ops-dash-greeting">
-          <span className="ops-dash-greeting-text">
-            {getGreeting(t)}, {displayName}
-          </span>
-          <span className="ops-dash-date">{dateString}</span>
-        </div>
-        <span className="ops-dash-tagline">{t('Operations Overview', 'نظرة عامة على العمليات')}</span>
-      </motion.div>
-
-      {/* ── Needs Attention strip ── */}
-      {signalsReady && (
-        <motion.section
-          className="ops-attn"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        >
-          {attention.length === 0 ? (
-            <div className="ops-attn-clear">
-              <CheckCircle2 size={18} />
-              <span>{t('All clear — nothing needs your attention right now.', 'كل شيء على ما يرام — لا يوجد ما يتطلب انتباهك حالياً.')}</span>
-            </div>
-          ) : (
-            <>
-              <div className="ops-attn-title">
-                <AlertTriangle size={14} />
-                {t('Needs attention', 'يتطلب انتباهك')}
-                <span className="ops-attn-count">{attention.length}</span>
-              </div>
-              <div className="ops-attn-row">
-                {attention.map((a, i) => {
-                  const Icon = a.icon;
-                  return (
-                    <motion.button
-                      key={a.key}
-                      className={`ops-attn-item${a.urgent ? ' urgent' : ''}`}
-                      style={{ '--attn-color': a.color }}
-                      onClick={() => navigate(a.path)}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05, duration: 0.3 }}
-                    >
-                      <span className="ops-attn-icon"><Icon size={15} strokeWidth={2} /></span>
-                      <span className="ops-attn-num">{a.count}</span>
-                      <span className="ops-attn-label">{a.label}</span>
-                      <ChevronRight size={14} className="ops-attn-go" />
-                    </motion.button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </motion.section>
-      )}
-
-      {/* ── Module cards ── */}
-      <div className="ops-dash-grid">
-        {MODULE_CARDS.map((mod, i) => {
-          const data = moduleData[mod.id];
-          const isLoading = data?.loading;
-          const kpis = data?.kpis || [];
-
-          return (
-            <motion.div
-              key={mod.id}
-              className="ops-dash-card"
-              style={{
-                '--card-accent':        mod.accent,
-                '--card-accent-soft':   mod.accentSoft,
-                '--card-accent-border': mod.accentBorder,
-                '--card-accent-glow':   mod.accentGlow,
-              }}
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 + i * 0.05, duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
-              onClick={() => navigate(mod.path)}
+      <header className="odx-head">
+        <h1 className="odx-title">
+          {getGreeting(t)}{firstName ? `, ${firstName}` : ''}
+        </h1>
+        <div className="odx-head-right">
+          <div className="odx-toggles">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
+          <div className="odx-head-icons">
+            <button
+              className="odx-icon-circle"
+              aria-label={t('Search (Ctrl+K)', 'بحث (Ctrl+K)')}
+              title="Ctrl+K"
+              onClick={() => window.dispatchEvent(new CustomEvent('fmac:palette'))}
             >
-              <div className="ops-dash-card-header">
-                <div className="ops-dash-card-icon">
-                  <mod.icon size={22} strokeWidth={1.75} />
-                </div>
-                <div className="ops-dash-card-title">
-                  <span className="ops-dash-card-name">{mod.label}</span>
-                  <span className="ops-dash-card-badge live">{t('Live', 'مباشر')}</span>
-                </div>
-                <div className="ops-dash-card-arrow">
-                  <ArrowRight size={15} strokeWidth={2} />
-                </div>
-              </div>
-
-              {isLoading ? (
-                <div className="ops-dash-card-loading">
-                  <div className="app-loader">
-                    <span /><span /><span /><span /><span />
-                  </div>
-                </div>
-              ) : (
-                <div className="ops-dash-card-kpis">
-                  {kpis.map((kpi, j) => (
-                    <div key={j} className={`ops-dash-kpi${kpi.alert ? ' alert' : ''}${kpi.hero ? ' hero' : ''}`}>
-                      <span className="ops-dash-kpi-value">{kpi.value}</span>
-                      <span className="ops-dash-kpi-label">{kpi.label}</span>
+              <Search size={15} strokeWidth={2} />
+            </button>
+            <button
+              className="odx-icon-circle"
+              aria-label={t('Print the daily brief', 'طباعة الموجز اليومي')}
+              title={t('Daily brief', 'الموجز اليومي')}
+              onClick={printBrief}
+            >
+              <FileText size={15} strokeWidth={2} />
+            </button>
+            <button
+              className="odx-icon-circle"
+              aria-label={t('Open the ops wallboard (TV mode)', 'فتح شاشة العمليات (وضع TV)')}
+              title={t('Wallboard', 'شاشة العمليات')}
+              onClick={() => navigate('/wallboard')}
+            >
+              <MonitorPlay size={15} strokeWidth={2} />
+            </button>
+            <div className="odx-bell-wrap" ref={bellRef}>
+              <button
+                className="odx-icon-circle"
+                aria-label={t('Notifications', 'الإشعارات')}
+                onClick={() => setBellOpen(v => !v)}
+              >
+                <Bell size={15} strokeWidth={2} />
+                {attentionCount > 0 && <span className="odx-bell-dot" aria-hidden="true" />}
+              </button>
+              {bellOpen && (
+                <div className="odx-bell-menu">
+                  {bellItems.length === 0 ? (
+                    <div className="odx-bell-none">
+                      {t('All clear — nothing needs attention.', 'كل شيء على ما يرام.')}
                     </div>
+                  ) : bellItems.map(item => (
+                    <button
+                      key={item.key}
+                      className="odx-bell-item"
+                      onClick={() => { setBellOpen(false); navigate(item.path); }}
+                    >
+                      <b dir="ltr">{item.n.toLocaleString(locale)}</b>
+                      <span>{item.label}</span>
+                      <ChevronRight size={13} strokeWidth={2} />
+                    </button>
                   ))}
                 </div>
               )}
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* ── Activity feeds ── */}
-      <div className="ops-feeds">
-        {/* Help Desk feed */}
-        <motion.section
-          className="ops-feed"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <div className="ops-feed-head">
-            <h3><LifeBuoy size={15} /> {t('Latest Tickets', 'أحدث التذاكر')}</h3>
-            <button className="ops-feed-link" onClick={() => navigate('/help')}>
-              {t('View all', 'عرض الكل')} <ChevronRight size={13} />
+            </div>
+            <button className="odx-user-pill" onClick={() => navigate('/profile')} aria-label={t('My Profile', 'ملفي الشخصي')}>
+              <span className="odx-user-avatar">
+                {userProfile?.photoURL ? (
+                  <img src={userProfile.photoURL} alt="" />
+                ) : (
+                  (displayName || 'A').trim().charAt(0).toUpperCase()
+                )}
+              </span>
+              <span className="odx-user-name">{firstName || t('Admin', 'مسؤول')}</span>
             </button>
           </div>
-          {ticketFeed === null ? (
-            <div className="ops-feed-loading"><div className="app-loader"><span /><span /><span /><span /><span /></div></div>
-          ) : ticketFeed.length === 0 ? (
-            <div className="ops-feed-empty">{t('No tickets yet.', 'لا توجد تذاكر بعد.')}</div>
-          ) : (
-            <div className="ops-feed-list">
-              {ticketFeed.map(r => {
-                const sm = TICKET_STATUS[r.status] || TICKET_STATUS.new;
-                return (
-                  <button key={r.id} className="ops-feed-item" onClick={() => navigate(`/help/requests/${r.id}`)}>
-                    <span className="ops-feed-dot" style={{ background: sm.color }} />
-                    <div className="ops-feed-main">
-                      <span className="ops-feed-title">
-                        {r.ticketNumber || r.id.slice(0, 8)}
-                        <em>{(r.type || '').toUpperCase()}</em>
-                      </span>
-                      <span className="ops-feed-sub">{r.userInfo?.name || '—'}</span>
-                    </div>
-                    <span className="ops-feed-pill" style={{ color: sm.color, background: `${sm.color}14`, borderColor: `${sm.color}35` }}>
-                      {lang === 'ar' ? sm.ar : sm.en}
-                    </span>
-                    <span className="ops-feed-time">{timeAgo(r.createdAt, lang)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </motion.section>
+        </div>
+      </header>
 
-        {/* Inventory movements feed */}
-        <motion.section
-          className="ops-feed"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.42, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <div className="ops-feed-head">
-            <h3><Activity size={15} /> {t('Latest Stock Movements', 'أحدث حركات المخزون')}</h3>
-            <button className="ops-feed-link" onClick={() => navigate('/inventory')}>
-              {t('View all', 'عرض الكل')} <ChevronRight size={13} />
+      {/* ── Row 1 — tinted stat cards ── */}
+      <div className="odx-row1">
+        <div className="odx-col">
+          <h2 className="odx-sec">{t('Fleet activity', 'نشاط الأسطول')}</h2>
+          <div className="odx-card odx-card--red">
+            <div className="odx-value" dir="ltr">
+              {tripData?.totalKm == null ? '—' : `${tripData.totalKm.toLocaleString(locale)} ${t('km', 'كم')}`}
+            </div>
+            <div className="odx-label">{rangeLabel}</div>
+            <div className="odx-chart" dir="ltr">
+              {tripData && tripData.points.length > 0 && (
+                <ResponsiveContainer width="100%" height={130}>
+                  <AreaChart data={tripData.points} margin={{ top: 36, right: 10, left: 4, bottom: 2 }}>
+                    <defs>
+                      {/* The single permitted gradient: chart area fill */}
+                      <linearGradient id="odxTripFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f7d6da" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#f7d6da" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area
+                      type="monotone"
+                      dataKey="v"
+                      stroke={RED}
+                      strokeWidth={2}
+                      fill="url(#odxTripFill)"
+                      isAnimationActive={false}
+                      dot={(p) => {
+                        const last = tripData.points.length - 1;
+                        if (p.index !== last || p.cx == null) return <g key={`d-${p.index}`} />;
+                        const label = `${tripData.points[last].v.toLocaleString(locale)} km`;
+                        const w = label.length * 6.5 + 16;
+                        const bx = p.cx - w - 10 < 0 ? p.cx + 10 : p.cx - w - 10;
+                        return (
+                          <g key={`d-${p.index}`}>
+                            <rect x={bx} y={p.cy - 30} width={w} height={20} rx={10} fill="#0a0a0a" />
+                            <text x={bx + w / 2} y={p.cy - 16} textAnchor="middle" fill="#ffffff" fontSize={10} fontWeight={600}>
+                              {label}
+                            </text>
+                            <circle cx={p.cx} cy={p.cy} r={4} fill={RED} stroke="#ffffff" strokeWidth={2} />
+                          </g>
+                        );
+                      }}
+                      activeDot={{ r: 3.5, fill: RED, stroke: '#fdeef0', strokeWidth: 2 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="odx-range-tabs" dir="ltr">
+              {RANGES.map(r => (
+                <button
+                  key={r}
+                  className={`odx-range-tab${fleetRange === r ? ' active' : ''}`}
+                  onClick={() => changeRange(r)}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="odx-col">
+          <h2 className="odx-sec">{t('Modules', 'الوحدات')}</h2>
+          <button className="odx-card odx-card--purple" onClick={() => navigate('/reports')}>
+            <div>
+              <div className="odx-value" dir="ltr">
+                {reportStats ? `${fmt(reportStats.approved)} / ${fmt(reportStats.total)}` : '—'}
+              </div>
+              <div className="odx-label">{t('Sections approved', 'الأقسام المعتمدة')}</div>
+            </div>
+            <div className="odx-card-foot">
+              <span className="odx-chip odx-chip--purple"><BarChart2 size={16} strokeWidth={2} /></span>
+              <span className="odx-sub odx-sub--purple">{monthName}</span>
+            </div>
+          </button>
+        </div>
+
+        <div className="odx-col">
+          <div className="odx-sec-spacer" aria-hidden="true" />
+          <button className="odx-card odx-card--green" onClick={() => navigate('/inventory')}>
+            <div>
+              <div className="odx-value" dir="ltr">{fmt(invStats?.total)}</div>
+              <div className="odx-label">{t('Items in stock', 'أصناف في المخزون')}</div>
+            </div>
+            <div className="odx-card-foot">
+              <span className="odx-chip odx-chip--green"><Package size={16} strokeWidth={2} /></span>
+              <span className="odx-sub odx-sub--green">
+                {invStats?.out != null ? `${fmt(invStats.out)} ${t('out', 'نفذ')}` : '—'}
+              </span>
+            </div>
+          </button>
+        </div>
+
+        <div className="odx-col">
+          <div className="odx-sec-spacer" aria-hidden="true" />
+          <button className="odx-card odx-card--gold" onClick={() => navigate('/fleet/dashboard')}>
+            <div>
+              <div className="odx-value" dir="ltr">
+                {fleetStatus ? `${fmt(fleetStatus.onRoute)} / ${fmt(fleetStatus.total)}` : '—'}
+              </div>
+              <div className="odx-label">{t('Buses on route', 'حافلات في الطريق')}</div>
+            </div>
+            <div className="odx-card-foot">
+              <span className="odx-chip odx-chip--gold"><Bus size={16} strokeWidth={2} /></span>
+              <span className="odx-sub odx-sub--gold">{t('Live', 'مباشر')}</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Row 2 — naked tickets table + dark anchor card ── */}
+      <div className="odx-row2">
+        <div className="odx-assetsblock">
+          <div className="odx-table-head">
+            <h2 className="odx-table-title" dir="ltr">
+              {assetStats == null
+                ? '—'
+                : `${(assetStats.total ?? 0).toLocaleString(locale)} ${t('assets', 'أصلاً')} · ${(assetStats.missing ?? 0).toLocaleString(locale)} ${t('missing', 'مفقود')}`}
+            </h2>
+            <button className="odx-window-pill" onClick={() => navigate('/assets')}>
+              {t('Open assets', 'فتح الأصول')} <ChevronRight size={12} strokeWidth={2} />
             </button>
           </div>
-          {movementFeed === null ? (
-            <div className="ops-feed-loading"><div className="app-loader"><span /><span /><span /><span /><span /></div></div>
-          ) : movementFeed.length === 0 ? (
-            <div className="ops-feed-empty">{t('No stock movements yet.', 'لا توجد حركات مخزون بعد.')}</div>
+
+          {assetStats == null ? (
+            <div className="odx-empty">—</div>
+          ) : assetStats.rooms.length === 0 ? (
+            <div className="odx-empty">{t('No assets registered yet', 'لا توجد أصول مسجلة بعد')}</div>
           ) : (
-            <div className="ops-feed-list">
-              {movementFeed.map(mv => {
-                const isIn = mv.type === 'stock_in';
-                const color = isIn ? '#10b981' : '#f43f5e';
-                const MvIcon = isIn ? ArrowUpRight : ArrowDownRight;
-                return (
-                  <button key={mv.id} className="ops-feed-item" onClick={() => navigate('/inventory')}>
-                    <span className="ops-feed-mv-icon" style={{ color, background: `${color}14` }}>
-                      <MvIcon size={13} strokeWidth={2.5} />
+            <div className="odx-asset-rows">
+              {(() => {
+                const max = Math.max(...assetStats.rooms.map(r => r.count), 1);
+                return assetStats.rooms.map(room => (
+                  <button
+                    key={room.key}
+                    className="odx-asset-row"
+                    onClick={() => navigate('/assets')}
+                  >
+                    <span className="odx-asset-name" dir="auto">
+                      {lang === 'ar' ? room.ar : room.en}
                     </span>
-                    <div className="ops-feed-main">
-                      <span className="ops-feed-title" dir="auto">{mv.itemNameAr || mv.itemNameEn || mv.itemSku}</span>
-                      <span className="ops-feed-sub">
-                        {mv.issuedTo?.personName || mv.performedByName || '—'}
-                      </span>
-                    </div>
-                    <span className="ops-feed-qty" style={{ color }}>
-                      {isIn ? '+' : '−'}{mv.quantity}
+                    <span className="odx-asset-track" dir="ltr">
+                      <span className="odx-asset-fill" style={{ width: `${Math.max((room.count / max) * 100, 4)}%` }} />
                     </span>
-                    <span className="ops-feed-time">{timeAgo(mv.createdAt, lang)}</span>
+                    <span className="odx-asset-count" dir="ltr">{room.count.toLocaleString(locale)}</span>
                   </button>
-                );
-              })}
+                ));
+              })()}
             </div>
           )}
-        </motion.section>
+        </div>
+
+        {/* Dark anchor card — the single most urgent operational state */}
+        <div className="odx-dark">
+          {urgency ? (
+            <>
+              <div className="odx-dark-line1" dir="ltr">
+                <span>{fmt(urgency.n)} {urgency.unit}</span>
+                <span className="odx-dark-pill">{urgency.pill}</span>
+              </div>
+              <div className="odx-dark-line2">{urgency.line2}</div>
+              <p className="odx-dark-body">{urgency.body}</p>
+              <button className="odx-dark-cta" onClick={() => navigate(urgency.path)}>
+                {urgency.cta}
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="odx-dark-line2">{t('All clear', 'كل شيء على ما يرام')}</div>
+              <p className="odx-dark-body">
+                {t('No urgent operational state right now.', 'لا توجد حالة تشغيلية عاجلة حالياً.')}
+              </p>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* ── Stock movements — naked table, full width ── */}
+      <div className="odx-moves">
+        <h2 className="odx-table-title">{t('Latest stock movements', 'أحدث حركات المخزون')}</h2>
+        <table className="odx-table">
+          <thead>
+            <tr>
+              <th className="odx-th">{t('Item', 'الصنف')}</th>
+              <th className="odx-th">{t('By', 'بواسطة')}</th>
+              <th className="odx-th odx-th--end">{t('Qty', 'الكمية')}</th>
+              <th className="odx-th odx-th--end">{t('Age', 'العمر')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {movements == null ? (
+              <tr><td className="odx-td odx-td--empty" colSpan={4}>—</td></tr>
+            ) : movements.length === 0 ? (
+              <tr><td className="odx-td odx-td--empty" colSpan={4}>{t('No stock movements yet.', 'لا توجد حركات مخزون بعد.')}</td></tr>
+            ) : movements.map(mv => {
+              const isIn = mv.type === 'stock_in';
+              return (
+                <tr key={mv.id} className="odx-tr" onClick={() => navigate('/inventory')}>
+                  <td className="odx-td">
+                    <span className="odx-move-name" dir="auto">
+                      {mv.itemNameAr || mv.itemNameEn || mv.itemSku}
+                    </span>
+                  </td>
+                  <td className="odx-td odx-td--muted" dir="auto">
+                    {mv.issuedTo?.personName || mv.performedByName || '—'}
+                  </td>
+                  <td className={`odx-td odx-td--end odx-qty ${isIn ? 'odx-qty--in' : 'odx-qty--out'}`} dir="ltr">
+                    {isIn ? '+' : '−'}{mv.quantity}
+                  </td>
+                  <td className="odx-td odx-td--muted odx-td--end" dir="ltr">{ageShort(mv.createdAt)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </motion.div>
   );
 }

@@ -75,6 +75,39 @@ function formatLabel(key) {
   return key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).trim()
 }
 
+/* ── Stat-value normalisation ────────────────────────────────────────
+   Extracted figures often arrive as strings carrying their unit words —
+   "9 units", "148 players", "+25 individuals", "114~", "July 1-31, 2026".
+   Rendered raw at display size inside an RTL context, the bidi algorithm
+   flips "9 units" into "units 9" and the unit words print at number size,
+   overflowing the cell. Split the leading figure from its trailing words:
+   the figure renders big in an isolated LTR span, the words render small. */
+function splitStat(raw) {
+  const s = String(raw ?? '').trim().replace(/\s+/g, ' ')
+  if (!s) return { num: '', rest: '' }
+  const m = s.match(/^([+\-~≈]?[0-9٠-٩][0-9٠-٩.,:%/]*)\s*(.*)$/)
+  if (!m) return { num: '', rest: s }
+  // Trailing tildes/dashes on the figure or its remainder are extraction noise.
+  const num = m[1].replace(/[~.,]+$/, '')
+  const rest = m[2].replace(/^[~\-–—]+|[~\-–—]+$/g, '').trim()
+  return { num, rest }
+}
+
+/* One stat figure. Numeric-led values: big isolated-LTR figure + small unit.
+   Text values (date ranges etc.): medium weight at a size that fits. */
+function StatValue({ raw }) {
+  const { num, rest } = splitStat(raw)
+  if (num) {
+    return (
+      <p className="kpi-value">
+        <span dir="ltr" className="kpi-num">{num}</span>
+        {rest && <span className="kpi-unit" dir="auto">{rest}</span>}
+      </p>
+    )
+  }
+  return <p className="kpi-value kpi-value--text" dir="auto">{rest}</p>
+}
+
 // ── Page-split algorithm ────────────────────────────────────────────
 // Returns array of page configs: [{ isFirst, tableSlices: [{table, start, end}] }]
 
@@ -107,7 +140,12 @@ function buildSectionPageSet(section) {
     let start = 0
 
     while (start < rows.length) {
-      if (budget <= 0) {
+      /* Orphan control: with fewer than 4 rows of budget left, break to a new
+         page instead of stranding a 1–3 row sliver above the page break. The
+         first-page-with-nothing-yet case keeps its budget so a section that is
+         ONLY a table never opens with a pointless blank page. */
+      const pageHasContent = pages.length > 1 || pages[0].tableSlices.length > 0 || start > 0
+      if (budget < 4 && pageHasContent) {
         pages.push({ isFirst: false, tableSlices: [] })
         budget = continuationBudget
       }
@@ -123,11 +161,13 @@ function buildSectionPageSet(section) {
 
 // ── Shared sub-components ───────────────────────────────────────────
 
-function RunningHeader({ monthName }) {
+function RunningHeader({ monthName, docRef }) {
   return (
     <div className="rpt-running-header">
       <div className="rpt-running-header-title">التقرير التشغيلي الشهري — {monthName}</div>
-      <img src="/fmac-logo-new.png" alt="Logo" />
+      {/* Document-control reference — repeated on every page like a real
+          controlled document, set in mono to read as a filing code. */}
+      <span className="rpt-doc-ref">{docRef}</span>
     </div>
   )
 }
@@ -144,25 +184,38 @@ function RunningFooter({ pageNum, totalPages, sectionName }) {
 
 // ── Cover Page ──────────────────────────────────────────────────────
 
-function CoverPage({ data }) {
+function CoverPage({ data, docRef }) {
   return (
     <div className="report-page cover-page">
-      <div className="cover-top-bar" />
-      <div className="cover-left-accent" />
-      <div className="cover-right-accent" />
-      <div className="cover-bottom-bar" />
-      <div className="cover-body">
-        <img src="/fmac-logo-new.png" alt="FMAC" className="cover-logo" />
-        <div className="cover-gold-line" />
-        <h1 className="cover-main-title"><span>تقرير الأقسام الشهري</span></h1>
-        <p className="cover-subtitle">قسم العمليات — نادي الفجيرة للفنون القتالية</p>
-        <div className="cover-gold-line-thin" />
-        <p className="cover-month">{data.monthName}</p>
-        <div className="cover-meta">
-          <p>أعده: {data.hodName}</p>
-          <p>التاريخ: {data.generatedDate}</p>
-          <p className="cover-confidential">سري — للاستخدام الداخلي فقط</p>
-        </div>
+      {/* Crimson spine on the binding edge — this is a bound file, not a flyer */}
+      <div className="cover-spine" />
+
+      <div className="cover-inner">
+        {/* Top strip: identity + document-control block, like any controlled record */}
+        <header className="cover-head">
+          <img src="/fmac-ops-logo.png" alt="FMAC" className="cover-logo" />
+          <table className="cover-doc-table">
+            <tbody>
+              <tr><td>رقم الوثيقة</td><td className="rpt-doc-ref">{docRef}</td></tr>
+              <tr><td>التصنيف</td><td>داخلي — قسم العمليات</td></tr>
+              <tr><td>دورية الإصدار</td><td>شهري</td></tr>
+            </tbody>
+          </table>
+        </header>
+
+        {/* Title block — start-aligned, not floating in the middle */}
+        <main className="cover-main">
+          <p className="cover-kicker">نادي الفجيرة للفنون القتالية — قسم العمليات</p>
+          <h1 className="cover-main-title">التقرير التشغيلي الشهري</h1>
+          <div className="cover-title-rule" />
+          <p className="cover-month">{data.monthName}</p>
+        </main>
+
+        {/* Bottom meta ledger */}
+        <footer className="cover-foot">
+          <div className="cover-foot-row"><span>أعدّه</span><strong>{data.hodName}</strong></div>
+          <div className="cover-foot-latin">FUJAIRAH MARTIAL ARTS CLUB — OPERATIONS DEPARTMENT</div>
+        </footer>
       </div>
     </div>
   )
@@ -170,10 +223,10 @@ function CoverPage({ data }) {
 
 // ── TOC Page ────────────────────────────────────────────────────────
 
-function TocPage({ sections, sectionStartPages, totalPages, monthName }) {
+function TocPage({ sections, sectionStartPages, totalPages, monthName, docRef }) {
   return (
     <div className="report-page" style={{ display: 'flex', flexDirection: 'column' }}>
-      <RunningHeader monthName={monthName} />
+      <RunningHeader monthName={monthName} docRef={docRef} />
       <div className="toc-page-body">
         <h2 className="toc-page-title">فهرس المحتويات</h2>
         <div className="toc-gold-rule" />
@@ -242,8 +295,8 @@ function BlockPart({ part }) {
         <div className="kpi-row">
           {b.items.filter(it => it.label || it.value).map((it, i) => (
             <div key={i} className="kpi-card">
-              <p className="kpi-value">{arCell(it.value)}</p>
-              <p className="kpi-label">{it.label}</p>
+              <StatValue raw={arCell(it.value)} />
+              <p className="kpi-label" dir="auto">{it.label}</p>
             </div>
           ))}
         </div>
@@ -262,7 +315,7 @@ function BlockPart({ part }) {
 
 // ── Section Page ────────────────────────────────────────────────────
 
-function SectionPage({ section, sectionNum, pageConfig, pageNum, totalPages, monthName }) {
+function SectionPage({ section, sectionNum, pageConfig, pageNum, totalPages, monthName, docRef }) {
   const c = section.parsedContent || {}
   const summaryAr = c.summaryAr || ''
   const keyPointsAr = c.keyPointsAr || []
@@ -279,21 +332,31 @@ function SectionPage({ section, sectionNum, pageConfig, pageNum, totalPages, mon
 
   return (
     <div className="report-page" style={{ display: 'flex', flexDirection: 'column' }}>
-      <RunningHeader monthName={monthName} />
+      <RunningHeader monthName={monthName} docRef={docRef} />
+
+      {/* Index tab on the binding edge — steps down per section like the
+          physical tabs of a filed dossier, and repeats on continuations so a
+          flip through the PDF always shows which section you are in. */}
+      <div className="section-edge-tab" style={{ top: 84 + sectionNum * 46 }}>
+        {String(sectionNum).padStart(2, '0')}
+      </div>
 
       {pageConfig.isFirst ? (
         <>
           <div className="section-header-bar">
-            <span className="section-header-name">{section.nameAr}</span>
-            <span className="section-header-num">{String(sectionNum).padStart(2, '0')}</span>
+            <div className="section-head-flag">{String(sectionNum).padStart(2, '0')}</div>
+            <div className="section-head-names">
+              <span className="section-header-name">{section.nameAr}</span>
+              {section.nameEn && <span className="section-header-en">{section.nameEn}</span>}
+            </div>
           </div>
           <div className="section-gold-rule" />
         </>
       ) : (
         <>
           <div className="section-cont-bar">
+            <div className="section-cont-flag">{String(sectionNum).padStart(2, '0')}</div>
             <span className="section-cont-name">{section.nameAr} — {'تابع'}</span>
-            <span className="section-cont-num">{String(sectionNum).padStart(2, '0')}</span>
           </div>
           <div className="section-gold-rule" />
         </>
@@ -316,11 +379,15 @@ function SectionPage({ section, sectionNum, pageConfig, pageNum, totalPages, mon
               <div className="kpi-row">
                 {kpis.map(kpi => (
                   <div key={kpi.key} className="kpi-card">
-                    <p className="kpi-value">
-                      {typeof kpi.value === 'number' ? kpi.value.toLocaleString() : kpi.value}
-                      {kpi.unit && <span className="kpi-unit">{kpi.unit}</span>}
-                    </p>
-                    <p className="kpi-label">{kpi.label}</p>
+                    {typeof kpi.value === 'number' ? (
+                      <p className="kpi-value">
+                        <span dir="ltr" className="kpi-num">{kpi.value.toLocaleString()}</span>
+                        {kpi.unit && <span className="kpi-unit">{kpi.unit}</span>}
+                      </p>
+                    ) : (
+                      <StatValue raw={kpi.value} />
+                    )}
+                    <p className="kpi-label" dir="auto">{kpi.label}</p>
                   </div>
                 ))}
               </div>
@@ -387,13 +454,16 @@ function SectionPage({ section, sectionNum, pageConfig, pageNum, totalPages, mon
 
 // ── Closing Page ────────────────────────────────────────────────────
 
-function ClosingPage({ data, pageNum, totalPages }) {
+function ClosingPage({ data, pageNum, totalPages, docRef }) {
   return (
     <div className="report-page" style={{ display: 'flex', flexDirection: 'column' }}>
-      <RunningHeader monthName={data.monthName} />
+      <RunningHeader monthName={data.monthName} docRef={docRef} />
       <div className="section-header-bar">
-        <span className="section-header-name">ملاحظات ختامية</span>
-        <span className="section-header-num" style={{ fontSize: 22 }}>خاتمة</span>
+        <div className="section-head-flag">خاتمة</div>
+        <div className="section-head-names">
+          <span className="section-header-name">ملاحظات ختامية</span>
+          <span className="section-header-en">Closing Remarks & Sign-off</span>
+        </div>
       </div>
       <div className="section-gold-rule" />
 
@@ -403,10 +473,18 @@ function ClosingPage({ data, pageNum, totalPages }) {
           : <p className="closing-notes-text" style={{ color: '#aaa' }}>لم يتم إدخال ملاحظات ختامية لهذا التقرير.</p>
         }
         <div className="closing-signature-area">
+          {/* Pre-applied signature of the Head of Operations. If the image is
+              missing the block still renders correctly, leaving a blank space
+              above the rule to sign by hand. */}
+          <img
+            src="/hod-signature.png"
+            alt=""
+            className="closing-sig-image"
+            onError={(e) => { e.currentTarget.style.visibility = 'hidden' }}
+          />
           <div className="closing-sig-line" />
           <p className="closing-sig-title">رئيس قسم العمليات</p>
           <p className="closing-sig-name">{data.hodName}</p>
-          <p className="closing-sig-date">{data.generatedDate}</p>
         </div>
         <p className="closing-club-footer">
           نادي الفجيرة للفنون القتالية — قسم العمليات — {data.monthName}
@@ -422,6 +500,10 @@ function ClosingPage({ data, pageNum, totalPages }) {
 
 export default function ReportTemplate({ data }) {
   if (!data) return null
+
+  /* Document-control reference — e.g. FMAC-OPS-MR-2026-07. Printed on the
+     cover's control block and repeated in every running header. */
+  const docRef = `FMAC-OPS-MR-${data.reportId || ''}`.replace(/-$/, '')
 
   // Build page structure: calculate how many pages each section needs
   const sectionPageSets = data.sections.map(sec => buildSectionPageSet(sec))
@@ -450,7 +532,7 @@ export default function ReportTemplate({ data }) {
 
   return (
     <div style={{ fontFamily: "'Cairo', sans-serif !important" }}>
-      <CoverPage data={data} />
+      <CoverPage data={data} docRef={docRef} />
 
       <TocPage
         sections={data.sections}
@@ -471,7 +553,7 @@ export default function ReportTemplate({ data }) {
         />
       ))}
 
-      <ClosingPage data={data} pageNum={closingPageNum} totalPages={totalPages} />
+      <ClosingPage data={data} pageNum={closingPageNum} totalPages={totalPages} docRef={docRef} />
     </div>
   )
 }

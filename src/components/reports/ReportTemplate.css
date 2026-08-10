@@ -1,5 +1,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
 
+/* ═══════════════════════════════════════════════════════════════════
+   Monthly operations report — print document.
+
+   Design: institutional dossier, not a brochure. The devices are the
+   ones real controlled documents use — a document-control block and
+   reference code on every page, a crimson spine on the binding edge,
+   stepped index tabs per section, bilingual section heads, ledger-style
+   meta rows and stat bands. Ink on white; crimson strictly for wayfinding.
+
+   All colours are LITERAL hexes: these pages are captured by html2canvas
+   for the PDF and must never depend on app CSS variables.
+
+   Palette
+     ink        #141419   headings, tabs, strong rules
+     body       #26262c   running text
+     muted      #6e6e78   labels, secondary titles
+     ghost      #a3a3ab   footers, faint meta
+     hairline   #e4e1da   separators
+     bone       #f2efe8   table-header fill
+     zebra      #faf9f5   alternating rows
+     crimson    #c70017   spine, tabs' echo, wayfinding marks
+   ═══════════════════════════════════════════════════════════════════ */
+
 .report-page,
 .report-page *,
 .report-page ::before,
@@ -18,360 +41,417 @@
 .report-page {
   width: 794px;
   height: 1122px;
-  background: white;
+  background: #ffffff;
   position: relative;
   overflow: hidden;
   box-sizing: border-box;
+}
+
+/* Filing codes — Latin, mono, LTR wherever they appear. */
+.report-page .rpt-doc-ref {
+  font-family: 'JetBrains Mono', ui-monospace, 'Courier New', monospace !important;
+  direction: ltr;
+  unicode-bidi: embed;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #6e6e78;
 }
 
 /* ── Running header (pages 2+) ──────────────────────────────────── */
 
 .rpt-running-header {
   width: 100%;
-  height: 48px;
-  background: #0f1729;
+  height: 44px;
+  background: #ffffff;
+  border-bottom: 1px solid #e4e1da;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
+  padding: 0 40px;
   box-sizing: border-box;
   direction: rtl;
   flex-shrink: 0;
 }
 
-.rpt-running-header img {
-  height: 28px;
-  object-fit: contain;
-}
-
 .rpt-running-header-title {
-  font-family: 'Cairo', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  color: #26262c;
   direction: rtl;
-}
-
-.rpt-header-gold-line {
-  height: 3px;
-  background: #c9a84c;
-  width: 100%;
-  flex-shrink: 0;
 }
 
 /* ── Running footer ──────────────────────────────────────────────── */
 
 .rpt-running-footer {
-  height: 36px;
+  height: 34px;
   flex-shrink: 0;
-  border-top: 1px solid #e0e0e8;
+  border-top: 1px solid #e4e1da;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
+  padding: 0 40px;
   box-sizing: border-box;
   direction: rtl;
-  font-family: 'Cairo', sans-serif;
-  font-size: 11px;
-  color: #888;
+  font-size: 10px;
+  color: #a3a3ab;
 }
 
 /* ── Cover page ──────────────────────────────────────────────────── */
 
 .cover-page {
-  background: #0f1729;
-  color: white;
+  background: #ffffff;
+  color: #141419;
+}
+
+/* Crimson spine along the binding edge (right, RTL). */
+.cover-spine {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  background: #c70017;
+}
+
+.cover-inner {
+  position: absolute;
+  inset: 0 14px 0 0;
+  padding: 52px 56px 44px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
 }
 
-.cover-top-bar {
-  height: 8px;
-  background: #c9a84c;
-  width: 100%;
-  flex-shrink: 0;
-}
-
-.cover-bottom-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 8px;
-  background: #c9a84c;
-}
-
-.cover-left-accent {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-  background: #c9a84c;
-}
-
-.cover-right-accent {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-  background: #c9a84c;
-}
-
-.cover-body {
-  flex: 1;
+/* Identity + document-control block */
+.cover-head {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 22px;
-  padding: 32px 80px 48px;
-  text-align: center;
-  direction: rtl;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
 }
 
 .cover-logo {
-  height: 72px;
+  height: 56px;
   object-fit: contain;
 }
 
-.cover-gold-line {
-  width: 60%;
-  height: 2px;
-  background: #c9a84c;
-  flex-shrink: 0;
+.cover-doc-table {
+  border-collapse: collapse;
+  font-size: 10.5px;
+  min-width: 240px;
+}
+.cover-doc-table td {
+  padding: 4px 0;
+  color: #141419;
+  font-weight: 600;
+}
+.cover-doc-table td:first-child {
+  color: #6e6e78;
+  font-weight: 500;
+  padding-left: 20px;
+  white-space: nowrap;
+}
+.cover-doc-table tr + tr td {
+  border-top: 1px solid #e4e1da;
+}
+.cover-doc-table .rpt-doc-ref { font-size: 10.5px; color: #141419; }
+
+/* Title block — start-aligned */
+.cover-main {
+  margin: auto 0;
+  padding-top: 40px;
 }
 
-.cover-gold-line-thin {
-  width: 40%;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.2);
-  flex-shrink: 0;
+.cover-kicker {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6e6e78;
+  margin: 0 0 16px;
 }
 
 .cover-main-title {
-  font-family: 'Cairo', sans-serif !important;
-  font-size: 40px;
-  font-weight: 700;
-  color: #ffffff;
+  font-size: 46px;
+  font-weight: 900;
+  color: #141419;
   margin: 0;
   line-height: 1.2;
-  text-align: center;
   letter-spacing: 0 !important;
   word-spacing: normal !important;
-  font-feature-settings: "kern" 1, "liga" 1, "clig" 1;
 }
 
-.cover-subtitle {
-  font-family: 'Cairo', sans-serif;
-  font-size: 17px;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.75);
-  margin: 0;
-  text-align: center;
+.cover-title-rule {
+  width: 96px;
+  height: 3px;
+  background: #c70017;
+  margin: 24px 0 28px;
 }
 
 .cover-month {
-  font-family: 'Cairo', sans-serif;
-  font-size: 34px;
-  font-weight: 700;
-  color: #c9a84c;
+  font-size: 32px;
+  font-weight: 800;
+  color: #141419;
   margin: 0;
-  text-align: center;
 }
 
-.cover-meta {
+/* Bottom meta ledger */
+.cover-foot {
+  margin-top: auto;
+  border-top: 2px solid #141419;
+  padding-top: 14px;
+}
+
+.cover-foot-row {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  padding: 7px 0;
+  border-bottom: 1px solid #e4e1da;
+  font-size: 13px;
+}
+.cover-foot-row span {
+  color: #6e6e78;
+  min-width: 88px;
+  font-weight: 500;
+}
+.cover-foot-row strong {
+  color: #141419;
+  font-weight: 700;
+}
+
+.cover-foot-latin {
   margin-top: 16px;
-  text-align: center;
-  direction: rtl;
-}
-
-.cover-meta p {
-  font-family: 'Cairo', sans-serif;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.65);
-  margin: 5px 0;
-}
-
-.cover-confidential {
-  font-size: 11px !important;
-  color: rgba(255, 255, 255, 0.35) !important;
-  margin-top: 10px !important;
-  letter-spacing: 0.5px;
+  font-size: 9.5px;
+  letter-spacing: 0.22em !important;
+  color: #a3a3ab;
+  direction: ltr;
+  text-align: left;
+  font-weight: 600;
 }
 
 /* ── TOC page ────────────────────────────────────────────────────── */
 
 .toc-page-body {
   flex: 1;
-  padding: 28px 40px 20px;
+  padding: 30px 48px 20px;
   direction: rtl;
   overflow: hidden;
   min-height: 0;
 }
 
 .toc-page-title {
-  font-family: 'Cairo', sans-serif;
-  font-size: 26px;
+  font-size: 23px;
   font-weight: 800;
-  color: #0f1729;
-  margin: 0 0 8px 0;
+  color: #141419;
+  margin: 0 0 10px 0;
   direction: rtl;
 }
 
 .toc-gold-rule {
+  width: 64px;
   height: 3px;
-  background: #c9a84c;
-  margin-bottom: 24px;
+  background: #c70017;
+  margin-bottom: 26px;
 }
 
 .toc-row {
   display: flex;
   align-items: center;
   direction: rtl;
-  padding: 10px 12px;
-  border-radius: 6px;
-  margin-bottom: 4px;
-  font-family: 'Cairo', sans-serif;
+  padding: 11px 4px;
+  border-bottom: 1px solid #e4e1da;
 }
 
-.toc-row:nth-child(even) {
-  background: #f8f8fc;
-}
-
+/* Section number — same ink square as the section flags. */
 .toc-num {
-  font-size: 14px;
+  width: 25px;
+  height: 25px;
+  line-height: 25px;
+  background: #141419;
+  color: #ffffff;
+  font-size: 11.5px;
   font-weight: 800;
-  color: #c9a84c;
-  min-width: 36px;
   text-align: center;
+  border-radius: 5px;
   margin-left: 16px;
+  flex-shrink: 0;
 }
 
 .toc-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
-  color: #0f1729;
+  color: #141419;
   flex: 1;
 }
 
 .toc-dots {
   flex: 1;
-  border-bottom: 2px dotted #ccc;
-  margin: 0 12px;
+  border-bottom: 1px dotted #cfccc4;
+  margin: 0 14px;
   height: 1px;
   align-self: center;
 }
 
 .toc-page-num {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #4a4a6a;
+  color: #43434b;
   min-width: 28px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Section pages ───────────────────────────────────────────────── */
 
-/* Continuation page header — slimmer than the first-page bar */
-.section-cont-bar {
-  width: 100%;
-  background: #1a2540;
+/* Index tab on the binding edge — steps down per section. */
+.section-edge-tab {
+  position: absolute;
+  right: 0;
+  width: 30px;
+  height: 40px;
+  background: #141419;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 32px;
+  justify-content: center;
+  border-radius: 5px 0 0 5px;
+  z-index: 2;
+}
+
+/* First-page section header — number flag + bilingual name block. */
+.section-header-bar {
+  width: 100%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 40px 12px;
   box-sizing: border-box;
   direction: rtl;
   flex-shrink: 0;
 }
 
-.section-cont-name {
-  font-family: 'Cairo', sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
+.section-head-flag {
+  min-width: 40px;
+  height: 40px;
+  padding: 0 10px;
+  background: #141419;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
-.section-cont-num {
-  font-family: 'Cairo', sans-serif;
-  font-size: 24px;
+.section-head-names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.section-header-name {
+  font-size: 23px;
   font-weight: 800;
-  color: #c9a84c;
-  opacity: 0.55;
+  color: #141419;
+  line-height: 1.25;
+}
+
+.section-header-en {
+  font-size: 10px;
+  font-weight: 700;
+  color: #6e6e78;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Continuation header — quiet echo with a smaller flag. */
+.section-cont-bar {
+  width: 100%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 16px 40px 8px;
+  box-sizing: border-box;
+  direction: rtl;
+  flex-shrink: 0;
+}
+
+.section-cont-flag {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  background: #141419;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.section-cont-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6e6e78;
+}
+
+/* Rule under both headers — ink, with a crimson echo at the binding end. */
+.section-gold-rule {
+  height: 2px;
+  background: #141419;
+  margin: 0 40px;
+  flex-shrink: 0;
+  position: relative;
+}
+.section-gold-rule::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 64px;
+  height: 2px;
+  background: #c70017;
 }
 
 .section-page-body {
   flex: 1;
-  padding: 20px 40px 20px;
+  padding: 16px 40px;
   direction: rtl;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 13px;
   overflow: hidden;
   min-height: 0;
 }
 
-.section-header-bar {
-  width: 100%;
-  background: #0f1729;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 32px;
-  box-sizing: border-box;
-  direction: rtl;
-  flex-shrink: 0;
-}
-
-.section-header-left-accent {
-  position: absolute;
-  left: 0;
-  width: 6px;
-  background: #c9a84c;
-}
-
-.section-header-name {
-  font-family: 'Cairo', sans-serif;
-  font-size: 22px;
-  font-weight: 700;
-  color: white;
-}
-
-.section-header-num {
-  font-family: 'Cairo', sans-serif;
-  font-size: 36px;
-  font-weight: 800;
-  color: #c9a84c;
-  opacity: 0.55;
-}
-
-.section-gold-rule {
-  height: 3px;
-  background: #c9a84c;
-  flex-shrink: 0;
-}
-
-/* Section subheadings */
+/* Section subheadings — crimson side tick, the Arabic-report device. */
 .section-subheading {
-  font-family: 'Cairo', sans-serif;
-  font-size: 15px;
-  font-weight: 700;
-  color: #0f1729;
-  margin: 0 0 4px 0;
-  padding-bottom: 4px;
-  border-bottom: 1.5px solid #c9a84c;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #141419;
+  margin: 0;
+  padding-inline-start: 9px;
+  border-inline-start: 3px solid #c70017;
+  line-height: 1.5;
   direction: rtl;
 }
 
 /* Summary text */
 .section-summary-text {
-  font-family: 'Cairo', sans-serif;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 400;
-  color: #1a1a2e;
-  line-height: 1.75;
+  color: #26262c;
+  line-height: 1.8;
   direction: rtl;
   margin: 0;
 }
@@ -386,14 +466,13 @@
   max-width: 100%;
   max-height: 300px;
   object-fit: contain;
-  border: 1px solid #d8d8e0;
-  border-radius: 4px;
+  border: 1px solid #e4e1da;
+  border-radius: 6px;
 }
 .section-figure figcaption {
-  font-family: 'Cairo', sans-serif;
   font-size: 11px;
-  color: #6b6b80;
-  margin-top: 4px;
+  color: #6e6e78;
+  margin-top: 5px;
   direction: rtl;
 }
 
@@ -406,114 +485,146 @@
 }
 
 .section-keypoints li {
-  font-family: 'Cairo', sans-serif;
-  font-size: 13px;
-  color: #1a1a2e;
-  line-height: 1.7;
+  font-size: 12.5px;
+  color: #26262c;
+  line-height: 1.75;
   padding: 2px 0;
   direction: rtl;
 }
 
 .section-keypoints li::before {
-  content: '•';
-  color: #c9a84c;
+  content: '—';
+  color: #c70017;
   font-weight: 800;
   margin-left: 8px;
 }
 
-/* KPI cards */
+/* KPI figures — an annual-report stat grid.
+   GRID, not flex: a flex row with basis-0 items never wraps (the line-break
+   uses the base size), so 13 stats got crushed into ~55px columns with the
+   digits stacking vertically. auto-fit/minmax guarantees every cell is at
+   least 150px wide and rows form on their own — 4 per row on this page. */
 .kpi-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   direction: rtl;
+  border-top: 2px solid #141419;
+  border-bottom: 1px solid #e4e1da;
+  /* Hides the pulled-out edge borders of the divider technique below. */
+  overflow: hidden;
 }
 
 .kpi-card {
-  flex: 1 1 calc(33.33% - 7px);
-  max-width: calc(33.33% - 7px);
-  min-width: 120px;
-  background: #f0f0f7;
-  border-radius: 6px;
+  min-width: 0;
+  max-width: none;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  /* Internal dividers only: every cell draws start+top hairlines, then pulls
+     them 1px out of the band; the outer ones vanish under overflow:hidden. */
+  border-inline-start: 1px solid #e4e1da;
+  border-top: 1px solid #e4e1da;
+  margin-inline-start: -1px;
+  margin-top: -1px;
   padding: 10px 14px;
   text-align: right;
   direction: rtl;
-  border-top: 3px solid #c9a84c;
   box-sizing: border-box;
 }
 
 .kpi-value {
-  font-family: 'Cairo', sans-serif;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
-  color: #0f1729;
+  color: #141419;
   margin: 0;
   direction: rtl;
-  line-height: 1.2;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The figure itself — isolated LTR so "9 units" can never flip to "units 9". */
+.kpi-num {
+  unicode-bidi: isolate;
+}
+
+/* Non-numeric values (date ranges, phrases) — smaller, still weighty. */
+.kpi-value--text {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .kpi-unit {
-  font-size: 12px;
-  font-weight: 400;
-  margin-right: 4px;
-  color: #4a4a6a;
+  font-size: 10.5px;
+  font-weight: 600;
+  margin-inline-start: 5px;
+  color: #6e6e78;
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  vertical-align: baseline;
 }
 
 .kpi-label {
-  font-family: 'Cairo', sans-serif;
-  font-size: 11px;
-  font-weight: 400;
-  color: #4a4a6a;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #6e6e78;
   margin: 3px 0 0 0;
   direction: rtl;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
-/* Data table */
+/* Data table — bone-filled header row under a strong ink top rule. */
 .section-table {
   width: 100%;
   border-collapse: collapse;
-  font-family: 'Cairo', sans-serif;
-  font-size: 12px;
+  font-size: 11.5px;
   direction: rtl;
+  border-top: 2px solid #141419;
 }
 
 .section-table th {
-  background: #0f1729;
-  color: white;
-  font-weight: 700;
-  padding: 8px 12px;
+  background: #f2efe8;
+  color: #141419;
+  font-weight: 800;
+  padding: 7px 10px;
   text-align: right;
-  border: 1px solid #2a2a4a;
+  border: none;
+  border-bottom: 1.5px solid #141419;
+  /* Pinned: the paginator's row-unit math (≈31px/row) depends on it. */
+  line-height: 1.6;
 }
 
 .section-table td {
-  padding: 7px 12px;
+  padding: 6px 10px;
   text-align: right;
-  border: 1px solid #e0e0e8;
-  color: #1a1a2e;
+  border: none;
+  border-bottom: 1px solid #e4e1da;
+  color: #26262c;
+  font-variant-numeric: tabular-nums;
+  /* Pinned: the paginator's row-unit math (≈31px/row) depends on it. */
+  line-height: 1.6;
 }
 
 .section-table tr:nth-child(even) td {
-  background: #f8f8fc;
+  background: #faf9f5;
 }
 
 /* Attachment note */
 .section-attachment-note {
-  font-family: 'Cairo', sans-serif;
-  font-size: 11px;
-  color: #888;
+  font-size: 10.5px;
+  color: #a3a3ab;
   direction: rtl;
   margin-top: auto;
   padding-top: 8px;
-  border-top: 1px solid #e0e0e8;
+  border-top: 1px solid #e4e1da;
 }
 
 /* ── Closing page ────────────────────────────────────────────────── */
 
 .closing-page-body {
   flex: 1;
-  padding: 28px 40px 20px;
+  padding: 24px 40px 20px;
   direction: rtl;
   display: flex;
   flex-direction: column;
@@ -523,9 +634,8 @@
 }
 
 .closing-notes-text {
-  font-family: 'Cairo', sans-serif;
-  font-size: 13px;
-  color: #1a1a2e;
+  font-size: 12.5px;
+  color: #26262c;
   line-height: 1.9;
   direction: rtl;
   white-space: pre-wrap;
@@ -538,42 +648,49 @@
   direction: rtl;
 }
 
+/* Pre-applied signature — sits just above the rule, like a hand signature.
+   `visibility` (not `display`) is toggled on load failure so the block keeps
+   its height and the layout of the closing page never shifts. */
+.closing-sig-image {
+  display: block;
+  height: 84px;
+  width: auto;
+  max-width: 50%;
+  object-fit: contain;
+  margin: 16px 0 0 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
 .closing-sig-line {
-  border-top: 1px solid #4a4a6a;
-  width: 50%;
+  border-top: 1px solid #141419;
+  width: 45%;
   margin-right: 0;
   margin-bottom: 8px;
   margin-top: 40px;
 }
 
+.closing-sig-image + .closing-sig-line {
+  margin-top: 4px;
+}
+
 .closing-sig-title {
-  font-family: 'Cairo', sans-serif;
   font-size: 13px;
-  font-weight: 700;
-  color: #0f1729;
+  font-weight: 800;
+  color: #141419;
   margin: 0 0 4px 0;
 }
 
 .closing-sig-name {
-  font-family: 'Cairo', sans-serif;
   font-size: 13px;
-  color: #1a1a2e;
+  color: #26262c;
   margin: 0 0 4px 0;
 }
 
-.closing-sig-date {
-  font-family: 'Cairo', sans-serif;
-  font-size: 12px;
-  color: #4a4a6a;
-  margin: 0;
-}
-
 .closing-club-footer {
-  font-family: 'Cairo', sans-serif;
-  font-size: 11px;
-  color: #aaa;
+  font-size: 10.5px;
+  color: #a3a3ab;
   text-align: center;
   direction: rtl;
   margin-top: auto;
 }
-

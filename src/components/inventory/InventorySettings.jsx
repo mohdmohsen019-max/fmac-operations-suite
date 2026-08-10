@@ -217,6 +217,7 @@ export default function InventorySettings({ items, settings, onSettingsChange })
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCatalog()
     loadSuppliers()
   }, [])

@@ -11,6 +11,7 @@ import { db } from '../../firebase'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { buildStrategy, buildLinkage, buildPlan, buildExecutive, buildAMS, docRef } from './reports'
 import StrategicReportDoc, { TITLES } from './StrategicReportDoc'
+import AssetKpiEvidence from './AssetKpiEvidence'
 import { DEFAULT_AMS_CONFIG, buildSnapshot } from './ams'
 import {
   fmtMoney, withDefaults, resolveGoalCode, goalByCode,
@@ -23,7 +24,7 @@ const REPORTS = [
   {
     type: 'strategy',
     icon: FileText,
-    color: '#06b6d4',
+    color: '#e26a15',
     ar: 'استراتيجية الأصول والموارد',
     en: 'Asset & Resource Strategy',
     deliverable: 'استراتيجية الأصول والموارد المعتمدة',
@@ -57,7 +58,7 @@ const REPORTS = [
   {
     type: 'plan',
     icon: CalendarClock,
-    color: '#f59e0b',
+    color: '#d4a008',
     ar: 'خطة الأصول متوسطة المدى (٣–٥ سنوات)',
     en: 'Medium-Term Asset Plan',
     deliverable: 'خطة الأصول متوسطة المدى المعتمدة',
@@ -74,7 +75,7 @@ const REPORTS = [
   {
     type: 'executive',
     icon: Briefcase,
-    color: '#10b981',
+    color: '#2c9c5c',
     ar: 'الملخص التنفيذي لمحفظة الأصول',
     en: 'Executive Portfolio Summary',
     deliverable: 'ملخص من صفحة واحدة لعرض القيادة',
@@ -247,6 +248,9 @@ export default function AssetReports({ assets, rooms, lang, t, amsConfig, snapsh
           <p>{t('Import or add assets first, then generate reports.', 'استورد أو أضف أصولاً أولاً، ثم أنشئ التقارير.')}</p>
         </div>
       )}
+
+      {/* Monthly KPI reading + its supporting evidence */}
+      {!empty && <AssetKpiEvidence assets={assets} lang={lang} />}
 
       <div className="ast-reports-grid">
         {REPORTS.map((r) => {

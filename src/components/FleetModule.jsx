@@ -5,6 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { Lock } from 'lucide-react';
 import './fleet/FleetModule.css';
 import { FleetSettingsProvider } from './fleet/FleetSettingsContext';
+import { FleetScopeProvider, FleetScopeSwitch } from './fleet/FleetScopeContext';
 import { usePermissions } from '../hooks/usePermissions';
 
 // Admin Views
@@ -16,6 +17,7 @@ import FleetRiskManagement from './fleet/FleetRiskManagement';
 import FleetSettings from './fleet/FleetSettings';
 import FuelIntelligence from './fleet/fuel/FuelIntelligence';
 import FleetLiveMap from './fleet/FleetLiveMap';
+import FleetRidership from './fleet/FleetRidership';
 
 export default function FleetModule() {
   const navigate = useNavigate();
@@ -40,7 +42,8 @@ export default function FleetModule() {
     'safety-behavior': 'risk',
     'risk': 'risk',
     'settings': 'settings',
-    'livemap': 'livemap'
+    'livemap': 'livemap',
+    'ridership': 'ridership'
   };
 
   const tabToSlug = {
@@ -52,7 +55,8 @@ export default function FleetModule() {
     'reports': 'reports',
     'risk': 'safety-behavior',
     'settings': 'settings',
-    'livemap': 'livemap'
+    'livemap': 'livemap',
+    'ridership': 'ridership'
   };
 
   // Sync tab with URL
@@ -83,11 +87,12 @@ export default function FleetModule() {
   const allTabs = [
     { id: 'dashboard',   label: t('Overview', 'نظرة عامة'),              editOnly: false },
     { id: 'livemap',     label: t('Live Map', 'خريطة مباشرة'),           editOnly: false },
-    { id: 'vehicles',    label: t('Ecosystem', 'النظام البيئي'),          editOnly: false },
+    { id: 'vehicles',    label: t('Fleet', 'الأسطول'),                    editOnly: false },
     { id: 'fuel',        label: t('Fuel Core', 'جوهر الوقود'),           editOnly: false },
     { id: 'maintenance', label: t('Maintenance', 'الصيانة'),              editOnly: false },
     { id: 'risk',        label: t('Safety & Behavior', 'السلامة والسلوك'), editOnly: false },
-    { id: 'reports',     label: t('Intelligence', 'الذكاء'),              editOnly: false },
+    { id: 'ridership',   label: t('Ridership', 'ركاب الحافلات'),          editOnly: false },
+    { id: 'reports',     label: t('Reports', 'تقارير'),                   editOnly: false },
     { id: 'settings',    label: t('System', 'النظام'),                    editOnly: true  },
   ];
   const adminTabs = allTabs.filter(tab => !tab.editOnly || canEdit);
@@ -117,29 +122,35 @@ export default function FleetModule() {
       case 'risk': return <FleetRiskManagement {...props} />;
       case 'settings': return <FleetSettings {...props} />;
       case 'livemap': return <FleetLiveMap {...props} />;
+      case 'ridership': return <FleetRidership {...props} />;
       default: return <FleetDashboard {...props} />;
     }
   };
 
   return (
     <FleetSettingsProvider>
+    <FleetScopeProvider>
       <motion.div 
         className="fleet-module-container"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       >
-        <nav className="luxury-tab-rail" style={{ marginBottom: '20px', marginTop: '8px', marginLeft: '24px' }}>
-          {adminTabs.map(tab => (
-            <button 
-              key={tab.id}
-              className={`tab-item ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => handleTabChange(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+        <div className="fleet-rail-row">
+          <nav className="luxury-tab-rail" style={{ marginBottom: 0, marginTop: 0 }}>
+            {adminTabs.map(tab => (
+              <button 
+                key={tab.id}
+                className={`tab-item ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => handleTabChange(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+          {/* Which vehicles every tab below is looking at */}
+          {activeTab !== 'settings' && <FleetScopeSwitch />}
+        </div>
 
         <main className="main-content">
           <AnimatePresence mode="wait">
@@ -167,6 +178,7 @@ export default function FleetModule() {
           </AnimatePresence>
         </main>
       </motion.div>
+    </FleetScopeProvider>
     </FleetSettingsProvider>
   );
 }

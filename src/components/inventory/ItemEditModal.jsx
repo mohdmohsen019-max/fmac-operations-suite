@@ -173,7 +173,7 @@ export default function ItemEditModal({ item, settings, onClose, onSaved }) {
                 onBlur={e => checkBarcodeUnique(e.target.value)}
               />
               {barcodeWarning && (
-                <div style={{ fontSize:'0.75rem', color:'#f59e0b', marginTop:4 }}>
+                <div style={{ fontSize:'0.75rem', color:'var(--status-warn)', marginTop:4 }}>
                   ⚠ {barcodeWarning}
                 </div>
               )}

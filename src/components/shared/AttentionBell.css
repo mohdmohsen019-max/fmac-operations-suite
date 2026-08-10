@@ -1,0 +1,103 @@
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL ATTENTION BELL — floating cluster, every route.
+   Theme-var driven; matches the toggle pills beside it.
+═══════════════════════════════════════════════════════════ */
+
+.ab-wrap { position: relative; }
+
+.ab-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--theme-surface-raised);
+  border: 1px solid var(--theme-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--theme-text-main);
+  cursor: pointer;
+  position: relative;
+  padding: 0;
+  transition: border-color 0.2s ease;
+}
+.ab-btn:hover { border-color: var(--theme-accent-border); }
+
+.ab-dot {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-risk);
+}
+
+.ab-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: 0;
+  min-width: 260px;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border-strong);
+  border-radius: 14px;
+  padding: 5px;
+  z-index: 1600;
+  display: flex;
+  flex-direction: column;
+}
+
+.ab-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 11px 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--theme-text-ghost);
+}
+
+.ab-refresh {
+  background: none;
+  border: none;
+  padding: 3px;
+  border-radius: 6px;
+  color: var(--theme-text-ghost);
+  cursor: pointer;
+  display: flex;
+}
+.ab-refresh:hover { color: var(--theme-text-main); }
+.ab-refresh:disabled { cursor: default; }
+
+.ab-spin { animation: ab-spin 1s linear infinite; }
+@keyframes ab-spin { to { transform: rotate(360deg); } }
+
+.ab-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 11px;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--theme-text-main);
+  cursor: pointer;
+  text-align: start;
+}
+.ab-item:hover { background: var(--theme-surface-hover); }
+.ab-item b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.ab-item span { flex: 1; min-width: 0; }
+.ab-item svg { color: var(--theme-text-ghost); flex-shrink: 0; }
+
+.ab-none {
+  padding: 14px 12px;
+  font-size: 12px;
+  color: var(--theme-text-ghost);
+  text-align: center;
+}

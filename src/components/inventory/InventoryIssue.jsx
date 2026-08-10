@@ -13,7 +13,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { useLanguage } from '../../contexts/LanguageContext'
-import { getSportLabel, getRoleLabel, getUnitLabel, fmtDateTime, DEFAULT_SPORTS, DEFAULT_ROLES } from './shared'
+import { getSportLabel, getRoleLabel, getUnitLabel, fmtDateTime, DEFAULT_SPORTS, DEFAULT_ROLES, OTHER_SPORT } from './shared'
 import CustomSelect from '../CustomSelect'
 import { sendNotification } from '../../utils/notify'
 
@@ -216,7 +216,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
   const { t, lang } = useLanguage()
   const [step, setStep] = useState(1)
   const [recipient, setRecipient] = useState({
-    sport: '', sportAr: '', personName: '', role: 'player', roleAr: '', playerNames: '', notes: ''
+    sport: '', sportAr: '', sportOther: '', personName: '', role: 'player', roleAr: '', playerNames: '', notes: ''
   })
   const [selectedItems, setSelectedItems] = useState([])
   const [saving, setSaving] = useState(false)
@@ -226,6 +226,16 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
   const sports = settings?.sports || DEFAULT_SPORTS
   const roles = DEFAULT_ROLES
   const units = settings?.units || []
+
+  /* "Other" is offered in the picker but never stored in inventory_sports —
+     it is a one-off escape hatch for a discipline that isn't on the list yet,
+     captured as free text on this issuance only. */
+  const isOtherSport = recipient.sport === OTHER_SPORT.id
+  const otherName = recipient.sportOther.trim()
+  /* What the receipt, confirm step and movement records should display. */
+  const sportLabel = isOtherSport
+    ? otherName
+    : getSportLabel(recipient.sport, lang, sports)
 
   const addItem = (item) => {
     if (selectedItems.find(r => r.item.id === item.id)) return
@@ -238,7 +248,8 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
 
   const removeItem = (idx) => setSelectedItems(prev => prev.filter((_, i) => i !== idx))
 
-  const step1Valid = recipient.sport && recipient.role
+  // Choosing "Other" without naming the sport would record a useless entry.
+  const step1Valid = recipient.sport && recipient.role && (!isOtherSport || !!otherName)
   const step2Valid = selectedItems.length > 0
 
   const hasOverstock = selectedItems.some(r => r.qty > r.item.currentStock)
@@ -272,7 +283,11 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
         receiptNumber,
         issuedTo: {
           sport: recipient.sport,
-          sportAr: sport?.ar || recipient.sport,
+          /* For "Other" the free-text name is what identifies the discipline,
+             so it becomes the display label in both languages; `sport` keeps
+             the 'other' id so these can still be filtered as a group. */
+          sportAr: isOtherSport ? otherName : (sport?.ar || recipient.sport),
+          sportOther: isOtherSport ? otherName : null,
           personName: recipient.personName || null,
           role: recipient.role,
           roleAr: role?.ar || recipient.role,
@@ -326,7 +341,8 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
           reason: 'issued',
           issuedTo: {
             sport: recipient.sport,
-            sportAr: sport?.ar || recipient.sport,
+            sportAr: isOtherSport ? otherName : (sport?.ar || recipient.sport),
+            sportOther: isOtherSport ? otherName : null,
             personName: recipient.personName || null,
             role: recipient.role,
             playerNames,
@@ -376,7 +392,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
 
   const resetForm = () => {
     setStep(1)
-    setRecipient({ sport: '', sportAr: '', personName: '', role: 'player', roleAr: '', playerNames: '', notes: '' })
+    setRecipient({ sport: '', sportAr: '', sportOther: '', personName: '', role: 'player', roleAr: '', playerNames: '', notes: '' })
     setSelectedItems([])
     setReceipt(null)
     onIssueComplete?.()
@@ -400,11 +416,33 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
               <label className="inv-label">{t('Sport', 'الرياضة')} *</label>
               <CustomSelect
                 value={recipient.sport}
-                onChange={(v) => setRecipient(p => ({ ...p, sport: v }))}
+                onChange={(v) => setRecipient(p => ({
+                  ...p, sport: v,
+                  // Leaving "Other" clears whatever was typed, so a stale name
+                  // can never ride along on a normal sport.
+                  sportOther: v === OTHER_SPORT.id ? p.sportOther : '',
+                }))}
                 placeholder={t('Select sport…', 'اختر الرياضة…')}
-                options={sports.map(s => ({ value: s.id, label: lang === 'ar' ? s.ar : s.en }))}
+                options={[
+                  ...sports.map(s => ({ value: s.id, label: lang === 'ar' ? s.ar : s.en })),
+                  { value: OTHER_SPORT.id, label: lang === 'ar' ? OTHER_SPORT.ar : OTHER_SPORT.en },
+                ]}
               />
             </div>
+
+            {isOtherSport && (
+              <div className="inv-form-row">
+                <label className="inv-label">{t('Specify sport', 'حدّد الرياضة')} *</label>
+                <input
+                  className="inv-input"
+                  autoFocus
+                  value={recipient.sportOther}
+                  onChange={e => setRecipient(p => ({ ...p, sportOther: e.target.value }))}
+                  placeholder={t('e.g. Wrestling', 'مثال: المصارعة')}
+                  dir="auto"
+                />
+              </div>
+            )}
 
             <div className="inv-form-row">
               <label className="inv-label">{t('Person Name', 'اسم الشخص')}</label>
@@ -500,7 +538,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
                               <div className="inv-name-en">{r.item.sku}{r.item.size ? ` · ${r.item.size}` : ''}</div>
                             </div>
                           </td>
-                          <td style={{ color: r.item.currentStock === 0 ? '#f43f5e' : 'var(--theme-text-muted)' }}>
+                          <td style={{ color: r.item.currentStock === 0 ? 'var(--status-risk)' : 'var(--theme-text-muted)' }}>
                             {r.item.currentStock}
                           </td>
                           <td>
@@ -510,9 +548,9 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
                                 type="number" min={1}
                                 value={r.qty}
                                 onChange={e => updateItemQty(idx, parseInt(e.target.value) || 1)}
-                                style={{ borderColor: over ? '#f43f5e' : undefined }}
+                                style={{ borderColor: over ? 'var(--status-risk)' : undefined }}
                               />
-                              {over && <AlertTriangle size={14} style={{ color: '#f43f5e', flexShrink: 0 }} />}
+                              {over && <AlertTriangle size={14} style={{ color: 'var(--status-risk)', flexShrink: 0 }} />}
                             </div>
                           </td>
                           <td>
@@ -562,7 +600,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
               <div className="inv-confirm-section-label">{t('Recipient', 'المستلم')}</div>
               <div className="inv-confirm-row">
                 <span>{t('Sport', 'الرياضة')}</span>
-                <span>{getSportLabel(recipient.sport, lang, sports)}</span>
+                <span>{sportLabel}</span>
               </div>
               {recipient.personName && (
                 <div className="inv-confirm-row">
@@ -624,7 +662,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
               <div style={{
                 width: 36, height: 36, borderRadius: '50%',
                 background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', color: '#10b981', flexShrink: 0,
+                justifyContent: 'center', color: 'var(--status-safe)', flexShrink: 0,
               }}>
                 <Check size={18} />
               </div>

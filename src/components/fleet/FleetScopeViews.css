@@ -1,0 +1,111 @@
+/* ── Fleet scope views — shared styles for scope-aware Dashboard & Reports ──
+   All classes are fsv- prefixed. Used to keep bus-fleet rows and
+   "other vehicles — not part of the bus fleet" rows visually distinct. */
+
+/* Banner shown when the module is scoped to non-bus vehicles */
+.fsv-scope-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin-bottom: 18px;
+  border-radius: 12px;
+  background: var(--theme-surface-pearl);
+  border: 1px dashed var(--theme-border);
+  color: var(--theme-text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* Small class chip next to a vehicle name in mixed ('all') lists */
+.fsv-class-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+.fsv-badge-bus {
+  color: var(--theme-accent);
+  background: var(--theme-accent-glow);
+  border: 1px solid var(--theme-accent-border);
+}
+.fsv-badge-other {
+  color: var(--theme-text-muted);
+  background: var(--theme-surface-pearl);
+  border: 1px solid var(--theme-border);
+}
+
+/* Class-group header row inside report tables (scope = 'all') */
+.fsv-group-row td {
+  padding: 12px 20px 8px;
+  background: var(--theme-surface-pearl);
+  border-top: 2px solid var(--theme-border);
+  color: var(--theme-text-main);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.fsv-group-row td svg {
+  vertical-align: -2px;
+  margin-inline-end: 8px;
+  color: var(--theme-accent);
+}
+.fsv-group-row--other td {
+  color: var(--theme-text-muted);
+}
+.fsv-group-row--other td svg {
+  color: var(--theme-text-muted);
+}
+
+/* Per-class subtotal row (scope = 'all') */
+.fsv-subtotal-row td {
+  padding: 10px 20px;
+  background: var(--theme-surface-hover);
+  border-bottom: 1px solid var(--theme-border);
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--theme-text-muted);
+}
+
+/* Annotation line under report titles when scope = 'others' */
+.fsv-scope-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 4px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--theme-text-muted);
+}
+
+/* Legend for class-colored charts (maintenance spend, scope = 'all') */
+.fsv-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 8px;
+}
+.fsv-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--theme-text-muted);
+}
+.fsv-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.fsv-legend-dot--bus { background: #b08f3a; }
+.fsv-legend-dot--other { background: var(--theme-text-ghost); }

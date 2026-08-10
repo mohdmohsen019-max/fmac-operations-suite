@@ -67,6 +67,7 @@ export function FleetSettingsProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useFleetSettings() {
   const ctx = useContext(FleetSettingsContext);
   if (!ctx) throw new Error('useFleetSettings must be used inside <FleetSettingsProvider>');
@@ -79,6 +80,7 @@ export function useFleetSettings() {
  * @param {string} unit        – 'km' | 'mi'
  * @returns {number}
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function convertDistance(valueInKm, unit) {
   if (unit === 'mi') return Math.round(valueInKm * 0.621371 * 100) / 100;
   return valueInKm;
@@ -90,6 +92,7 @@ export function convertDistance(valueInKm, unit) {
  * @param {string} targetCurrency 
  * @returns {number}
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function convertCurrency(valueInAED, targetCurrency) {
   if (!valueInAED) return 0;
   if (targetCurrency === 'USD') return Math.round((valueInAED / 3.6725) * 100) / 100;

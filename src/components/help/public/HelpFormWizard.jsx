@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Loader2, Check } from 'lucide-react';
+import { ArrowLeft, Loader2, Check, ShieldCheck } from 'lucide-react';
 import { submitTicket } from '../services/ticketService';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import CustomSelect from '../../CustomSelect';
-import CinematicBackdrop from '../../shared/CinematicBackdrop';
 import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
+import {
+  TYPE_SCHEMA, emptyDetailsFor, visibleFields, detailsComplete,
+  optValue, displayValue,
+} from '../ticketSchema';
 
 import './HelpFormWizard.css';
 
-const BRANCHES = ['Fujairah', 'Dibba'];
+const BRANCHES = ['Fujairah', 'Dibba', 'Al Bidya'];
 
 const TYPE_ICONS = {
   inquiry:     'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z',
@@ -45,15 +48,20 @@ const TITLE_TRANSLATIONS = {
   maintenance: 'Maintenance Issue — FMAC Operations Suite',
 };
 
+/* Keep only the keys that belong to this type (drops any stale cached keys). */
+function pickKnown(type, obj) {
+  const schema = TYPE_SCHEMA[type];
+  if (!schema) return { description: obj.description || '' };
+  const out = {};
+  schema.fields.forEach((f) => { if (obj[f.key] !== undefined) out[f.key] = obj[f.key]; });
+  return out;
+}
+
 export default function HelpFormWizard() {
   const { type } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentStep = parseInt(searchParams.get('step') || '1');
   const navigate = useNavigate();
-
-
-
-
 
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
@@ -72,35 +80,22 @@ export default function HelpFormWizard() {
     sport: ''
   });
 
-  const [details, setDetails] = useState({
-    description: '',
-    categories: [],
-    against: 'Coach',
-    targetName: '',
-    department: 'Coaching',
-    priority: 'Medium',
-    outcome: '',
-    meetingWith: 'Club Director',
-    date: '',
-    role: 'Parent',
-    subject: '',
-    bestTime: 'Morning',
-    notes: '',
-    location: 'Main Building',
-    busNumber: '',
-    urgency: 'Medium',
-    issueCategories: []
-  });
+  // Details holds ONLY the selected type's own fields — no cross-type leakage.
+  const [details, setDetails] = useState(() => emptyDetailsFor(type));
 
   useEffect(() => {
     const savedData = sessionStorage.getItem(`fmac_form_${type}`);
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
-        if (parsed.userInfo) setUserInfo(parsed.userInfo);
-        if (parsed.details) setDetails(parsed.details);
-      } catch (e) { }
+        if (parsed.userInfo) setUserInfo((u) => ({ ...u, ...parsed.userInfo }));
+        // Merge saved values over a fresh, type-scoped shell so only this
+        // type's keys survive even if an older cache carried extra keys.
+        if (parsed.details) { setDetails({ ...emptyDetailsFor(type), ...pickKnown(type, parsed.details) }); return; }
+      } catch (e) { /* ignore */ }
     }
+    setDetails(emptyDetailsFor(type));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
   const saveData = (newUserInfo, newDetails) => {
@@ -113,30 +108,22 @@ export default function HelpFormWizard() {
     saveData(nextInfo, details);
   };
 
-  const handleDetailChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    let nextDetails;
-    if (type === 'checkbox') {
-      const currentList = details[name] || [];
-      const newList = checked ? [...currentList, value] : currentList.filter(item => item !== value);
-      nextDetails = { ...details, [name]: newList };
-    } else {
-      nextDetails = { ...details, [name]: value };
-    }
+  const setField = (name, value) => {
+    const nextDetails = { ...details, [name]: value };
     setDetails(nextDetails);
     saveData(userInfo, nextDetails);
   };
 
-  const nextStep = () => {
-    setSearchParams({ step: currentStep + 1 });
+  const toggleCheck = (name, value, checked) => {
+    const currentList = details[name] || [];
+    const newList = checked ? [...currentList, value] : currentList.filter((item) => item !== value);
+    setField(name, newList);
   };
 
+  const nextStep = () => setSearchParams({ step: currentStep + 1 });
   const prevStep = () => {
-    if (currentStep === 1) {
-      navigate('/');
-    } else {
-      setSearchParams({ step: currentStep - 1 });
-    }
+    if (currentStep === 1) navigate('/');
+    else setSearchParams({ step: currentStep - 1 });
   };
 
   const handleSubmit = async () => {
@@ -176,6 +163,73 @@ export default function HelpFormWizard() {
     </div>
   );
 
+  const labelClass = isAr ? 'form-label-ar' : 'form-label-en';
+  const fieldLabel = (f) => (isAr ? f.ar : f.en);
+  const placeholder = (f) => (isAr ? (f.placeholderAr || '') : (f.placeholderEn || ''));
+
+  /* One field, rendered from the schema. */
+  const renderField = (f) => {
+    const req = f.required ? <span className="required-asterisk">*</span> : null;
+    if (f.kind === 'select') {
+      return (
+        <div className="form-group" key={f.key}>
+          <label className={labelClass}>{fieldLabel(f)} {req}</label>
+          <CustomSelect
+            value={details[f.key] || ''}
+            onChange={(v) => setField(f.key, v)}
+            placeholder={isAr ? 'اختر…' : 'Select…'}
+            options={f.options.map((o) => ({ value: optValue(o), label: optValue(o) }))}
+          />
+        </div>
+      );
+    }
+    if (f.kind === 'textarea') {
+      return (
+        <div className="form-group" key={f.key}>
+          <label className={labelClass}>{fieldLabel(f)} {req}</label>
+          <textarea className="form-input" rows={f.key === 'description' || f.key === 'notes' || f.key === 'reason' ? 5 : 3}
+            value={details[f.key] || ''} onChange={(e) => setField(f.key, e.target.value)}
+            placeholder={placeholder(f)} style={{ resize: 'vertical' }} />
+        </div>
+      );
+    }
+    if (f.kind === 'date') {
+      return (
+        <div className="form-group" key={f.key}>
+          <label className={labelClass}>{fieldLabel(f)} {req}</label>
+          <input type="date" className="form-input" value={details[f.key] || ''} onChange={(e) => setField(f.key, e.target.value)} />
+        </div>
+      );
+    }
+    if (f.kind === 'checkgroup') {
+      return (
+        <div className="form-group" key={f.key}>
+          <label className={labelClass}>{fieldLabel(f)} {req}</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+            {f.options.map((o) => {
+              const val = optValue(o);
+              return (
+                <label key={val} className="form-checkbox-label" style={{ direction: isAr ? 'rtl' : 'ltr' }}>
+                  <input type="checkbox" className="form-checkbox" value={val}
+                    checked={(details[f.key] || []).includes(val)}
+                    onChange={(e) => toggleCheck(f.key, val, e.target.checked)} />
+                  {isAr ? o.ar : o.en}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+    // text
+    return (
+      <div className="form-group" key={f.key}>
+        <label className={labelClass}>{fieldLabel(f)} {req}</label>
+        <input className="form-input" value={details[f.key] || ''} onChange={(e) => setField(f.key, e.target.value)} placeholder={placeholder(f)} />
+      </div>
+    );
+  };
+
   const renderStep1 = () => (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <h3 className="form-heading-ar">تأكيد نوع الخدمة</h3>
@@ -203,21 +257,26 @@ export default function HelpFormWizard() {
       <h4 className="form-heading-en">PERSONAL INFORMATION</h4>
 
       <div className="form-group">
-        <label className={isAr ? 'form-label-ar' : 'form-label-en'}>
+        <label className={labelClass}>
           {isAr ? 'الاسم الكامل' : 'FULL NAME'} <span className="required-asterisk">*</span>
         </label>
         <input className="form-input" name="name" required value={userInfo.name} onChange={handleUserChange} placeholder={isAr ? 'مثال: أحمد سالم' : 'e.g. Ahmed Salem'} />
       </div>
 
       <div className="form-group">
-        <label className={isAr ? 'form-label-ar' : 'form-label-en'}>
+        <label className={labelClass}>
           {isAr ? 'رقم الهاتف' : 'PHONE NUMBER'} <span className="required-asterisk">*</span>
         </label>
         <input className="form-input" name="phone" required value={userInfo.phone} onChange={handleUserChange} placeholder="e.g. 050 123 4567" />
+        <p className="form-hint" dir="auto">
+          {isAr
+            ? 'سنستخدم آخر ٤ أرقام من هاتفك للتحقق من هويتك عند متابعة الطلب لاحقاً.'
+            : 'The last 4 digits of your phone verify you when you track this request later.'}
+        </p>
       </div>
 
       <div className="form-group">
-        <label className={isAr ? 'form-label-ar' : 'form-label-en'}>
+        <label className={labelClass}>
           {isAr ? 'البريد الإلكتروني' : 'EMAIL ADDRESS'}
         </label>
         <input className="form-input" type="email" name="email" value={userInfo.email} onChange={handleUserChange} placeholder={isAr ? 'اختياري' : 'optional'} />
@@ -225,14 +284,14 @@ export default function HelpFormWizard() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         <div className="form-group">
-          <label className={isAr ? 'form-label-ar' : 'form-label-en'}>
+          <label className={labelClass}>
             {isAr ? 'الفرع' : 'BRANCH'} <span className="required-asterisk">*</span>
           </label>
           <CustomSelect value={userInfo.branch} onChange={(v) => handleUserChange({ target: { name: 'branch', value: v } })}
             options={BRANCHES.map(b => ({ value: b, label: b }))} />
         </div>
         <div className="form-group">
-          <label className={isAr ? 'form-label-ar' : 'form-label-en'}>
+          <label className={labelClass}>
             {isAr ? 'الرياضة' : 'SPORT'}
           </label>
           <input className="form-input" name="sport" value={userInfo.sport} onChange={handleUserChange} placeholder={isAr ? 'مثال: جودو' : 'e.g. Judo'} />
@@ -240,7 +299,7 @@ export default function HelpFormWizard() {
       </div>
 
       <div className="form-group">
-        <label className={isAr ? 'form-label-ar' : 'form-label-en'}>
+        <label className={labelClass}>
           {isAr ? 'اسم اللاعب (إن وجد)' : 'PLAYER NAME (IF APPLICABLE)'}
         </label>
         <input className="form-input" name="playerName" value={userInfo.playerName} onChange={handleUserChange} />
@@ -263,154 +322,20 @@ export default function HelpFormWizard() {
   );
 
   const renderStep3 = () => {
+    const fields = visibleFields(type, details);
     return (
       <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
         <h3 className="form-heading-ar">تفاصيل الطلب</h3>
         <h4 className="form-heading-en">REQUEST DETAILS</h4>
 
-        {type === 'inquiry' && (
-          <>
+        {fields.length > 0
+          ? fields.map(renderField)
+          : (
             <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الفئات' : 'INQUIRY CATEGORIES'}</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
-                {['البرامج والجداول / Programs & Schedules', 'الرسوم والاشتراكات / Fees & Subscriptions', 'التسجيل / Registration', 'المرافق / Facilities', 'البطولات والفعاليات / Events & Tournaments', 'أخرى / Other'].map(cat => (
-                  <label key={cat} className="form-checkbox-label" style={{ direction: isAr ? 'rtl' : 'ltr' }}>
-                    <input type="checkbox" className="form-checkbox" name="categories" value={cat} checked={(details.categories || []).includes(cat)} onChange={handleDetailChange} />
-                    {cat}
-                  </label>
-                ))}
-              </div>
+              <label className={labelClass}>{isAr ? 'الوصف / الرسالة' : 'DESCRIPTION / MESSAGE'} <span className="required-asterisk">*</span></label>
+              <textarea className="form-input" rows={6} value={details.description || ''} onChange={(e) => setField('description', e.target.value)} style={{ resize: 'vertical' }} />
             </div>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'ملاحظات إضافية' : 'ADDITIONAL NOTES'}</label>
-              <textarea className="form-input" name="notes" rows={4} value={details.notes} onChange={handleDetailChange} placeholder={isAr ? 'أي تفاصيل إضافية...' : 'Any additional details...'} style={{ resize: 'vertical' }} />
-            </div>
-          </>
-        )}
-
-        {type === 'complaint' && (
-          <>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الشكوى ضد' : 'COMPLAINT AGAINST'} <span className="required-asterisk">*</span></label>
-              <CustomSelect value={details.against} onChange={(v) => handleDetailChange({ target: { name: 'against', value: v } })}
-                options={['مدرب / Coach', 'موظف إداري / Admin Staff', 'سائق حافلة / Bus Driver', 'لاعب آخر / Other Player', 'المنشأة / Facility', 'أخرى / Other'].map(opt => ({ value: opt, label: opt }))} />
-            </div>
-            {['مدرب / Coach', 'سائق حافلة / Bus Driver', 'لاعب آخر / Other Player'].includes(details.against) && (
-              <div className="form-group">
-                <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'اسم الشخص أو رقم الحافلة' : 'NAME OR BUS NUMBER'}</label>
-                <input className="form-input" name="targetName" value={details.targetName} onChange={handleDetailChange} />
-              </div>
-            )}
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'وصف الشكوى' : 'COMPLAINT DESCRIPTION'} <span className="required-asterisk">*</span></label>
-              <textarea className="form-input" name="description" rows={5} required value={details.description} onChange={handleDetailChange} style={{ resize: 'vertical' }} />
-            </div>
-          </>
-        )}
-
-        {type === 'suggestion' && (
-          <>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'القسم' : 'DEPARTMENT'}</label>
-              <CustomSelect value={details.department} onChange={(v) => handleDetailChange({ target: { name: 'department', value: v } })}
-                options={['التدريب / Coaching', 'الإدارة / Administration', 'النقل / Transport', 'المرافق / Facilities', 'الفعاليات / Events', 'أخرى / Other'].map(opt => ({ value: opt, label: opt }))} />
-            </div>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الأولوية' : 'PRIORITY'}</label>
-              <CustomSelect value={details.priority} onChange={(v) => handleDetailChange({ target: { name: 'priority', value: v } })}
-                options={['منخفض / Low', 'متوسط / Medium', 'عالي / High'].map(opt => ({ value: opt, label: opt }))} />
-            </div>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'النتيجة المتوقعة' : 'EXPECTED OUTCOME'}</label>
-              <textarea className="form-input" name="outcome" rows={3} value={details.outcome} onChange={handleDetailChange} style={{ resize: 'vertical' }} />
-            </div>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'وصف الاقتراح' : 'SUGGESTION DETAILS'} <span className="required-asterisk">*</span></label>
-              <textarea className="form-input" name="description" rows={4} required value={details.description} onChange={handleDetailChange} style={{ resize: 'vertical' }} />
-            </div>
-          </>
-        )}
-
-        {type === 'meeting' && (
-          <>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الاجتماع مع' : 'MEETING WITH'} <span className="required-asterisk">*</span></label>
-              <CustomSelect value={details.meetingWith} onChange={(v) => handleDetailChange({ target: { name: 'meetingWith', value: v } })}
-                options={['مدير النادي / Club Director', 'مدير العمليات / Operations Manager', 'المدرب الرئيسي / Head Coach', 'الفريق الإداري / Admin Team'].map(opt => ({ value: opt, label: opt }))} />
-            </div>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'التاريخ المفضل' : 'PREFERRED DATE'} <span className="required-asterisk">*</span></label>
-              <input type="date" className="form-input" name="date" required value={details.date} onChange={handleDetailChange} />
-            </div>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'سبب الاجتماع' : 'REASON FOR MEETING'} <span className="required-asterisk">*</span></label>
-              <textarea className="form-input" name="description" rows={4} required value={details.description} onChange={handleDetailChange} style={{ resize: 'vertical' }} />
-            </div>
-          </>
-        )}
-
-        {type === 'call' && (
-          <>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'صفتك' : 'YOUR ROLE'}</label>
-              <CustomSelect value={details.role} onChange={(v) => handleDetailChange({ target: { name: 'role', value: v } })}
-                options={['ولي أمر / Parent', 'لاعب / Player', 'مدرب / Coach', 'زائر / Visitor', 'أخرى / Other'].map(opt => ({ value: opt, label: opt }))} />
-            </div>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'موضوع المكالمة' : 'CALL SUBJECT'} <span className="required-asterisk">*</span></label>
-              <input className="form-input" name="subject" required value={details.subject} onChange={handleDetailChange} />
-            </div>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الوقت المفضل' : 'BEST TIME TO CALL'}</label>
-              <CustomSelect value={details.bestTime} onChange={(v) => handleDetailChange({ target: { name: 'bestTime', value: v } })}
-                options={['الصباح 8-12 / Morning 8-12', 'الظهر 12-4 / Afternoon 12-4', 'المساء 4-8 / Evening 4-8'].map(opt => ({ value: opt, label: opt }))} />
-            </div>
-          </>
-        )}
-
-        {type === 'maintenance' && (
-          <>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الموقع' : 'LOCATION'} <span className="required-asterisk">*</span></label>
-              <CustomSelect value={details.location} onChange={(v) => handleDetailChange({ target: { name: 'location', value: v } })}
-                options={['المبنى الرئيسي / Main Building', 'الحافلة / Bus', 'أرض التدريب / Training Ground', 'غرف التبديل / Changing Rooms', 'أخرى / Other'].map(opt => ({ value: opt, label: opt }))} />
-            </div>
-            {details.location === 'الحافلة / Bus' && (
-              <div className="form-group">
-                <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'رقم الحافلة' : 'BUS NUMBER'}</label>
-                <input className="form-input" name="busNumber" value={details.busNumber} onChange={handleDetailChange} />
-              </div>
-            )}
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'فئة المشكلة' : 'ISSUE CATEGORY'}</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
-                {['كهرباء / Electrical', 'سباكة / Plumbing', 'تكييف / AC & Cooling', 'نظافة / Cleaning', 'معدات / Equipment', 'أخرى / Other'].map(cat => (
-                  <label key={cat} className="form-checkbox-label" style={{ direction: isAr ? 'rtl' : 'ltr' }}>
-                    <input type="checkbox" className="form-checkbox" name="issueCategories" value={cat} checked={(details.issueCategories || []).includes(cat)} onChange={handleDetailChange} />
-                    {cat}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'درجة الأهمية' : 'URGENCY'}</label>
-              <CustomSelect value={details.urgency} onChange={(v) => handleDetailChange({ target: { name: 'urgency', value: v } })}
-                options={['منخفض / Low', 'متوسط / Medium', 'عالي / High', 'طارئ / Emergency'].map(opt => ({ value: opt, label: opt }))} />
-            </div>
-            <div className="form-group">
-              <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'وصف المشكلة' : 'ISSUE DESCRIPTION'} <span className="required-asterisk">*</span></label>
-              <textarea className="form-input" name="description" rows={4} required value={details.description} onChange={handleDetailChange} style={{ resize: 'vertical' }} />
-            </div>
-          </>
-        )}
-
-        {/* Fallback for unknown type */}
-        {!['inquiry', 'complaint', 'suggestion', 'meeting', 'call', 'maintenance'].includes(type) && (
-          <div className="form-group">
-            <label className={isAr ? 'form-label-ar' : 'form-label-en'}>{isAr ? 'الوصف / الرسالة' : 'DESCRIPTION / MESSAGE'} <span className="required-asterisk">*</span></label>
-            <textarea className="form-input" name="description" rows={6} required value={details.description} onChange={handleDetailChange} style={{ resize: 'vertical' }} />
-          </div>
-        )}
+          )}
 
         <div className="form-actions-row">
           <button className="form-btn-outline" style={{ flex: 1 }} onClick={prevStep}>
@@ -419,14 +344,7 @@ export default function HelpFormWizard() {
           <button
             className={`form-btn-primary ${isAr ? 'form-btn-primary-ar' : 'form-btn-primary-en'}`}
             style={{ flex: 2, margin: 0 }}
-            disabled={
-              (type === 'complaint' && !details.description) ||
-              (type === 'suggestion' && !details.description) ||
-              (type === 'meeting' && (!details.date || !details.description)) ||
-              (type === 'call' && !details.subject) ||
-              (type === 'maintenance' && !details.description) ||
-              (!['complaint', 'suggestion', 'meeting', 'call', 'maintenance'].includes(type) && !details.description && !details.notes)
-            }
+            disabled={!detailsComplete(type, details)}
             onClick={nextStep}
           >
             {isAr ? 'مراجعة' : 'REVIEW'}
@@ -436,62 +354,69 @@ export default function HelpFormWizard() {
     );
   };
 
-  const renderStep4 = () => (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-      <h3 className="form-heading-ar">مراجعة وإرسال</h3>
-      <h4 className="form-heading-en">REVIEW & SUBMIT</h4>
+  const renderStep4 = () => {
+    const fields = visibleFields(type, details).filter((f) => {
+      const v = details[f.key];
+      return Array.isArray(v) ? v.length > 0 : !!(v && String(v).trim());
+    });
+    return (
+      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+        <h3 className="form-heading-ar">مراجعة وإرسال</h3>
+        <h4 className="form-heading-en">REVIEW & SUBMIT</h4>
 
-      <div className="form-summary-box">
-        <h4 className="summary-title" style={{ textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
-          {isAr ? 'المعلومات الشخصية' : 'PERSONAL INFO'}
-        </h4>
-        <div style={{ textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
-          <p className="summary-item"><strong>{isAr ? 'الاسم' : 'NAME'}:</strong> {userInfo.name}</p>
-          <p className="summary-item"><strong>{isAr ? 'الهاتف' : 'PHONE'}:</strong> {userInfo.phone}</p>
-          <p className="summary-item" style={{ marginBottom: 0 }}><strong>{isAr ? 'الفرع' : 'BRANCH'}:</strong> {userInfo.branch}</p>
+        <div className="form-summary-box">
+          <h4 className="summary-title" style={{ textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
+            {isAr ? 'المعلومات الشخصية' : 'PERSONAL INFO'}
+          </h4>
+          <div style={{ textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
+            <p className="summary-item"><strong>{isAr ? 'الاسم' : 'Name'}:</strong> {userInfo.name}</p>
+            <p className="summary-item"><strong>{isAr ? 'الهاتف' : 'Phone'}:</strong> {userInfo.phone}</p>
+            {userInfo.email && <p className="summary-item"><strong>{isAr ? 'البريد' : 'Email'}:</strong> {userInfo.email}</p>}
+            <p className="summary-item" style={{ marginBottom: 0 }}><strong>{isAr ? 'الفرع' : 'Branch'}:</strong> {userInfo.branch}</p>
+          </div>
         </div>
-      </div>
 
-      <div className="form-summary-box">
-        <h4 className="summary-title" style={{ textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
-          {isAr ? 'التفاصيل' : 'DETAILS'}
-        </h4>
-        <div style={{ textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
-          {Object.entries(details).map(([key, value]) => {
-            if (!value || (Array.isArray(value) && value.length === 0)) return null;
-            if (key === 'description' || key === 'notes' || key === 'outcome') return <p key={key} className="summary-item" style={{ whiteSpace: 'pre-wrap' }}><strong>{key.toUpperCase()}:</strong><br />{value}</p>;
-            if (Array.isArray(value)) return <p key={key} className="summary-item"><strong>{key.toUpperCase()}:</strong> {value.join(', ')}</p>;
-            return <p key={key} className="summary-item"><strong>{key.toUpperCase()}:</strong> {value}</p>;
-          })}
+        <div className="form-summary-box">
+          <h4 className="summary-title" style={{ textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
+            {isAr ? 'تفاصيل الطلب' : 'REQUEST DETAILS'}
+          </h4>
+          <div style={{ textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
+            {fields.map((f) => {
+              const multiline = f.kind === 'textarea';
+              return (
+                <p key={f.key} className="summary-item" style={multiline ? { whiteSpace: 'pre-wrap' } : undefined}>
+                  <strong>{fieldLabel(f)}:</strong>{multiline ? <br /> : ' '}{displayValue(f, details[f.key])}
+                </p>
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      <div className="form-actions-row">
-        <button className="form-btn-outline" style={{ flex: 1 }} onClick={prevStep}>
-          {isAr ? 'تعديل' : 'EDIT'}
-        </button>
-        <button
-          className={`form-btn-primary ${isAr ? 'form-btn-primary-ar' : 'form-btn-primary-en'}`}
-          style={{ flex: 2, margin: 0 }}
-          onClick={handleSubmit}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : (isAr ? 'تأكيد وإرسال' : 'SUBMIT')}
-        </button>
-      </div>
-    </motion.div>
-  );
+        <div className="form-actions-row">
+          <button className="form-btn-outline" style={{ flex: 1 }} onClick={prevStep}>
+            {isAr ? 'تعديل' : 'EDIT'}
+          </button>
+          <button
+            className={`form-btn-primary ${isAr ? 'form-btn-primary-ar' : 'form-btn-primary-en'}`}
+            style={{ flex: 2, margin: 0 }}
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : (isAr ? 'تأكيد وإرسال' : 'SUBMIT')}
+          </button>
+        </div>
+      </motion.div>
+    );
+  };
 
   return (
     <div className="fmac-form-page">
-      <CinematicBackdrop intensity={0.55} />
-
       <button
         className="form-back-btn"
         onClick={prevStep}
       >
         <ArrowLeft size={16} />
-        <span>{isAr ? 'العودة / BACK' : 'BACK / العودة'}</span>
+        <span>{isAr ? 'العودة' : 'Back'}</span>
       </button>
 
       <motion.div
@@ -522,6 +447,12 @@ export default function HelpFormWizard() {
           {currentStep === 4 && renderStep4()}
         </AnimatePresence>
       </motion.div>
+
+      {/* Trust footer — privacy of the submitted data */}
+      <div className="wiz-trust" dir="auto">
+        <ShieldCheck size={13} />
+        {isAr ? 'بياناتك محفوظة بسرّية وتُستخدم فقط لمعالجة طلبك.' : 'Your data is kept confidential and used only to handle your request.'}
+      </div>
     </div>
   );
 }

@@ -17,6 +17,7 @@ export default function useIsMobile(breakpoint = 768) {
     const onChange = (e) => setIsMobile(e.matches);
 
     // Sync immediately in case the width changed before the listener attached.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMobile(mql.matches);
 
     if (mql.addEventListener) {

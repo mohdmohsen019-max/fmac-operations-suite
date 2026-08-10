@@ -133,10 +133,30 @@ export function blocksToLegacy(blocks) {
 }
 
 // ── PDF pagination ──────────────────────────────────────────────────
-// Row-unit budgets (1 unit ≈ one table-row height). A page's body fits a fixed
-// number of units; the first page is smaller because of the section header bar.
-const FIRST_PAGE_BUDGET = 11
-const CONT_PAGE_BUDGET = 15
+// Row-unit budgets (1 unit ≈ one single-line table-row, ~33px). Derived from
+// the A4 geometry: 1122px page − running header − section bar − footer −
+// body padding leaves ≈930–950px of content area, ≈28 row units. The budgets
+// sit below that ceiling on purpose: the page body is overflow:hidden, so an
+// over-estimate CLIPS rows (data silently missing from the PDF) while an
+// under-estimate only leaves margin. Rows that will wrap are charged extra
+// units (see rowUnits), which keeps long-text sections honest too.
+const FIRST_PAGE_BUDGET = 22
+const CONT_PAGE_BUDGET = 25
+
+// Never open a table with fewer than this many rows before a page break —
+// a lone orphan row followed by blank space reads as a rendering fault.
+const MIN_TABLE_START_ROWS = 3
+
+// Height of one table row, in units — wrap-aware. A cell longer than ~45
+// characters wraps to a second line at this column width; charge for it.
+function rowUnits(row) {
+  let longest = 0
+  for (const c of row || []) {
+    const len = String(c ?? '').length
+    if (len > longest) longest = len
+  }
+  return 1 + Math.min(2, Math.floor(longest / 45))
+}
 
 // Estimated height cost (in row units) of a non-table block.
 function blockCost(block) {
@@ -144,7 +164,9 @@ function blockCost(block) {
     case 'heading': return 1.4
     case 'paragraph': return Math.max(1, Math.ceil((block.text || '').length / 70)) + 0.5
     case 'list': return (block.items?.length || 0) + 1
-    case 'cards': return Math.ceil((block.items?.length || 0) / 4) * 2 + 0.5
+    // Stat grid: 4 cells per row (auto-fit @150px min in a 714px body), each
+    // row ≈70px ≈ 2.2 row-units — charging 2 under-billed multi-row grids.
+    case 'cards': return Math.ceil((block.items?.length || 0) / 4) * 2.2 + 0.5
     case 'image': return 9
     default: return 1
   }
@@ -169,26 +191,44 @@ export function buildBlockPages(blocks) {
   for (const block of blocks) {
     if (block.type === 'table') {
       const rows = block.rows || []
-      // Title + header cost ride with the first slice.
-      let start = 0
-      let firstSlice = true
-      const overhead = (block.title ? 1 : 0) + 1 // title (maybe) + header row
-      // If even the header doesn't fit and the page already has content, break.
-      if (budget < overhead + 1 && current().parts.length) newPage()
-      while (start < rows.length) {
-        const lead = firstSlice ? overhead : 1 // continuation slices still show a header
-        const avail = Math.max(1, Math.floor(budget - lead))
-        const end = Math.min(start + avail, rows.length)
-        current().parts.push({ kind: 'tableSlice', block, start, end, isFirstSlice: firstSlice })
-        budget -= lead + (end - start)
-        start = end
-        firstSlice = false
-        if (start < rows.length) newPage()
-      }
-      // Handle an empty table (no rows) — still show title + header once.
+      const overhead = (block.title ? 1.2 : 0) + 1.1 // title (maybe) + header row
+
+      /* Orphan control: starting a table needs room for its header AND a few
+         rows. The old code forced "at least 1 row" into whatever space was
+         left, which printed a single stranded row above a half-empty page. */
+      if (current().parts.length && budget < overhead + MIN_TABLE_START_ROWS) newPage()
+
+      // Empty table (no rows) — still show title + header once.
       if (!rows.length) {
         current().parts.push({ kind: 'tableSlice', block, start: 0, end: 0, isFirstSlice: true })
         budget -= overhead
+        continue
+      }
+
+      let start = 0
+      let firstSlice = true
+      while (start < rows.length) {
+        const lead = firstSlice ? overhead : 1.1 // continuation slices repeat the header
+        // Fill greedily by measured row cost, never past the budget.
+        let end = start
+        let used = lead
+        while (end < rows.length && used + rowUnits(rows[end]) <= budget) {
+          used += rowUnits(rows[end])
+          end++
+        }
+        if (end === start) {
+          // Nothing fits here. On a page with other content, move on and retry
+          // with a full budget; on an EMPTY page take one row regardless —
+          // guaranteed forward progress even for a pathological mega-row.
+          if (current().parts.length) { newPage(); continue }
+          end = start + 1
+          used = lead + rowUnits(rows[start])
+        }
+        current().parts.push({ kind: 'tableSlice', block, start, end, isFirstSlice: firstSlice })
+        budget -= used
+        start = end
+        firstSlice = false
+        if (start < rows.length) newPage()
       }
     } else {
       const cost = blockCost(block)

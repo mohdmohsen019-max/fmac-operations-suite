@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef, lazy, Suspense, Component } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Package2, Bus, Users, LifeBuoy, LogOut, BarChart2, Package, Building2 } from 'lucide-react'
+import { Package2, Bus, Users, LifeBuoy, LogOut, BarChart2, Package, Building2, History, TrendingUp, Target, Siren, LayoutGrid, X } from 'lucide-react'
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 import ThemeToggle from './components/shared/ThemeToggle'
 import LanguageToggle from './components/shared/LanguageToggle'
+import CommandPalette from './components/shared/CommandPalette'
+import AttentionBell from './components/shared/AttentionBell'
+import ShortcutLayer from './components/shared/ShortcutLayer'
 import { useLanguage } from './contexts/LanguageContext'
+import { useModuleVisibility } from './hooks/useModuleVisibility'
 import { useAuth } from './contexts/AuthContext'
 import { auth, db } from './firebase'
 import { signOut, updatePassword } from 'firebase/auth'
@@ -23,20 +27,30 @@ const ReportsModule        = lazy(() => import('./components/ReportsModule'))
 const InventoryModule      = lazy(() => import('./components/InventoryModule'))
 const AssetsModule         = lazy(() => import('./components/AssetsModule'))
 const OperationsDashboard  = lazy(() => import('./components/OperationsDashboard'))
+const ActivityModule       = lazy(() => import('./components/ActivityModule'))
+const InsightsModule       = lazy(() => import('./components/InsightsModule'))
+const StrategyModule       = lazy(() => import('./components/StrategyModule'))
+const CrisisModule         = lazy(() => import('./components/CrisisModule'))
+const WallboardModule      = lazy(() => import('./components/WallboardModule'))
 const HelpAdminDashboard   = lazy(() => import('./components/help/admin/HelpAdminDashboard'))
 const HelpAdminTicket      = lazy(() => import('./components/help/admin/HelpAdminTicket'))
 const HelpLanding          = lazy(() => import('./components/help/public/HelpLanding'))
 const HelpFormWizard       = lazy(() => import('./components/help/public/HelpFormWizard'))
 const HelpSuccess          = lazy(() => import('./components/help/public/HelpSuccess'))
+const HelpTrack            = lazy(() => import('./components/help/public/HelpTrack'))
 
 const NAV_ITEMS_DEF = [
   { id: 'fleet',     icon: Bus,      en: 'Fleet Management', ar: 'إدارة الأسطول',         path: '/fleet/dashboard' },
   { id: 'help',      icon: LifeBuoy, en: 'Help Desk',        ar: 'مركز الدعم',             path: '/help' },
-  { id: 'logistics', icon: Package2, en: 'Logistics Hub',    ar: 'مركز اللوجستيات',        path: '/logistics/dashboard' },
-  { id: 'users',     icon: Users,    en: 'User Management',  ar: 'إدارة المستخدمين',       path: '/users/dashboard' },
-  { id: 'reports',   icon: BarChart2,en: 'Dept. Reports',    ar: 'تقارير الأقسام',         path: '/reports' },
   { id: 'inventory', icon: Package,  en: 'Inventory',        ar: 'المخزون',                path: '/inventory' },
   { id: 'assets',    icon: Building2,en: 'Assets',           ar: 'الأصول',                 path: '/assets' },
+  { id: 'strategy',  icon: Target,   en: 'Strategy & Excellence', ar: 'الاستراتيجية والتميز', path: '/strategy' },
+  { id: 'crisis',    icon: Siren,    en: 'Crisis & Emergency', ar: 'إدارة الأزمات والطوارئ', path: '/crisis' },
+  { id: 'logistics', icon: Package2, en: 'Logistics Hub',    ar: 'مركز اللوجستيات',        path: '/logistics/dashboard' },
+  { id: 'reports',   icon: BarChart2,en: 'Dept. Reports',    ar: 'تقارير الأقسام',         path: '/reports' },
+  { id: 'insights',  icon: TrendingUp, en: 'Insights',        ar: 'الرؤى',                  path: '/insights' },
+  { id: 'activity',  icon: History,  en: 'Activity Log',     ar: 'سجل النشاط',             path: '/activity' },
+  { id: 'users',     icon: Users,    en: 'User Management',  ar: 'إدارة المستخدمين',       path: '/users/dashboard' },
 ]
 
 // Arabic labels for the job titles defined in jobTitlePermissions (English-only there).
@@ -50,19 +64,6 @@ const JOB_TITLE_AR = {
   'Manager':                       'مدير',
   'Admin':                         'مسؤول',
 }
-
-const SIDEBAR_COLLAPSED = 54
-const SIDEBAR_EXPANDED  = 230
-
-const labelVariants = {
-  expanded:  { opacity: 1, x: 0,  maxWidth: 160 },
-  collapsed: { opacity: 0, x: -6, maxWidth: 0   },
-}
-const labelTransition = (delay = 0) => ({
-  duration: 0.18,
-  delay,
-  ease: [0.16, 1, 0.3, 1],
-})
 
 /* ── Catches failed chunk loads (stale hashes after deploy) and reloads once ── */
 class ChunkErrorBoundary extends Component {
@@ -83,6 +84,15 @@ class ChunkErrorBoundary extends Component {
     return { crashed: true }
   }
 
+  componentDidCatch(error, info) {
+    console.error('ChunkErrorBoundary caught:', error, info?.componentStack)
+  }
+
+  componentDidMount() {
+    // Successful mount: re-arm the one-shot auto-reload for the next deploy.
+    if (!this.state.crashed) sessionStorage.removeItem('chunkReloaded')
+  }
+
   componentDidUpdate(prevProps) {
     if (prevProps.routeKey !== this.props.routeKey && this.state.crashed) {
       sessionStorage.removeItem('chunkReloaded')
@@ -91,7 +101,22 @@ class ChunkErrorBoundary extends Component {
   }
 
   render() {
-    if (this.state.crashed) return null
+    if (this.state.crashed) {
+      // Never render a silent blank — always give the user a way out.
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '14px', textAlign: 'center', padding: '24px' }}>
+          <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--theme-text-main)' }}>
+            Something went wrong loading this module &middot; حدث خطأ أثناء تحميل هذه الوحدة
+          </p>
+          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--theme-text-muted)' }}>
+            This can happen right after an update is published &middot; قد يحدث هذا بعد نشر تحديث جديد
+          </p>
+          <button className="btn-premium" style={{ marginTop: '6px' }} onClick={() => window.location.reload()}>
+            Reload &middot; إعادة التحميل
+          </button>
+        </div>
+      )
+    }
     return this.props.children
   }
 }
@@ -100,6 +125,15 @@ class ChunkErrorBoundary extends Component {
 function ModuleLoader() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+      <div className="app-loader"><span /><span /><span /><span /><span /></div>
+    </div>
+  )
+}
+
+/* ── Full-viewport fallback for the top-level route Suspense ── */
+function RouteLoader() {
+  return (
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--theme-bg)' }}>
       <div className="app-loader"><span /><span /><span /><span /><span /></div>
     </div>
   )
@@ -233,25 +267,29 @@ function MainAuthGuard({ children }) {
    ══════════════════════════════════════════════════════════════ */
 function MainAppLayout() {
   const { user, userProfile } = useAuth()
-  const { t, lang, isRTL } = useLanguage()
+  const { t } = useLanguage()
   const navigate  = useNavigate()
   const location  = useLocation()
 
-  const [sidebarExpanded,    setSidebarExpanded]    = useState(false)
-  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
+  const [profileFlyoutOpen, setProfileFlyoutOpen] = useState(false)
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
   const profileRef = useRef(null)
 
   const isMasterAdmin = user?.email === MASTER_ADMIN_EMAIL
-  const NAV_ITEMS = NAV_ITEMS_DEF.map(n => ({ ...n, label: t(n.en, n.ar) }))
+  // Suite-wide module switches (master-admin controlled, live).
+  const { isHidden } = useModuleVisibility()
+  const NAV_ITEMS = NAV_ITEMS_DEF
+    .filter(n => !isHidden(n.id))
+    .map(n => ({ ...n, label: t(n.en, n.ar) }))
 
   useEffect(() => {
-    if (!profileDropdownOpen) return
+    if (!profileFlyoutOpen) return
     const handler = (e) => {
-      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileDropdownOpen(false)
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileFlyoutOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [profileDropdownOpen])
+  }, [profileFlyoutOpen])
 
   const getGlobalModule = () => {
     const segments = location.pathname.split('/').filter(Boolean)
@@ -260,6 +298,15 @@ function MainAppLayout() {
     return module
   }
   const globalModule = getGlobalModule()
+
+  /* A hidden module must not stay reachable by URL or bookmark — bounce to the
+     dashboard. Runs as an effect (never during render) so the redirect happens
+     after the visibility snapshot has settled. */
+  useEffect(() => {
+    if (globalModule !== 'dashboard' && isHidden(globalModule)) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [globalModule, isHidden, navigate])
 
   const getThemeClass = () => {
     switch (globalModule) {
@@ -270,15 +317,15 @@ function MainAppLayout() {
       case 'reports':   return 'theme-reports'
       case 'inventory': return 'theme-inventory'
       case 'assets':    return 'theme-assets'
+      case 'activity':  return 'theme-activity'
+      case 'insights':  return 'theme-insights'
+      case 'strategy':  return 'theme-strategy'
+      case 'crisis':    return 'theme-crisis'
+      case 'wallboard': return 'theme-dashboard'
       case 'dashboard': return 'theme-dashboard'
       case 'logistics':
       default:          return 'theme-logistics'
     }
-  }
-
-  const getModuleLabel = () => {
-    if (globalModule === 'dashboard') return t('Operations Overview', 'نظرة عامة على العمليات')
-    return NAV_ITEMS.find(n => n.id === globalModule)?.label ?? globalModule
   }
 
   const displayName = user?.displayName || userProfile?.displayName || user?.email?.split('@')[0] || 'Admin'
@@ -310,107 +357,188 @@ function MainAppLayout() {
     return roleMap[role] || role
   }
 
+  if (globalModule === 'wallboard') {
+    return (
+      <div className="ops-portal-root theme-dashboard">
+        <ChunkErrorBoundary routeKey="wallboard">
+          <Suspense fallback={<ModuleLoader />}>
+            <Outlet />
+          </Suspense>
+        </ChunkErrorBoundary>
+        <ShortcutLayer />
+      </div>
+    )
+  }
+
   return (
     <div className={`ops-portal-root ${getThemeClass()}`}>
+      {/* Single rounded dark frame — the sidebar is its left portion showing
+          through; the content panel floats inside it as a rounded card. */}
+      <div className="ops-frame">
       <motion.nav
         className="ops-global-rail"
         initial={{ opacity: 0, x: -16 }}
-        animate={{ opacity: 1, x: 0, width: sidebarExpanded ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED }}
-        transition={{ opacity: { duration: 0.4 }, x: { duration: 0.45, ease: [0.16, 1, 0.3, 1] }, width: { type: 'spring', stiffness: 300, damping: 32 } }}
-        onHoverStart={() => setSidebarExpanded(true)}
-        onHoverEnd={() => setSidebarExpanded(false)}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="ops-rail-header">
-          <motion.img src="/fmac-logo-new.png" alt="FMAC" className="ops-rail-logo-img" onClick={() => navigate('/dashboard')} whileHover={{ scale: 1.18, rotate: -10 }} transition={{ type: 'spring', stiffness: 280, damping: 14 }} />
-          <motion.span className="ops-rail-brand-name" variants={labelVariants} animate={sidebarExpanded ? 'expanded' : 'collapsed'} transition={labelTransition(sidebarExpanded ? 0.04 : 0)}>{t('Operations Dept.', 'قسم العمليات')}</motion.span>
+          <motion.button className="ops-rail-logo-tile" data-tip={t('Operations Overview', 'نظرة عامة على العمليات')} aria-label={t('Operations Overview', 'نظرة عامة على العمليات')} onClick={() => navigate('/dashboard')} whileTap={{ scale: 0.94 }}>
+            <img src="/favicon.png" alt="FMAC" className="ops-rail-logo-img" />
+          </motion.button>
         </div>
         <div className="ops-rail-nav">
-          {NAV_ITEMS.map(({ id, icon: Icon, label, path }, i) => (
-            <motion.button key={id} className={`ops-rail-item ${globalModule === id ? 'active' : ''}`} onClick={() => navigate(path)} whileTap={{ scale: 0.96 }} transition={{ type: 'spring', stiffness: 400, damping: 24 }}>
-              {globalModule === id && <motion.span layoutId="nav-indicator" className="ops-rail-indicator" transition={{ type: 'spring', bounce: 0.2, duration: 0.42 }} />}
-              <div className="rail-item-icon"><Icon size={19} strokeWidth={1.75} /></div>
-              <motion.span className="rail-item-label" variants={labelVariants} animate={sidebarExpanded ? 'expanded' : 'collapsed'} transition={labelTransition(sidebarExpanded ? 0.06 + i * 0.025 : 0)}>{label}</motion.span>
+          {NAV_ITEMS.map(({ id, icon: Icon, label, path }) => (
+            <motion.button key={id} data-tip={label} aria-label={label} className={`ops-rail-item ${globalModule === id ? 'active' : ''}`} onClick={() => navigate(path)} whileTap={{ scale: 0.92 }} transition={{ type: 'spring', stiffness: 400, damping: 24 }}>
+              <Icon size={20} strokeWidth={1.75} />
             </motion.button>
           ))}
         </div>
-        <div className="ops-rail-footer">
-          <div className="ops-rail-divider" />
-          <motion.button className="ops-rail-logout" onClick={() => signOut(auth)} whileTap={{ scale: 0.96 }} transition={{ type: 'spring', stiffness: 400, damping: 24 }}>
-            <div className="rail-item-icon"><LogOut size={18} strokeWidth={1.75} /></div>
-            <motion.span className="rail-item-label" variants={labelVariants} animate={sidebarExpanded ? 'expanded' : 'collapsed'} transition={labelTransition(sidebarExpanded ? 0.10 : 0)}>{t('Sign Out', 'تسجيل الخروج')}</motion.span>
+        <div className="ops-rail-footer" ref={profileRef}>
+          <motion.button className="ops-rail-avatar" aria-label={t('Profile menu', 'قائمة الملف الشخصي')} onClick={() => setProfileFlyoutOpen(v => !v)} whileTap={{ scale: 0.94 }}>
+            {userProfile?.photoURL ? (
+              <img src={userProfile.photoURL} alt="" />
+            ) : (
+              <span className="ops-rail-avatar-initials">{(displayName || 'A').trim().charAt(0).toUpperCase()}</span>
+            )}
+          </motion.button>
+          <AnimatePresence>
+            {profileFlyoutOpen && (
+              <motion.div className="ops-rail-flyout" initial={{ opacity: 0, scale: 0.95, y: 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 6 }} transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}>
+                <div className="ops-flyout-header">
+                  <span className="ops-flyout-name">{displayName}</span>
+                  <span className="ops-flyout-role">{getRoleLabel()}</span>
+                </div>
+                <div className="ops-dropdown-divider" />
+                <button className="ops-dropdown-item" onClick={() => { setProfileFlyoutOpen(false); navigate('/profile') }}>{t('My Profile', 'ملفي الشخصي')}</button>
+                <button className="ops-dropdown-item ops-dropdown-item-danger" onClick={() => { setProfileFlyoutOpen(false); signOut(auth) }}>{t('Sign Out', 'تسجيل الخروج')}</button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <motion.button className="ops-rail-item" data-tip={t('Sign Out', 'تسجيل الخروج')} aria-label={t('Sign Out', 'تسجيل الخروج')} onClick={() => signOut(auth)} whileTap={{ scale: 0.92 }}>
+            <LogOut size={20} strokeWidth={1.75} />
           </motion.button>
         </div>
       </motion.nav>
 
       <motion.div className="ops-main-wrapper" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.15 }}>
-        <motion.header className="ops-top-bar" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
-          <div style={{ position: 'absolute', left: isRTL ? 'auto' : '24px', right: isRTL ? '24px' : 'auto', top: '50%', transform: 'translateY(-50%)' }}>
-            <AnimatePresence mode="wait">
-              <motion.div key={globalModule} className="ops-module-badge" initial={{ opacity: 0, x: isRTL ? 6 : -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: isRTL ? 6 : -6 }} transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}>
-                <span className="ops-badge-dot" />
-                <span className="ops-badge-label">{getModuleLabel()}</span>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-          <div className="ops-status-cluster" style={{ position: 'absolute', left: isRTL ? '20px' : 'auto', right: isRTL ? 'auto' : '20px', top: '50%', transform: 'translateY(-50%)', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-            <LanguageToggle />
-            <ThemeToggle />
-            <div className="ops-header-divider" />
-            <div className="ops-user-section" ref={profileRef}>
-              <button className="ops-user-chip" onClick={() => setProfileDropdownOpen(v => !v)}>
-                <div className="ops-user-chip-avatar">
-                  {userProfile?.photoURL ? (
-                    <img src={userProfile.photoURL} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                  ) : (
-                    <span className="ops-user-chip-initials">{getInitials(displayName)}</span>
-                  )}
-                </div>
-                <div className="ops-user-chip-text ops-user-chip-text-desktop">
-                  <span className="ops-user-chip-name">{displayName}</span>
-                  <span className="ops-user-chip-role">{getRoleLabel()}</span>
-                </div>
-              </button>
-              <AnimatePresence>
-                {profileDropdownOpen && (
-                  <motion.div className="ops-profile-dropdown" initial={{ opacity: 0, scale: 0.95, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -4 }} transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }} style={{ transformOrigin: isRTL ? 'top left' : 'top right' }}>
-                    <button className="ops-dropdown-item" onClick={() => { setProfileDropdownOpen(false); navigate('/profile') }}>{t('My Profile', 'ملفي الشخصي')}</button>
-                    <div className="ops-dropdown-divider" />
-                    <button className="ops-dropdown-item ops-dropdown-item-danger" onClick={() => { setProfileDropdownOpen(false); signOut(auth) }}>{t('Sign Out', 'تسجيل الخروج')}</button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        </motion.header>
-
         <div className="ops-module-container">
-          <AnimatePresence mode="wait">
-            <motion.div key={globalModule} className="ops-module-inner" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}>
-              <ChunkErrorBoundary routeKey={globalModule}>
-                <Suspense fallback={<ModuleLoader />}>
-                  <Outlet />
-                </Suspense>
-              </ChunkErrorBoundary>
-            </motion.div>
-          </AnimatePresence>
+          {/* Enter-only animation. Do NOT wrap the router Outlet in
+              AnimatePresence mode="wait": React Router v7 navigations run
+              inside startTransition, and when a lazy module chunk suspends
+              mid-transition, AnimatePresence's exit bookkeeping is corrupted —
+              the old module unmounts but the new one never mounts (blank
+              screen until a hard reload). A keyed div with no exit phase
+              cannot deadlock. */}
+          <motion.div key={globalModule} className={`ops-module-inner${globalModule === 'dashboard' ? ' ops-module-inner--dash' : ''}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}>
+            <ChunkErrorBoundary routeKey={globalModule}>
+              <Suspense fallback={<ModuleLoader />}>
+                <Outlet />
+              </Suspense>
+            </ChunkErrorBoundary>
+          </motion.div>
         </div>
       </motion.div>
+      </div>
 
-      {/* Mobile-only bottom navigation — shown via CSS only on ≤768px */}
-      <nav className="ops-mobile-nav">
-        {NAV_ITEMS.map(({ id, icon: Icon, path }) => (
-          <button
-            key={id}
-            className={`ops-mobile-nav-item${globalModule === id ? ' active' : ''}`}
-            onClick={() => navigate(path)}
-          >
-            <Icon size={21} strokeWidth={1.75} />
-          </button>
-        ))}
-        <button className="ops-mobile-nav-item ops-mobile-nav-logout" onClick={() => signOut(auth)}>
-          <LogOut size={21} strokeWidth={1.75} />
-        </button>
-      </nav>
+      {/* Global command palette — Ctrl/⌘+K, or the dashboard search button */}
+      <CommandPalette />
+      {/* Keyboard layer: "g then key" navigation + "?" cheat sheet */}
+      <ShortcutLayer />
+
+      {/* Floating controls — hidden on /dashboard, whose header hosts
+          its own restyled toggles (spec §5 amendment) */}
+      {globalModule !== 'dashboard' && (
+        <motion.div className="ops-float-cluster" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}>
+          <AttentionBell />
+          <LanguageToggle />
+          <ThemeToggle />
+        </motion.div>
+      )}
+
+      {/* Mobile-only bottom navigation — shown via CSS only on ≤768px.
+          Eleven modules can't share one 58px row, so the bar keeps the four
+          primary modules (labelled) and everything else lives in a slide-up
+          "More" sheet with roomy, labelled tiles. */}
+      {(() => {
+        const primary = NAV_ITEMS.slice(0, 4)
+        const overflow = NAV_ITEMS.slice(4)
+        const overflowActive = overflow.some(n => n.id === globalModule) || globalModule === 'profile'
+        const go = (path) => { setMobileMoreOpen(false); navigate(path) }
+        return (
+          <>
+            <nav className="ops-mobile-nav">
+              {primary.map(({ id, icon: Icon, label, path }) => (
+                <button
+                  key={id}
+                  className={`ops-mobile-nav-item${globalModule === id && !mobileMoreOpen ? ' active' : ''}`}
+                  onClick={() => go(path)}
+                >
+                  <Icon size={20} strokeWidth={1.75} />
+                  <span className="ops-mobile-nav-label">{label}</span>
+                </button>
+              ))}
+              <button
+                className={`ops-mobile-nav-item${mobileMoreOpen || overflowActive ? ' active' : ''}`}
+                onClick={() => setMobileMoreOpen(v => !v)}
+              >
+                <LayoutGrid size={20} strokeWidth={1.75} />
+                <span className="ops-mobile-nav-label">{t('More', 'المزيد')}</span>
+              </button>
+            </nav>
+
+            <AnimatePresence>
+              {mobileMoreOpen && (
+                <>
+                  <motion.div
+                    className="ops-mobile-sheet-backdrop"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    onClick={() => setMobileMoreOpen(false)}
+                  />
+                  <motion.div
+                    className="ops-mobile-sheet"
+                    initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                    transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <div className="ops-mobile-sheet-head">
+                      <span>{t('All modules', 'جميع الوحدات')}</span>
+                      <button className="ops-mobile-sheet-close" onClick={() => setMobileMoreOpen(false)}>
+                        <X size={17} />
+                      </button>
+                    </div>
+                    <div className="ops-mobile-sheet-grid">
+                      {overflow.map(({ id, icon: Icon, label, path }) => (
+                        <button
+                          key={id}
+                          className={`ops-mobile-tile${globalModule === id ? ' active' : ''}`}
+                          onClick={() => go(path)}
+                        >
+                          <Icon size={21} strokeWidth={1.75} />
+                          <span>{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="ops-mobile-sheet-footer">
+                      <button className={`ops-mobile-tile ops-mobile-tile--row${globalModule === 'profile' ? ' active' : ''}`} onClick={() => go('/profile')}>
+                        <span className="ops-mobile-avatar">
+                          {userProfile?.photoURL
+                            ? <img src={userProfile.photoURL} alt="Profile" />
+                            : getInitials(displayName)}
+                        </span>
+                        <span>{t('My Profile', 'ملفي الشخصي')}</span>
+                      </button>
+                      <button className="ops-mobile-tile ops-mobile-tile--row ops-mobile-tile--logout" onClick={() => signOut(auth)}>
+                        <LogOut size={19} strokeWidth={1.75} />
+                        <span>{t('Sign out', 'تسجيل الخروج')}</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </>
+        )
+      })()}
     </div>
   )
 }
@@ -435,12 +563,13 @@ function App() {
   }
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<RouteLoader />}>
       <Routes>
         {/* PUBLIC */}
         <Route path="/"                             element={<HelpLanding />} />
         <Route path="/submit/:type"                 element={<HelpFormWizard />} />
         <Route path="/submit/success/:ticketId"     element={<HelpSuccess />} />
+        <Route path="/track"                        element={<HelpTrack />} />
 
         {/* AUTH */}
         <Route path="/login" element={<LoginPage />} />
@@ -448,6 +577,13 @@ function App() {
         {/* PROTECTED */}
         <Route element={<MainAuthGuard><MainAppLayout /></MainAuthGuard>}>
           <Route path="/dashboard"    element={<OperationsDashboard userProfile={userProfile} />} />
+          <Route path="/activity"     element={<ActivityModule />} />
+          <Route path="/insights"     element={<InsightsModule />} />
+          <Route path="/strategy"     element={<StrategyModule />} />
+          <Route path="/strategy/:tab" element={<StrategyModule />} />
+          <Route path="/crisis"       element={<CrisisModule />} />
+          <Route path="/crisis/:tab"  element={<CrisisModule />} />
+          <Route path="/wallboard"    element={<WallboardModule />} />
           <Route path="/logistics/*"  element={<LogisticsModule />} />
           <Route path="/fleet/*"      element={<FleetModule />} />
           <Route path="/inventory/*"  element={<InventoryModule />} />

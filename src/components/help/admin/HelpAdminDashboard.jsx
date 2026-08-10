@@ -10,6 +10,13 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { usePermissions } from '../../../hooks/usePermissions';
+import {
+  resolutionMinutesOf, slaMetOf, fmtDuration, avgResolutionMinutes,
+  slaCompliancePct, avgCsat, csatSatisfiedPct, avgIntakeRating,
+} from '../helpConfig';
+import html2canvas from 'html2canvas';
+import { buildCxReport, docRef } from '../helpReports';
+import HelpReportDoc from '../HelpReportDoc';
 
 export default function HelpAdminDashboard() {
   const navigate = useNavigate();
@@ -20,6 +27,8 @@ export default function HelpAdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showExport, setShowExport] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportPayload, setReportPayload] = useState(null);
 
   const MASTER_ADMIN_EMAIL = import.meta.env.VITE_MASTER_ADMIN_EMAIL;
   const currentUser = auth.currentUser;
@@ -57,12 +66,65 @@ export default function HelpAdminDashboard() {
     return matchesTab && matchesSearch;
   });
 
+  /* Performance is measured on the tickets currently in view, so the numbers
+     follow the active tab/search rather than always showing the global figure. */
+  const scope = filteredRequests;
   const stats = {
     total: requests.length,
     new: requests.filter(r => r.status === 'new').length,
     progress: requests.filter(r => r.status === 'progress').length,
     closed: requests.filter(r => r.status === 'closed').length,
-    overdue: requests.filter(r => r.slaDeadline?.toDate && r.slaDeadline.toDate() < new Date() && r.status !== 'closed').length
+    overdue: requests.filter(r => r.slaDeadline?.toDate && r.slaDeadline.toDate() < new Date() && r.status !== 'closed').length,
+    avgResolution: avgResolutionMinutes(scope),
+    slaCompliance: slaCompliancePct(scope),
+    csat: avgCsat(scope),
+    csatSatisfied: csatSatisfiedPct(scope),
+    intake: avgIntakeRating(scope),
+  };
+
+  /* ── Strategic CX report: computed from live tickets → offscreen A4 → PDF ── */
+  const generateStrategicReport = async () => {
+    if (reportBusy) return;
+    if (!requests.length) {
+      alert(t('No requests to report on yet.', 'لا توجد طلبات لإصدار تقرير عنها بعد.'));
+      return;
+    }
+    const now = new Date();
+    const data = buildCxReport(requests);
+    const period = data.kpi.firstYear
+      ? `${data.kpi.firstYear} – ${data.kpi.lastYear}`
+      : now.getFullYear().toString();
+    const meta = {
+      ref: docRef('CX'),
+      dateAr: now.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' }),
+      version: '1.0',
+      period,
+      color: '#2563eb',
+    };
+    setReportBusy(true);
+    setReportPayload({ data, meta });
+
+    // Let the offscreen document mount and fonts settle before capture.
+    await new Promise(res => setTimeout(res, 450));
+    try {
+      await document.fonts?.ready;
+      const pages = Array.from(document.querySelectorAll('#hc-report-root .ast-report-page'));
+      if (pages.length === 0) throw new Error('No report pages rendered');
+      const pdf = new jsPDF('p', 'mm', 'a4', true);
+      for (let i = 0; i < pages.length; i++) {
+        const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794, windowHeight: 1122 });
+        const img = canvas.toDataURL('image/jpeg', 0.94);
+        if (i > 0) pdf.addPage();
+        pdf.addImage(img, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+      }
+      pdf.save(`FMAC-Customer-Experience-Report-${now.toISOString().slice(0, 10)}.pdf`);
+    } catch (err) {
+      console.error('[helpdesk] strategic report failed:', err);
+      alert(t('Could not generate the report. Please try again.', 'تعذّر إنشاء التقرير. حاول مرة أخرى.'));
+    } finally {
+      setReportPayload(null);
+      setReportBusy(false);
+    }
   };
 
   const handleClearAll = async () => {
@@ -78,15 +140,25 @@ export default function HelpAdminDashboard() {
   };
 
   const exportExcel = () => {
-    const data = filteredRequests.map(r => ({
-      'Ticket ID': r.ticketNumber,
-      'Type': r.type?.toUpperCase(),
-      'Submitter': r.userInfo?.name,
-      'Status': r.status?.toUpperCase(),
-      'Priority': r.priority,
-      'Branch': r.userInfo?.branch,
-      'Date': r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString() : 'N/A'
-    }));
+    const data = filteredRequests.map(r => {
+      const mins = resolutionMinutesOf(r);
+      const ok = slaMetOf(r);
+      return {
+        'Ticket ID': r.ticketNumber,
+        'Type': r.type?.toUpperCase(),
+        'Submitter': r.userInfo?.name,
+        'Status': r.status?.toUpperCase(),
+        'Priority': r.priority,
+        'Branch': r.userInfo?.branch,
+        'Date': r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString() : 'N/A',
+        'Resolution Time / زمن الإنجاز': mins == null ? '' : fmtDuration(mins, 'en'),
+        'Resolution (hours)': mins == null ? '' : Math.round((mins / 60) * 10) / 10,
+        'SLA Target (hours)': r.slaTargetHours ?? '',
+        'SLA Met': ok == null ? '' : ok ? 'YES' : 'NO',
+        'Resolution Satisfaction (1-5)': r.satisfaction?.rating ?? '',
+        'Submission Experience (1-5)': r.intakeRating?.value ?? '',
+      };
+    });
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Requests');
@@ -214,13 +286,25 @@ export default function HelpAdminDashboard() {
     <div className="hc-admin-root" style={{ padding: '2rem 3rem', maxWidth: '1600px', margin: '0 auto' }}>
 
       {/* KPIs */}
-      <div className="hc-admin-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+      <div className="hc-admin-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
         {[
           { label: t('Total Requests', 'إجمالي الطلبات'), value: stats.total, color: 'var(--hc-text-primary)' },
-          { label: t('New', 'جديد'), value: stats.new, color: '#3B82F6' },
+          { label: t('New', 'جديد'), value: stats.new, color: 'var(--theme-accent)' },
           { label: t('In Progress', 'قيد التنفيذ'), value: stats.progress, color: 'var(--hc-warning)' },
           { label: t('Closed', 'مغلق'), value: stats.closed, color: 'var(--hc-success)' },
-          { label: t('Overdue SLA', 'تجاوز الموعد'), value: stats.overdue, color: 'var(--hc-accent)' }
+          { label: t('Overdue SLA', 'تجاوز الموعد'), value: stats.overdue, color: 'var(--hc-accent)' },
+          { label: t('Avg. Resolution Time', 'متوسط زمن الإنجاز'),
+            value: stats.avgResolution == null ? '—' : fmtDuration(stats.avgResolution, lang),
+            color: 'var(--hc-text-primary)' },
+          { label: t('SLA Compliance', 'الالتزام بمستوى الخدمة'),
+            value: stats.slaCompliance == null ? '—' : `${stats.slaCompliance}%`,
+            color: stats.slaCompliance == null ? 'var(--hc-text-primary)' : stats.slaCompliance >= 90 ? 'var(--hc-success)' : stats.slaCompliance >= 75 ? 'var(--hc-warning)' : 'var(--hc-accent)' },
+          { label: t('Satisfaction', 'رضا المتعامل'),
+            value: stats.csat == null ? '—' : `${stats.csat} / 5`,
+            color: stats.csat == null ? 'var(--hc-text-primary)' : stats.csat >= 4 ? 'var(--hc-success)' : stats.csat >= 3 ? 'var(--hc-warning)' : 'var(--hc-accent)' },
+          { label: t('Submission Experience', 'تجربة التقديم'),
+            value: stats.intake == null ? '—' : `${stats.intake} / 5`,
+            color: stats.intake == null ? 'var(--hc-text-primary)' : stats.intake >= 4 ? 'var(--hc-success)' : stats.intake >= 3 ? 'var(--hc-warning)' : 'var(--hc-accent)' },
         ].map((kpi, i) => (
           <motion.div key={kpi.label} className="hc-card" style={{ padding: '1.5rem' }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <p style={{ color: 'var(--hc-text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600, margin: '0 0 0.5rem 0' }}>{kpi.label}</p>
@@ -242,16 +326,19 @@ export default function HelpAdminDashboard() {
             style={{ paddingLeft: '36px', borderRadius: '999px', padding: '0.5rem 1rem 0.5rem 36px' }}
           />
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', position: 'relative' }}>
-          <input 
-            type="file" 
-            accept=".xlsx, .xls" 
-            id="import-excel" 
-            style={{ display: 'none' }} 
+        <div className="hc-admin-actions" style={{ display: 'flex', gap: '0.75rem', position: 'relative' }}>
+          <input
+            type="file"
+            accept=".xlsx, .xls"
+            id="import-excel"
+            style={{ display: 'none' }}
             onChange={handleImport}
           />
           <button className="hc-btn hc-btn-outline" onClick={() => document.getElementById('import-excel').click()}>
             <Upload size={15} /> {t('Import', 'استيراد')}
+          </button>
+          <button className="hc-btn hc-btn-primary" onClick={generateStrategicReport} disabled={reportBusy}>
+            <FileText size={15} /> {reportBusy ? t('Generating…', 'جارٍ الإنشاء…') : t('Strategic Report', 'التقرير الاستراتيجي')}
           </button>
           <button className="hc-btn hc-btn-outline" onClick={() => setShowExport(!showExport)}>
             <Download size={15} /> {t('Export', 'تصدير')} ▾
@@ -298,22 +385,23 @@ export default function HelpAdminDashboard() {
               <th>{t('Branch', 'الفرع')}</th>
               <th>{t('Priority', 'الأولوية')}</th>
               <th>{t('Status', 'الحالة')}</th>
+              <th>{t('Resolution Time', 'زمن الإنجاز')}</th>
               <th>{t('Date', 'التاريخ')}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{ textAlign: 'center', padding: '3rem' }}>{t('Loading live data...', 'جارٍ تحميل البيانات...')}</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '3rem' }}>{t('Loading live data...', 'جارٍ تحميل البيانات...')}</td></tr>
             ) : filteredRequests.length === 0 ? (
-              <tr><td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--hc-text-muted)' }}>{t('No requests found.', 'لا توجد طلبات.')}</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--hc-text-muted)' }}>{t('No requests found.', 'لا توجد طلبات.')}</td></tr>
             ) : (
               filteredRequests.map(r => (
                 <tr key={r.id} onClick={() => navigate('/help/requests/' + r.id)} style={{ cursor: 'pointer' }}>
                   <td style={{ fontWeight: 600, fontFamily: 'monospace' }}>
                     {r.ticketNumber}
                     {r.assignedTo === 'hod' && r.status !== 'closed' && (
-                      <span style={{ marginLeft: '8px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem' }}>↑ HOD</span>
+                      <span style={{ marginLeft: '8px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)', color: 'var(--status-warn)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem' }}>↑ HOD</span>
                     )}
                   </td>
                   <td style={{ textTransform: 'capitalize' }}>{r.type}</td>
@@ -328,6 +416,18 @@ export default function HelpAdminDashboard() {
                     <span className={`hc-badge ${r.status}`}>
                       {statusLabel(r.status)}
                     </span>
+                  </td>
+                  <td>
+                    {(() => {
+                      const mins = resolutionMinutesOf(r);
+                      if (mins == null) return <span style={{ color: 'var(--hc-text-muted)' }}>—</span>;
+                      const ok = slaMetOf(r);
+                      return (
+                        <span style={{ fontWeight: 600, color: ok === false ? 'var(--hc-accent)' : 'var(--hc-success, #16a34a)' }} dir="auto">
+                          {fmtDuration(mins, lang)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td style={{ color: 'var(--hc-text-secondary)' }}>
                     {r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString() : ''}
@@ -349,6 +449,13 @@ export default function HelpAdminDashboard() {
           <button className="hc-btn hc-btn-accent" onClick={handleClearAll}>
             {t('Clear All System Requests', 'مسح جميع طلبات النظام')}
           </button>
+        </div>
+      )}
+
+      {/* Offscreen A4 document for html2canvas capture */}
+      {reportPayload && (
+        <div style={{ position: 'fixed', left: -99999, top: 0, zIndex: -1 }}>
+          <HelpReportDoc data={reportPayload.data} meta={reportPayload.meta} />
         </div>
       )}
 

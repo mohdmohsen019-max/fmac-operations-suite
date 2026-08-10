@@ -168,7 +168,9 @@ function parseContent(raw) {
 
 async function fetchLogoBase64() {
   try {
-    const res = await fetch('/fmac-logo-new.png')
+    // Every PDF logo placement (cover + running header) sits on deep navy —
+    // use the white-text variant, the dark lockup vanishes there.
+    const res = await fetch('/fmac-ops-logo-light.png')
     if (!res.ok) return null
     const blob = await res.blob()
     return new Promise(resolve => {
@@ -213,7 +215,7 @@ function drawCoverPage(doc, { arabicMY, generatedBy, todayAr, W, H, logoBase64 }
   // Logo (centered, top area)
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, 'PNG', W / 2 - 22, 22, 44, 28)
+      doc.addImage(logoBase64, 'PNG', W / 2 - 16, 22, 32, 32)
     } catch { /* no-op */ }
   }
 
@@ -280,7 +282,7 @@ function drawRunningHeader(doc, { arabicMY, logoBase64, W }) {
   // Logo or club name (left side)
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, 'PNG', 7, 1.5, 20, 11)
+      doc.addImage(logoBase64, 'PNG', 7, 1.5, 12, 12)
     } catch {
       _drawHeaderFallbackText(doc)
     }
@@ -727,7 +729,7 @@ export const reportExportService = {
       .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
 
     approvedSections.forEach((section, idx) => {
-      emit(`جاري إعداد قسم: ${section.nameAr || SECTION_NAMES_AR[section.sectionKey] || section.sectionKey}...`)
+      emit(`جاري إعداد قسم: ${section.nameAr || section.sectionKey}...`)
       doc.addPage()
       const secStart  = doc.internal.getCurrentPageInfo().pageNumber
       const secName   = section.nameAr || section.sectionKey

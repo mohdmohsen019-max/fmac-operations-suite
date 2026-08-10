@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   FileText, Download, TrendingUp, DollarSign,
   Calendar, Loader2, AlertTriangle, RefreshCw,
   ChevronDown, BarChart2, Truck, Shield, Award,
-  Gauge, Clock, Users
+  Gauge, Clock, Users, Bus, Car
 } from 'lucide-react';
 import {
   format, subDays, startOfMonth, getWeek, getYear,
@@ -19,19 +19,18 @@ import autoTable from 'jspdf-autotable';
 import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { cartrackService } from '../../services/cartrackService';
-import { FLEET_MAPPING, getVehicleMeta } from '../../services/fleetMapping';
+import { FLEET_MAPPING } from '../../services/fleetMapping';
 import { pdfService } from '../../services/pdfService';
+import { useFleetScope } from './FleetScopeContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import CustomSelect from '../CustomSelect';
 import './FleetModule.css';
+import './FleetScopeViews.css';
+
+const doExcelExport = () => {};
+const doPDFExport = () => {};
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const FLEET_REGS = [
-  'A21248', 'A33867', 'A33876', 'C29769', 'C37069',
-  'C37072', 'C37074', 'C37075', 'M85750', 'M85751',
-  'M85756', 'M85759', 'M99268', 'M99270'
-];
-
 const todayStr   = () => format(new Date(), 'yyyy-MM-dd');
 const daysAgoStr = (n) => format(subDays(new Date(), n), 'yyyy-MM-dd');
 const monthStart = () => format(startOfMonth(new Date()), 'yyyy-MM-dd');
@@ -42,10 +41,6 @@ const toUAE = (ts) => {
   const clean = ts.substring(0, 19).replace(' ', 'T');
   return new Date(clean);
 };
-
-const VEHICLE_OPTIONS = Object.entries(FLEET_MAPPING)
-  .map(([reg, meta]) => ({ value: reg, label: `Bus ${meta.busNumber} — ${meta.driverName}` }))
-  .sort((a, b) => parseInt(a.label.split(' ')[1]) - parseInt(b.label.split(' ')[1]));
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function getRiskLevel(speeding, braking, maxSpeed, t) {
@@ -131,7 +126,7 @@ function ErrorState({ message, onRetry }) {
 }
 
 function ExportDropdown({ onExcel, onPDF, disabled }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -145,7 +140,7 @@ function ExportDropdown({ onExcel, onPDF, disabled }) {
         <Download size={14} /> {t('Export', 'تصدير')} <ChevronDown size={12} />
       </button>
       {open && (
-        <div className="rpt-export-menu" style={{ right: useLanguage().locale === 'ar-SA' ? 'auto' : 0, left: useLanguage().locale === 'ar-SA' ? 0 : 'auto' }}>
+        <div className="rpt-export-menu" style={{ right: locale === 'ar-SA' ? 'auto' : 0, left: locale === 'ar-SA' ? 0 : 'auto' }}>
           <button onClick={() => { onExcel(); setOpen(false); }}><FileText size={13} /> {t('Excel (.xlsx)', 'إكسل (.xlsx)')}</button>
           <button onClick={() => { onPDF();   setOpen(false); }}><FileText size={13} /> {t('PDF', 'بي دي إف (PDF)')}</button>
         </div>
@@ -170,7 +165,70 @@ function KpiCard({ icon, label, value, sub, color }) {
 // ── MAIN COMPONENT ─────────────────────────────────────────────────────────
 export default function FleetReports() {
   const { t, locale } = useLanguage();
+  const { scope, inScope, classOf: vehicleClassOf, displayName, metaOf, metaMap } = useFleetScope();
   const [activeReport, setActiveReport] = useState('odometer');
+
+  const lang     = locale === 'ar-SA' ? 'ar' : 'en';
+  const isAll    = scope === 'all';
+  const isOthers = scope === 'others';
+  // The mandatory designation for non-bus vehicles — they are NOT part of the bus fleet.
+  const busGroupLabel   = t('Bus Fleet', 'أسطول الحافلات');
+  const otherGroupLabel = t('Other Vehicles — not part of the bus fleet', 'مركبات أخرى — ليست ضمن أسطول الحافلات');
+  // Suffix appended to report/export titles when scope is 'others'.
+  const scopeSuffix = isOthers ? ` — ${otherGroupLabel}` : '';
+
+  // Scoped vehicle dropdown options. For 'buses' this reproduces the historical
+  // "Bus N — Driver" list; other scopes use the editable metadata display names.
+  const vehicleOptions = useMemo(() => {
+    const regs = new Set(Object.keys(FLEET_MAPPING));
+    metaMap.forEach((_, reg) => regs.add(reg));
+    const opts = [];
+    regs.forEach(reg => {
+      if (!inScope(reg)) return;
+      const m = metaOf(reg);
+      const isBus = m.vehicleClass === 'bus';
+      opts.push({
+        value: reg,
+        label: isBus
+          ? `Bus ${m.busNumber} — ${m.driverName}`
+          : `${displayName(reg, lang)} — ${reg}`,
+        isBus,
+        busNo: parseInt(m.busNumber) || 999,
+      });
+    });
+    opts.sort((a, b) => {
+      if (a.isBus !== b.isBus) return a.isBus ? -1 : 1;
+      return a.isBus ? a.busNo - b.busNo : a.label.localeCompare(b.label);
+    });
+    return opts.map(({ value, label }) => ({ value, label }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, metaMap, locale]);
+
+  const allVehiclesLabel = scope === 'buses'
+    ? t('All Buses', 'جميع الحافلات')
+    : t('All Vehicles', 'جميع المركبات');
+
+  // Class annotations attached to every aggregated row.
+  const classifyRow = (registration) => ({
+    vClass: vehicleClassOf(registration),
+    vName:  displayName(registration, lang),
+  });
+
+  // Cell label for the "vehicle" column: buses keep "Bus N", others use display name.
+  const vehicleLabelOf = (r) => (r.vClass === 'bus' && r.busNumber
+    ? `${t('Bus', 'حافلة')} ${r.busNumber}`
+    : r.vName || r.registration);
+  const vehicleColHeader = scope === 'buses' ? t('Bus #', 'رقم الحافلة') : t('Vehicle', 'المركبة');
+
+  // Group header row used by every table when scope is 'all'.
+  const GroupHeaderRow = ({ kind }) => (
+    <tr className={`fsv-group-row${kind === 'other' ? ' fsv-group-row--other' : ''}`}>
+      <td colSpan={99}>
+        {kind === 'bus' ? <Bus size={13} /> : <Car size={13} />}
+        <span>{kind === 'bus' ? busGroupLabel : otherGroupLabel}</span>
+      </td>
+    </tr>
+  );
 
   const DATE_PRESETS = [
     { label: t('Today', 'اليوم'),       getStart: () => todayStr(),   getEnd: () => todayStr() },
@@ -222,6 +280,22 @@ export default function FleetReports() {
     if (activeReport === 'maintenance' && !maintLoaded) fetchMaintenance();
   }, [activeReport]);
 
+  // Re-scope everything already on screen when the global fleet-scope switch flips.
+  const prevScopeRef = useRef(scope);
+  useEffect(() => {
+    if (prevScopeRef.current === scope) return;
+    prevScopeRef.current = scope;
+    // Selected vehicle may not exist in the new scope — reset the filters.
+    setOdomVehicle('all');
+    setRiskVehicle('all');
+    setScVehicle('all');
+    if (odomFetched) fetchOdometer(startDate, endDate, 'all');
+    if (riskFetched) fetchRisk(startDate, endDate, 'all');
+    if (scFetched)   fetchScorecard(startDate, endDate, 'all');
+    if (maintLoaded) fetchMaintenance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope]);
+
   // ── Maintenance fetch (original logic) ────────────────────────────────
   const fetchMaintenance = async (sDate = maintStartDate, eDate = maintEndDate) => {
     setMaintLoading(true);
@@ -229,6 +303,11 @@ export default function FleetReports() {
     try {
       const snap = await getDocs(collection(db, 'maintenance'));
       let records = snap.docs.map(d => d.data());
+      // Scope 'others' → only records for vehicles classified outside the bus fleet.
+      // 'buses' and 'all' keep the historical record set unchanged.
+      if (isOthers) {
+        records = records.filter(r => vehicleClassOf(r.plateNumber || r.registration) === 'other');
+      }
       if (sDate && eDate) {
         records = records.filter(r => {
           const d = r.date?.seconds
@@ -248,7 +327,7 @@ export default function FleetReports() {
           if (reg) agg[reg] = (agg[reg] || 0) + (parseFloat(r.total) || 0);
         });
         const chartData = Object.entries(agg)
-          .map(([plate, spend]) => ({ plate, spend }))
+          .map(([plate, spend]) => ({ plate, spend, vClass: vehicleClassOf(plate) }))
           .sort((a, b) => b.spend - a.spend);
         setMaintData(chartData);
         setMaintTotalSpent(chartData.reduce((s, i) => s + i.spend, 0));
@@ -271,7 +350,7 @@ export default function FleetReports() {
   };
 
   // ── Odometer fetch ─────────────────────────────────────────────────────
-  const fetchOdometer = async (s = startDate, e = endDate) => {
+  const fetchOdometer = async (s = startDate, e = endDate, veh = odomVehicle) => {
     setOdomLoading(true);
     setOdomError(null);
     setOdomFetched(true);
@@ -281,12 +360,12 @@ export default function FleetReports() {
 
       const groups = {};
       trips
-        .filter(t => FLEET_REGS.includes(t.registration))
+        .filter(trip => inScope(trip.registration))
         .forEach(t => {
-          if (odomVehicle !== 'all' && t.registration !== odomVehicle) return;
+          if (veh !== 'all' && t.registration !== veh) return;
           if (!t.start_timestamp) return;
 
-          const meta = getVehicleMeta(t.registration);
+          const meta = metaOf(t.registration);
           const uae  = toUAE(t.start_timestamp);
           if (isNaN(uae.getTime())) return;
 
@@ -307,6 +386,7 @@ export default function FleetReports() {
               registration: t.registration,
               busNumber: meta.busNumber,
               driverName: meta.driverName,
+              ...classifyRow(t.registration),
               distance: 0,
               trips: 0,
               startOdo: t.start_odometer ?? null,
@@ -340,7 +420,11 @@ export default function FleetReports() {
         })
         .sort((a, b) => {
           const d = a.period.localeCompare(b.period);
-          return d !== 0 ? d : parseInt(a.busNumber) - parseInt(b.busNumber);
+          if (d !== 0) return d;
+          if (a.vClass !== b.vClass) return a.vClass === 'bus' ? -1 : 1;
+          const an = parseInt(a.busNumber), bn = parseInt(b.busNumber);
+          if (!isNaN(an) && !isNaN(bn)) return an - bn;
+          return (a.vName || a.registration).localeCompare(b.vName || b.registration);
         });
 
       setOdomData(result);
@@ -353,7 +437,7 @@ export default function FleetReports() {
   };
 
   // ── Risk fetch ─────────────────────────────────────────────────────────
-  const fetchRisk = async (s = startDate, e = endDate) => {
+  const fetchRisk = async (s = startDate, e = endDate, veh = riskVehicle) => {
     setRiskLoading(true);
     setRiskError(null);
     setRiskFetched(true);
@@ -363,15 +447,16 @@ export default function FleetReports() {
 
       const agg = {};
       trips
-        .filter(t => FLEET_REGS.includes(t.registration))
+        .filter(trip => inScope(trip.registration))
         .forEach(t => {
-          if (riskVehicle !== 'all' && t.registration !== riskVehicle) return;
-          const meta = getVehicleMeta(t.registration);
+          if (veh !== 'all' && t.registration !== veh) return;
+          const meta = metaOf(t.registration);
           if (!agg[t.registration]) {
             agg[t.registration] = {
               registration: t.registration,
               busNumber: meta.busNumber,
               driverName: meta.driverName,
+              ...classifyRow(t.registration),
               speeding: 0, braking: 0, cornering: 0, accel: 0, maxSpeed: 0, trips: 0,
             };
           }
@@ -400,7 +485,7 @@ export default function FleetReports() {
   };
 
   // ── Scorecard fetch ────────────────────────────────────────────────────
-  const fetchScorecard = async (s = startDate, e = endDate) => {
+  const fetchScorecard = async (s = startDate, e = endDate, veh = scVehicle) => {
     setScLoading(true);
     setScError(null);
     setScFetched(true);
@@ -410,15 +495,16 @@ export default function FleetReports() {
 
       const agg = {};
       trips
-        .filter(t => FLEET_REGS.includes(t.registration))
+        .filter(trip => inScope(trip.registration))
         .forEach(t => {
-          if (scVehicle !== 'all' && t.registration !== scVehicle) return;
-          const meta = getVehicleMeta(t.registration);
+          if (veh !== 'all' && t.registration !== veh) return;
+          const meta = metaOf(t.registration);
           if (!agg[t.registration]) {
             agg[t.registration] = {
               registration: t.registration,
               busNumber: meta.busNumber,
               driverName: meta.driverName,
+              ...classifyRow(t.registration),
               trips: 0, totalKm: 0, speedSum: 0,
               maxSpeed: 0, speeding: 0, braking: 0, cornering: 0, accel: 0, idleTime: 0,
             };
@@ -488,19 +574,64 @@ export default function FleetReports() {
     const isDailyView = odomGroupBy === 'daily';
     const colCount    = isDailyView ? 8 : 6;
 
-    const excelHeaders = isDailyView
-      ? [t('Date', 'التاريخ'), t('Bus #', 'رقم الحافلة'), t('Plate', 'اللوحة'), t('Driver', 'السائق'), t('Trips', 'الرحلات'), t('Start Odo (km)', 'عداد البداية (كم)'), t('End Odo (km)', 'عداد النهاية (كم)'), t('Distance (km)', 'المسافة (كم)')]
-      : [odomGroupBy === 'weekly' ? t('Week', 'الأسبوع') : t('Month', 'الشهر'), t('Bus #', 'رقم الحافلة'), t('Plate', 'اللوحة'), t('Driver', 'السائق'), t('Trips', 'الرحلات'), t('Total Distance (km)', 'إجمالي المسافة (كم)')];
+    // Class split — bus fleet vs vehicles that are NOT part of the bus fleet.
+    const busRows   = odomData.filter(r => r.vClass === 'bus');
+    const otherRows = odomData.filter(r => r.vClass !== 'bus');
+    const sumTrips  = rows => rows.reduce((s, r) => s + r.trips, 0);
+    const sumKm     = rows => Math.round(rows.reduce((s, r) => s + r.distance, 0) * 10) / 10;
 
-    const excelRows = odomData.map(r =>
+    const excelHeaders = isDailyView
+      ? [t('Date', 'التاريخ'), vehicleColHeader, t('Plate', 'اللوحة'), t('Driver', 'السائق'), t('Trips', 'الرحلات'), t('Start Odo (km)', 'عداد البداية (كم)'), t('End Odo (km)', 'عداد النهاية (كم)'), t('Distance (km)', 'المسافة (كم)')]
+      : [odomGroupBy === 'weekly' ? t('Week', 'الأسبوع') : t('Month', 'الشهر'), vehicleColHeader, t('Plate', 'اللوحة'), t('Driver', 'السائق'), t('Trips', 'الرحلات'), t('Total Distance (km)', 'إجمالي المسافة (كم)')];
+
+    const excelRowFor = r =>
       isDailyView
-        ? [r.period, `${t('Bus', 'حافلة')} ${r.busNumber}`, r.registration, r.driverName, r.trips,
+        ? [r.period, vehicleLabelOf(r), r.registration, r.driverName, r.trips,
            r.startOdo ?? '--', r.endOdo ?? '--', r.distance]
-        : [r.period, `${t('Bus', 'حافلة')} ${r.busNumber}`, r.registration, r.driverName, r.trips, r.distance]
-    );
+        : [r.period, vehicleLabelOf(r), r.registration, r.driverName, r.trips, r.distance];
+    const excelSubtotal = (label, rows) => isDailyView
+      ? [label, '', '', '', sumTrips(rows), '', '', sumKm(rows)]
+      : [label, '', '', '', sumTrips(rows), sumKm(rows)];
+
+    // When scope is 'all', exports separate the two classes with headed sections
+    // and per-class subtotals — never one undifferentiated list.
+    const excelRows = isAll
+      ? [
+          [`■ ${busGroupLabel}`],
+          ...busRows.map(excelRowFor),
+          excelSubtotal(t('Bus fleet subtotal', 'إجمالي فرعي — أسطول الحافلات'), busRows),
+          [`■ ${otherGroupLabel}`],
+          ...otherRows.map(excelRowFor),
+          excelSubtotal(t('Other vehicles subtotal (not part of the bus fleet)', 'إجمالي فرعي — مركبات أخرى (ليست ضمن أسطول الحافلات)'), otherRows),
+        ]
+      : odomData.map(excelRowFor);
     const excelFooter = isDailyView
-      ? [t('TOTAL', 'الإجمالي'), '', '', '', totalTrips, '', '', Math.round(totalKm * 10) / 10]
-      : [t('TOTAL', 'الإجمالي'), '', '', '', totalTrips, Math.round(totalKm * 10) / 10];
+      ? [isAll ? t('GRAND TOTAL', 'الإجمالي الكلي') : t('TOTAL', 'الإجمالي'), '', '', '', totalTrips, '', '', Math.round(totalKm * 10) / 10]
+      : [isAll ? t('GRAND TOTAL', 'الإجمالي الكلي') : t('TOTAL', 'الإجمالي'), '', '', '', totalTrips, Math.round(totalKm * 10) / 10];
+
+    const odomRowJsx = (r, i) => (
+      <tr key={`${r.registration}-${r.period}-${i}`}>
+        <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem' }}>{r.period}</td>
+        <td style={{ fontWeight: 800 }}>{vehicleLabelOf(r)}</td>
+        <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem' }}>{r.registration}</td>
+        <td>{r.driverName || '—'}</td>
+        <td style={{ color: 'var(--theme-text-muted)' }}>{r.trips.toLocaleString(locale)}</td>
+        {isDailyView && <>
+          <td style={{ color: 'var(--theme-text-muted)', fontSize: '0.82rem' }}>{r.startOdo != null ? r.startOdo.toLocaleString(locale) : '--'}</td>
+          <td style={{ color: 'var(--theme-text-muted)', fontSize: '0.82rem' }}>{r.endOdo   != null ? r.endOdo.toLocaleString(locale)   : '--'}</td>
+        </>}
+        <td style={{ fontWeight: 800, color: 'var(--theme-accent)' }}>{r.distance.toLocaleString(locale)}</td>
+      </tr>
+    );
+
+    const odomSubtotalJsx = (label, rows) => (
+      <tr className="fsv-subtotal-row">
+        <td colSpan={4}>{label}</td>
+        <td>{sumTrips(rows).toLocaleString(locale)}</td>
+        {isDailyView && <><td>—</td><td>—</td></>}
+        <td>{sumKm(rows).toLocaleString(locale)} {t('km', 'كم')}</td>
+      </tr>
+    );
 
     return (
       <div className="rpt-panel">
@@ -545,7 +676,7 @@ export default function FleetReports() {
             <div className="rpt-field">
               <label>{t('Vehicle', 'المركبة')}</label>
               <CustomSelect value={odomVehicle} onChange={setOdomVehicle}
-                options={[{ value: 'all', label: t('All Buses', 'جميع الحافلات') }, ...VEHICLE_OPTIONS.map(v => ({ value: v.value, label: v.label }))]} />
+                options={[{ value: 'all', label: allVehiclesLabel }, ...vehicleOptions]} />
             </div>
             <button className="rpt-generate-btn" onClick={() => fetchOdometer()} disabled={odomLoading}>
               {odomLoading ? <Loader2 size={15} className="animate-spin" /> : <BarChart2 size={15} />}
@@ -557,9 +688,9 @@ export default function FleetReports() {
         {/* KPI cards */}
         {odomFetched && !odomLoading && odomData.length > 0 && (
           <div className="rpt-kpi-row">
-            <KpiCard icon={<Truck size={16} />}  label={t('Total Fleet Distance', 'إجمالي مسافة الأسطول')} value={`${Math.round(totalKm).toLocaleString(locale)} ${t('km', 'كم')}`} sub={t(`${odomData.length} vehicle–period groups`, `${odomData.length} مجموعات المركبات والفترات`)} />
-            <KpiCard icon={<Award size={16} />}  label={t('Busiest Vehicle', 'المركبة الأكثر انشغالاً')}      value={busiestBus ? `${t('Bus', 'حافلة')} ${busiestBus.busNumber}` : '--'} sub={busiestBus ? `${busiestBus.distance.toLocaleString(locale)} ${t('km', 'كم')}` : ''} color="var(--status-warn)" />
-            <KpiCard icon={<Gauge size={16} />}  label={t('Avg per Bus', 'المعدل لكل حافلة')}          value={`${Math.round(totalKm / Math.max(1, new Set(odomData.map(r => r.registration)).size)).toLocaleString(locale)} ${t('km', 'كم')}`} sub={t('Average distance per vehicle', 'متوسط المسافة لكل مركبة')} />
+            <KpiCard icon={<Truck size={16} />}  label={t('Total Fleet Distance', 'إجمالي مسافة الأسطول')} value={`${Math.round(totalKm).toLocaleString(locale)} ${t('km', 'كم')}`} sub={isAll ? `${busGroupLabel}: ${sumKm(busRows).toLocaleString(locale)} ${t('km', 'كم')} • ${t('Other vehicles', 'مركبات أخرى')}: ${sumKm(otherRows).toLocaleString(locale)} ${t('km', 'كم')}` : t(`${odomData.length} vehicle–period groups`, `${odomData.length} مجموعات المركبات والفترات`)} />
+            <KpiCard icon={<Award size={16} />}  label={t('Busiest Vehicle', 'المركبة الأكثر انشغالاً')}      value={busiestBus ? vehicleLabelOf(busiestBus) : '--'} sub={busiestBus ? `${busiestBus.distance.toLocaleString(locale)} ${t('km', 'كم')}` : ''} color="var(--status-warn)" />
+            <KpiCard icon={<Gauge size={16} />}  label={scope === 'buses' ? t('Avg per Bus', 'المعدل لكل حافلة') : t('Avg per Vehicle', 'المعدل لكل مركبة')}          value={`${Math.round(totalKm / Math.max(1, new Set(odomData.map(r => r.registration)).size)).toLocaleString(locale)} ${t('km', 'كم')}`} sub={t('Average distance per vehicle', 'متوسط المسافة لكل مركبة')} />
             <KpiCard icon={<Calendar size={16} />} label={t('Total Trips', 'إجمالي الرحلات')}         value={totalTrips.toLocaleString(locale)} sub={`${startDate} → ${endDate}`} />
           </div>
         )}
@@ -569,12 +700,13 @@ export default function FleetReports() {
           <div className="rpt-table-header">
             <div>
               <h3 className="rpt-table-title">{t('Odometer Report', 'تقرير عداد المسافات')}</h3>
+              {isOthers && <p className="fsv-scope-tag"><Car size={12} /> {otherGroupLabel}</p>}
               <p className="rpt-table-sub">{odomFetched ? t(`${odomData.length} rows • ${dateRangeStr}`, `${odomData.length} صفوف • ${dateRangeStr}`) : t('Select a date range and generate the report', 'حدد نطاق التاريخ وأنشئ التقرير')}</p>
             </div>
             <ExportDropdown
               disabled={!odomData.length}
-              onExcel={() => doExcelExport(t('Odometer Report', 'تقرير عداد المسافات'), excelHeaders, excelRows, dateRangeStr)}
-              onPDF={()   => doPDFExport(t('Odometer Report', 'تقرير عداد المسافات'), excelHeaders, excelRows, dateRangeStr, excelFooter)}
+              onExcel={() => doExcelExport(t('Odometer Report', 'تقرير عداد المسافات') + scopeSuffix, excelHeaders, excelRows, dateRangeStr)}
+              onPDF={()   => doPDFExport(t('Odometer Report', 'تقرير عداد المسافات') + scopeSuffix, excelHeaders, excelRows, dateRangeStr, excelFooter)}
             />
           </div>
           <div className="fleet-table-container" style={{ borderRadius: 0, border: 'none' }}>
@@ -582,9 +714,9 @@ export default function FleetReports() {
               <thead>
                 <tr>
                   {isDailyView ? (
-                    <><th>{t('Date', 'التاريخ')}</th><th>{t('Bus #', 'رقم الحافلة')}</th><th>{t('Plate', 'اللوحة')}</th><th>{t('Driver', 'السائق')}</th><th>{t('Trips', 'الرحلات')}</th><th>{t('Start Odo', 'بداية العداد')}</th><th>{t('End Odo', 'نهاية العداد')}</th><th>{t('Distance (km)', 'المسافة (كم)')}</th></>
+                    <><th>{t('Date', 'التاريخ')}</th><th>{vehicleColHeader}</th><th>{t('Plate', 'اللوحة')}</th><th>{t('Driver', 'السائق')}</th><th>{t('Trips', 'الرحلات')}</th><th>{t('Start Odo', 'بداية العداد')}</th><th>{t('End Odo', 'نهاية العداد')}</th><th>{t('Distance (km)', 'المسافة (كم)')}</th></>
                   ) : (
-                    <><th>{odomGroupBy === 'weekly' ? t('Week', 'الأسبوع') : t('Month', 'الشهر')}</th><th>{t('Bus #', 'رقم الحافلة')}</th><th>{t('Plate', 'اللوحة')}</th><th>{t('Driver', 'السائق')}</th><th>{t('Trips', 'الرحلات')}</th><th>{t('Total Distance (km)', 'إجمالي المسافة (كم)')}</th></>
+                    <><th>{odomGroupBy === 'weekly' ? t('Week', 'الأسبوع') : t('Month', 'الشهر')}</th><th>{vehicleColHeader}</th><th>{t('Plate', 'اللوحة')}</th><th>{t('Driver', 'السائق')}</th><th>{t('Trips', 'الرحلات')}</th><th>{t('Total Distance (km)', 'إجمالي المسافة (كم)')}</th></>
                   )}
                 </tr>
               </thead>
@@ -593,32 +725,34 @@ export default function FleetReports() {
                  odomError       ? <ErrorState message={odomError} onRetry={() => fetchOdometer()} /> :
                  !odomFetched    ? <EmptyState /> :
                  odomData.length === 0 ? <EmptyState /> :
-                 odomData.map((r, i) => (
-                  <tr key={i}>
-                    <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem' }}>{r.period}</td>
-                    <td style={{ fontWeight: 800 }}>{t('Bus', 'حافلة')} {r.busNumber}</td>
-                    <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem' }}>{r.registration}</td>
-                    <td>{r.driverName}</td>
-                    <td style={{ color: 'var(--theme-text-muted)' }}>{r.trips.toLocaleString(locale)}</td>
-                    {isDailyView && <>
-                      <td style={{ color: 'var(--theme-text-muted)', fontSize: '0.82rem' }}>{r.startOdo != null ? r.startOdo.toLocaleString(locale) : '--'}</td>
-                      <td style={{ color: 'var(--theme-text-muted)', fontSize: '0.82rem' }}>{r.endOdo   != null ? r.endOdo.toLocaleString(locale)   : '--'}</td>
-                    </>}
-                    <td style={{ fontWeight: 800, color: 'var(--theme-accent)' }}>{r.distance.toLocaleString(locale)}</td>
-                  </tr>
-                ))}
+                 isAll ? (
+                  <>
+                    {busRows.length > 0 && <GroupHeaderRow kind="bus" />}
+                    {busRows.map(odomRowJsx)}
+                    {busRows.length > 0 && odomSubtotalJsx(t('Bus fleet subtotal', 'إجمالي فرعي — أسطول الحافلات'), busRows)}
+                    {otherRows.length > 0 && <GroupHeaderRow kind="other" />}
+                    {otherRows.map(odomRowJsx)}
+                    {otherRows.length > 0 && odomSubtotalJsx(t('Other vehicles subtotal', 'إجمالي فرعي — مركبات أخرى'), otherRows)}
+                  </>
+                 ) :
+                 odomData.map(odomRowJsx)}
               </tbody>
               {odomData.length > 0 && (
                 <tfoot>
                   <tr className="rpt-total-row">
-                    <td colSpan={isDailyView ? 4 : 4} style={{ fontWeight: 800 }}>{t('TOTAL', 'الإجمالي')}</td>
+                    <td colSpan={isDailyView ? 4 : 4} style={{ fontWeight: 800 }}>{isAll ? t('GRAND TOTAL', 'الإجمالي الكلي') : t('TOTAL', 'الإجمالي')}</td>
                     <td style={{ fontWeight: 700 }}>{totalTrips.toLocaleString(locale)}</td>
                     {isDailyView && <><td>—</td><td>—</td></>}
                     <td style={{ fontWeight: 900, color: 'var(--theme-accent)' }}>{Math.round(totalKm * 10) / 10} {t('km', 'كم')}</td>
                   </tr>
                   <tr>
                     <td colSpan={99} style={{ padding: '8px 20px 14px', fontSize: '0.75rem', color: 'var(--theme-text-muted)', fontWeight: 600 }}>
-                      {t(`${new Set(odomData.map(r => r.registration)).size} buses`, `${new Set(odomData.map(r => r.registration)).size} حافلات`)} &nbsp;•&nbsp; {Math.round(totalKm * 10) / 10} {t('total km', 'إجمالي كم')} &nbsp;•&nbsp; {dateRangeStr}
+                      {scope === 'buses'
+                        ? t(`${new Set(odomData.map(r => r.registration)).size} buses`, `${new Set(odomData.map(r => r.registration)).size} حافلات`)
+                        : isOthers
+                          ? `${new Set(odomData.map(r => r.registration)).size} ${otherGroupLabel}`
+                          : `${new Set(busRows.map(r => r.registration)).size} ${busGroupLabel} • ${new Set(otherRows.map(r => r.registration)).size} ${otherGroupLabel}`}
+                      &nbsp;•&nbsp; {Math.round(totalKm * 10) / 10} {t('total km', 'إجمالي كم')} &nbsp;•&nbsp; {dateRangeStr}
                     </td>
                   </tr>
                 </tfoot>
@@ -644,9 +778,60 @@ export default function FleetReports() {
       ? Math.round((lowCount * 100 + medCount * 50 + highCount * 10) / riskData.length)
       : 0;
 
-    const excelHeaders = [t('Bus #', 'رقم الحافلة'), t('Plate', 'اللوحة'), t('Driver', 'السائق'), t('Speeding Events', 'تجاوز السرعة'), t('Harsh Braking', 'فرملة قاسية'), t('Harsh Cornering', 'انعطاف حاد'), t('Harsh Accel', 'تسارع قاسي'), t('Max Speed (km/h)', 'أقصى سرعة (كم/س)'), t('Risk Level', 'مستوى المخاطر')];
-    const excelRows    = filtered.map(r => [`${t('Bus', 'حافلة')} ${r.busNumber}`, r.registration, r.driverName, r.speeding, r.braking, r.cornering, r.accel, r.maxSpeed, r.riskLevel]);
+    // Class split — bus fleet vs vehicles that are NOT part of the bus fleet.
+    const busRows   = filtered.filter(r => r.vClass === 'bus');
+    const otherRows = filtered.filter(r => r.vClass !== 'bus');
+    const riskSum   = (rows, key) => rows.reduce((s, r) => s + r[key], 0);
+
+    const excelHeaders = [vehicleColHeader, t('Plate', 'اللوحة'), t('Driver', 'السائق'), t('Speeding Events', 'تجاوز السرعة'), t('Harsh Braking', 'فرملة قاسية'), t('Harsh Cornering', 'انعطاف حاد'), t('Harsh Accel', 'تسارع قاسي'), t('Max Speed (km/h)', 'أقصى سرعة (كم/س)'), t('Risk Level', 'مستوى المخاطر')];
+    const excelRowFor  = r => [vehicleLabelOf(r), r.registration, r.driverName, r.speeding, r.braking, r.cornering, r.accel, r.maxSpeed, r.riskLevel];
+    const excelSubtotal = (label, rows) => [label, '', '', riskSum(rows, 'speeding'), riskSum(rows, 'braking'), riskSum(rows, 'cornering'), riskSum(rows, 'accel'), '', ''];
+    const excelRows = isAll
+      ? [
+          [`■ ${busGroupLabel}`],
+          ...busRows.map(excelRowFor),
+          excelSubtotal(t('Bus fleet subtotal', 'إجمالي فرعي — أسطول الحافلات'), busRows),
+          [`■ ${otherGroupLabel}`],
+          ...otherRows.map(excelRowFor),
+          excelSubtotal(t('Other vehicles subtotal (not part of the bus fleet)', 'إجمالي فرعي — مركبات أخرى (ليست ضمن أسطول الحافلات)'), otherRows),
+        ]
+      : filtered.map(excelRowFor);
     const excelFooter  = [`${highCount} ${t('High', 'مرتفع')} / ${medCount} ${t('Medium', 'متوسط')} / ${lowCount} ${t('Low', 'منخفض')}`, '', '', totalSpeeding, totalBraking, '', '', '', ''];
+
+    const riskRowJsx = (r, i) => {
+      const badge = getRiskBadge(r.riskLevel, t);
+      return (
+        <tr key={`${r.registration}-${i}`}>
+          <td style={{ fontWeight: 800 }}>{vehicleLabelOf(r)}</td>
+          <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem' }}>{r.registration}</td>
+          <td>{r.driverName || '—'}</td>
+          <td style={{ color: r.speeding > 10 ? 'var(--status-risk)' : r.speeding > 0 ? 'var(--status-caution)' : 'var(--theme-text-muted)', fontWeight: r.speeding > 0 ? 700 : 400 }}>{r.speeding.toLocaleString(locale)}</td>
+          <td style={{ color: r.braking  > 5  ? 'var(--status-risk)' : r.braking  > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)', fontWeight: r.braking  > 0 ? 700 : 400 }}>{r.braking.toLocaleString(locale)}</td>
+          <td style={{ color: r.cornering > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)' }}>{r.cornering.toLocaleString(locale)}</td>
+          <td style={{ color: r.accel     > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)' }}>{r.accel.toLocaleString(locale)}</td>
+          <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem', color: r.maxSpeed > 120 ? 'var(--status-risk)' : 'var(--theme-text-main)' }}>
+            {r.maxSpeed > 0 ? `${r.maxSpeed.toLocaleString(locale)} ${t('km/h', 'كم/س')}` : '--'}
+          </td>
+          <td>
+            <span className="status-badge" style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>
+              {r.riskLevel}
+            </span>
+          </td>
+        </tr>
+      );
+    };
+
+    const riskSubtotalJsx = (label, rows) => (
+      <tr className="fsv-subtotal-row">
+        <td colSpan={3}>{label}</td>
+        <td>{riskSum(rows, 'speeding').toLocaleString(locale)}</td>
+        <td>{riskSum(rows, 'braking').toLocaleString(locale)}</td>
+        <td>{riskSum(rows, 'cornering').toLocaleString(locale)}</td>
+        <td>{riskSum(rows, 'accel').toLocaleString(locale)}</td>
+        <td>—</td>
+        <td>—</td>
+      </tr>
+    );
 
     return (
       <div className="rpt-panel">
@@ -672,7 +857,7 @@ export default function FleetReports() {
             <div className="rpt-field">
               <label>{t('Vehicle', 'المركبة')}</label>
               <CustomSelect value={riskVehicle} onChange={setRiskVehicle}
-                options={[{ value: 'all', label: t('All Buses', 'جميع الحافلات') }, ...VEHICLE_OPTIONS.map(v => ({ value: v.value, label: v.label }))]} />
+                options={[{ value: 'all', label: allVehiclesLabel }, ...vehicleOptions]} />
             </div>
             <div className="rpt-field">
               <label>{t('Risk Level', 'مستوى المخاطر')}</label>
@@ -704,19 +889,20 @@ export default function FleetReports() {
           <div className="rpt-table-header">
             <div>
               <h3 className="rpt-table-title">{t('Risk Management Report', 'تقرير إدارة المخاطر')}</h3>
+              {isOthers && <p className="fsv-scope-tag"><Car size={12} /> {otherGroupLabel}</p>}
               <p className="rpt-table-sub">{riskFetched ? t(`${filtered.length} vehicles • ${dateRangeStr}`, `${filtered.length} مركبات • ${dateRangeStr}`) : t('Select a date range and generate the report', 'حدد نطاق التاريخ وأنشئ التقرير')}</p>
             </div>
             <ExportDropdown
               disabled={!filtered.length}
-              onExcel={() => doExcelExport(t('Risk Management Report', 'تقرير إدارة المخاطر'), excelHeaders, excelRows, dateRangeStr)}
-              onPDF={()   => doPDFExport(t('Risk Management Report', 'تقرير إدارة المخاطر'), excelHeaders, excelRows, dateRangeStr, excelFooter)}
+              onExcel={() => doExcelExport(t('Risk Management Report', 'تقرير إدارة المخاطر') + scopeSuffix, excelHeaders, excelRows, dateRangeStr)}
+              onPDF={()   => doPDFExport(t('Risk Management Report', 'تقرير إدارة المخاطر') + scopeSuffix, excelHeaders, excelRows, dateRangeStr, excelFooter)}
             />
           </div>
           <div className="fleet-table-container" style={{ borderRadius: 0, border: 'none' }}>
             <table className="fleet-table">
               <thead>
                 <tr>
-                  <th>{t('Bus #', 'رقم الحافلة')}</th><th>{t('Plate', 'اللوحة')}</th><th>{t('Driver', 'السائق')}</th>
+                  <th>{vehicleColHeader}</th><th>{t('Plate', 'اللوحة')}</th><th>{t('Driver', 'السائق')}</th>
                   <th>{t('Speeding', 'السرعة')}</th><th>{t('Harsh Braking', 'فرملة قاسية')}</th><th>{t('Harsh Cornering', 'انعطاف حاد')}</th><th>{t('Harsh Accel', 'تسارع قاسي')}</th>
                   <th>{t('Max Speed', 'أقصى سرعة')}</th><th>{t('Risk Level', 'مستوى المخاطر')}</th>
                 </tr>
@@ -726,33 +912,22 @@ export default function FleetReports() {
                  riskError       ? <ErrorState message={riskError} onRetry={() => fetchRisk()} /> :
                  !riskFetched    ? <EmptyState /> :
                  filtered.length === 0 ? <EmptyState /> :
-                 filtered.map((r, i) => {
-                  const badge = getRiskBadge(r.riskLevel, t);
-                  return (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 800 }}>{t('Bus', 'حافلة')} {r.busNumber}</td>
-                      <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem' }}>{r.registration}</td>
-                      <td>{r.driverName}</td>
-                      <td style={{ color: r.speeding > 10 ? 'var(--status-risk)' : r.speeding > 0 ? 'var(--status-caution)' : 'var(--theme-text-muted)', fontWeight: r.speeding > 0 ? 700 : 400 }}>{r.speeding.toLocaleString(locale)}</td>
-                      <td style={{ color: r.braking  > 5  ? 'var(--status-risk)' : r.braking  > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)', fontWeight: r.braking  > 0 ? 700 : 400 }}>{r.braking.toLocaleString(locale)}</td>
-                      <td style={{ color: r.cornering > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)' }}>{r.cornering.toLocaleString(locale)}</td>
-                      <td style={{ color: r.accel     > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)' }}>{r.accel.toLocaleString(locale)}</td>
-                      <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem', color: r.maxSpeed > 120 ? 'var(--status-risk)' : 'var(--theme-text-main)' }}>
-                        {r.maxSpeed > 0 ? `${r.maxSpeed.toLocaleString(locale)} ${t('km/h', 'كم/س')}` : '--'}
-                      </td>
-                      <td>
-                        <span className="status-badge" style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>
-                          {r.riskLevel}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                 isAll ? (
+                  <>
+                    {busRows.length > 0 && <GroupHeaderRow kind="bus" />}
+                    {busRows.map(riskRowJsx)}
+                    {busRows.length > 0 && riskSubtotalJsx(t('Bus fleet subtotal', 'إجمالي فرعي — أسطول الحافلات'), busRows)}
+                    {otherRows.length > 0 && <GroupHeaderRow kind="other" />}
+                    {otherRows.map(riskRowJsx)}
+                    {otherRows.length > 0 && riskSubtotalJsx(t('Other vehicles subtotal', 'إجمالي فرعي — مركبات أخرى'), otherRows)}
+                  </>
+                 ) :
+                 filtered.map(riskRowJsx)}
               </tbody>
               {filtered.length > 0 && (
                 <tfoot>
                   <tr className="rpt-total-row">
-                    <td colSpan={3} style={{ fontWeight: 800 }}>{t('FLEET TOTALS', 'إجمالي الأسطول')}</td>
+                    <td colSpan={3} style={{ fontWeight: 800 }}>{isAll ? t('GRAND TOTAL', 'الإجمالي الكلي') : t('FLEET TOTALS', 'إجمالي الأسطول')}</td>
                     <td style={{ fontWeight: 800, color: 'var(--status-risk)' }}>{totalSpeeding.toLocaleString(locale)}</td>
                     <td style={{ fontWeight: 800, color: 'var(--status-warn)' }}>{totalBraking.toLocaleString(locale)}</td>
                     <td style={{ fontWeight: 700 }}>{riskData.reduce((s, r) => s + r.cornering, 0).toLocaleString(locale)}</td>
@@ -788,9 +963,72 @@ export default function FleetReports() {
     const best  = scData.length ? scData[0] : null;
     const worst = scData.length ? scData[scData.length - 1] : null;
 
-    const excelHeaders = [t('Rank', 'الرتبة'), t('Bus #', 'رقم الحافلة'), t('Driver', 'السائق'), t('Trips', 'الرحلات'), t('Total km', 'إجمالي كم'), t('Avg Speed', 'متوسط السرعة'), t('Max Speed', 'أقصى سرعة'), t('Speeding', 'السرعة'), t('Harsh Braking', 'فرملة قاسية'), t('Harsh Cornering', 'انعطاف حاد'), t('Harsh Accel', 'تسارع قاسي'), t('Idle Time (min)', 'وقت الخمول (دقيقة)'), t('Score', 'الدرجة'), t('Grade', 'التقييم')];
-    const excelRows    = scData.map(r => [r.rank, `${t('Bus', 'حافلة')} ${r.busNumber}`, r.driverName, r.trips, r.totalKm, r.avgSpeed, r.maxSpeed, r.speeding, r.braking, r.cornering, r.accel, r.idleMins, r.score, r.scoreBadge.label]);
-    const excelFooter  = ['', t('FLEET AVG', 'متوسط الأسطول'), '', totalTrips, Math.round(totalKm * 10) / 10, '', '', '', '', '', '', '', fleetAvgScore, ''];
+    // Class split — bus fleet vs vehicles that are NOT part of the bus fleet.
+    // Ranks are re-computed per class so each cohort is ranked against its peers.
+    const scBusRows   = scData.filter(r => r.vClass === 'bus').map((r, i) => ({ ...r, rank: i + 1 }));
+    const scOtherRows = scData.filter(r => r.vClass !== 'bus').map((r, i) => ({ ...r, rank: i + 1 }));
+    const scSumTrips  = rows => rows.reduce((s, r) => s + r.trips, 0);
+    const scSumKm     = rows => Math.round(rows.reduce((s, r) => s + r.totalKm, 0) * 10) / 10;
+    const scAvgScore  = rows => (rows.length ? Math.round(rows.reduce((s, r) => s + (Number(r.score) || 0), 0) / rows.length) : 0);
+
+    const excelHeaders = [t('Rank', 'الرتبة'), vehicleColHeader, t('Driver', 'السائق'), t('Trips', 'الرحلات'), t('Total km', 'إجمالي كم'), t('Avg Speed', 'متوسط السرعة'), t('Max Speed', 'أقصى سرعة'), t('Speeding', 'السرعة'), t('Harsh Braking', 'فرملة قاسية'), t('Harsh Cornering', 'انعطاف حاد'), t('Harsh Accel', 'تسارع قاسي'), t('Idle Time (min)', 'وقت الخمول (دقيقة)'), t('Score', 'الدرجة'), t('Grade', 'التقييم')];
+    const excelRowFor  = r => [r.rank, vehicleLabelOf(r), r.driverName, r.trips, r.totalKm, r.avgSpeed, r.maxSpeed, r.speeding, r.braking, r.cornering, r.accel, r.idleMins, r.score, r.scoreBadge.label];
+    const excelSubtotal = (label, rows) => ['', label, '', scSumTrips(rows), scSumKm(rows), '', '', '', '', '', '', '', scAvgScore(rows), ''];
+    const excelRows = isAll
+      ? [
+          [`■ ${busGroupLabel}`],
+          ...scBusRows.map(excelRowFor),
+          excelSubtotal(t('Bus fleet subtotal', 'إجمالي فرعي — أسطول الحافلات'), scBusRows),
+          [`■ ${otherGroupLabel}`],
+          ...scOtherRows.map(excelRowFor),
+          excelSubtotal(t('Other vehicles subtotal (not part of the bus fleet)', 'إجمالي فرعي — مركبات أخرى (ليست ضمن أسطول الحافلات)'), scOtherRows),
+        ]
+      : scData.map(excelRowFor);
+    const excelFooter  = ['', isAll ? t('OVERALL AVG', 'المتوسط الكلي') : t('FLEET AVG', 'متوسط الأسطول'), '', totalTrips, Math.round(totalKm * 10) / 10, '', '', '', '', '', '', '', fleetAvgScore, ''];
+
+    const scRowJsx = (r, i) => {
+      const badge  = r.scoreBadge;
+      const isTop  = r.rank === 1;
+      return (
+        <tr key={`${r.registration}-${i}`} style={isTop ? { background: 'var(--theme-accent-glow)', borderLeft: locale === 'ar-SA' ? 'none' : '3px solid var(--theme-accent-border)', borderRight: locale === 'ar-SA' ? '3px solid var(--theme-accent-border)' : 'none' } : {}}>
+          <td style={{ fontWeight: 900, fontSize: '1rem', color: isTop ? 'var(--theme-accent)' : 'var(--theme-text-muted)' }}>
+            {isTop ? '🥇' : `#${r.rank.toLocaleString(locale)}`}
+          </td>
+          <td style={{ fontWeight: 800 }}>{vehicleLabelOf(r)}</td>
+          <td style={{ fontWeight: 600 }}>{r.driverName || '—'}</td>
+          <td style={{ color: 'var(--theme-text-muted)' }}>{r.trips.toLocaleString(locale)}</td>
+          <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem' }}>{r.totalKm.toLocaleString(locale)}</td>
+          <td style={{ color: 'var(--theme-text-muted)', fontSize: '0.82rem' }}>{r.avgSpeed > 0 ? `${r.avgSpeed.toLocaleString(locale)} ${t('km/h', 'كم/س')}` : '--'}</td>
+          <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem', color: r.maxSpeed > 120 ? 'var(--status-risk)' : 'var(--theme-text-main)' }}>
+            {r.maxSpeed > 0 ? `${r.maxSpeed.toLocaleString(locale)} ${t('km/h', 'كم/س')}` : '--'}
+          </td>
+          <td style={{ color: r.speeding  > 0 ? 'var(--status-caution)' : 'var(--theme-text-muted)' }}>{r.speeding.toLocaleString(locale)}</td>
+          <td style={{ color: r.braking   > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)' }}>{r.braking.toLocaleString(locale)}</td>
+          <td style={{ color: r.cornering > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)' }}>{r.cornering.toLocaleString(locale)}</td>
+          <td style={{ color: r.accel     > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)' }}>{r.accel.toLocaleString(locale)}</td>
+          <td style={{ color: 'var(--theme-text-muted)', fontSize: '0.82rem' }}>{r.idleMins.toLocaleString(locale)}</td>
+          <td>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 900, fontSize: '1rem', color: badge.color }}>{r.score.toLocaleString(locale)}</span>
+              <span className="status-badge" style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, fontSize: '0.65rem' }}>
+                {badge.label}
+              </span>
+            </div>
+          </td>
+        </tr>
+      );
+    };
+
+    const scSubtotalJsx = (label, rows) => (
+      <tr className="fsv-subtotal-row">
+        <td>—</td>
+        <td colSpan={2}>{label}</td>
+        <td>{scSumTrips(rows).toLocaleString(locale)}</td>
+        <td>{scSumKm(rows).toLocaleString(locale)}</td>
+        <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+        <td>{scAvgScore(rows).toLocaleString(locale)}</td>
+      </tr>
+    );
 
     return (
       <div className="rpt-panel">
@@ -816,7 +1054,7 @@ export default function FleetReports() {
             <div className="rpt-field">
               <label>{t('Driver / Vehicle', 'السائق / المركبة')}</label>
               <CustomSelect value={scVehicle} onChange={setScVehicle}
-                options={[{ value: 'all', label: t('All Drivers', 'جميع السائقين') }, ...VEHICLE_OPTIONS.map(v => ({ value: v.value, label: v.label }))]} />
+                options={[{ value: 'all', label: t('All Drivers', 'جميع السائقين') }, ...vehicleOptions]} />
             </div>
             <button className="rpt-generate-btn" onClick={() => fetchScorecard()} disabled={scLoading}>
               {scLoading ? <Loader2 size={15} className="animate-spin" /> : <Award size={15} />}
@@ -827,8 +1065,8 @@ export default function FleetReports() {
 
         {scFetched && !scLoading && scData.length > 0 && (
           <div className="rpt-kpi-row">
-            <KpiCard icon={<Award size={16} />}  label={t('Best Driver', 'أفضل سائق')}      value={best ? `${t('Bus', 'حافلة')} ${best.busNumber}` : '--'} sub={best ? `${best.driverName} — ${best.score.toLocaleString(locale)}/100` : ''} color="var(--status-safe)" />
-            <KpiCard icon={<AlertTriangle size={16} />} label={t('Needs Attention', 'يحتاج للانتباه')} value={worst ? `${t('Bus', 'حافلة')} ${worst.busNumber}` : '--'} sub={worst ? `${worst.driverName} — ${worst.score.toLocaleString(locale)}/100` : ''} color="var(--status-risk)" />
+            <KpiCard icon={<Award size={16} />}  label={t('Best Driver', 'أفضل سائق')}      value={best ? vehicleLabelOf(best) : '--'} sub={best ? `${best.driverName || best.registration} — ${best.score.toLocaleString(locale)}/100` : ''} color="var(--status-safe)" />
+            <KpiCard icon={<AlertTriangle size={16} />} label={t('Needs Attention', 'يحتاج للانتباه')} value={worst ? vehicleLabelOf(worst) : '--'} sub={worst ? `${worst.driverName || worst.registration} — ${worst.score.toLocaleString(locale)}/100` : ''} color="var(--status-risk)" />
             <KpiCard icon={<Gauge size={16} />}  label={t('Fleet Avg Score', 'متوسط درجة الأسطول')}  value={`${fleetAvgScore.toLocaleString(locale)}/100`} color={fleetAvgScore >= 80 ? 'var(--status-safe)' : fleetAvgScore >= 60 ? 'var(--status-warn)' : 'var(--status-risk)'} sub={t('Weighted fleet-wide score', 'الدرجة الموزونة لكامل الأسطول')} />
             <KpiCard icon={<Users size={16} />}  label={t('Total Trips', 'إجمالي الرحلات')}      value={totalTrips.toLocaleString(locale)} sub={t(`${Math.round(totalKm).toLocaleString(locale)} km total distance`, `إجمالي المسافة ${Math.round(totalKm).toLocaleString(locale)} كم`)} />
           </div>
@@ -838,19 +1076,20 @@ export default function FleetReports() {
           <div className="rpt-table-header">
             <div>
               <h3 className="rpt-table-title">{t('Driver Scorecard Report', 'تقرير سجل أداء السائقين')}</h3>
+              {isOthers && <p className="fsv-scope-tag"><Car size={12} /> {otherGroupLabel}</p>}
               <p className="rpt-table-sub">{scFetched ? t(`${scData.length} drivers • ${dateRangeStr}`, `${scData.length} سائقين • ${dateRangeStr}`) : t('Select a date range and generate the report', 'حدد نطاق التاريخ وأنشئ التقرير')}</p>
             </div>
             <ExportDropdown
               disabled={!scData.length}
-              onExcel={() => doExcelExport(t('Driver Scorecard Report', 'تقرير سجل أداء السائقين'), excelHeaders, excelRows, dateRangeStr)}
-              onPDF={()   => doPDFExport(t('Driver Scorecard Report', 'تقرير سجل أداء السائقين'), excelHeaders, excelRows, dateRangeStr, excelFooter)}
+              onExcel={() => doExcelExport(t('Driver Scorecard Report', 'تقرير سجل أداء السائقين') + scopeSuffix, excelHeaders, excelRows, dateRangeStr)}
+              onPDF={()   => doPDFExport(t('Driver Scorecard Report', 'تقرير سجل أداء السائقين') + scopeSuffix, excelHeaders, excelRows, dateRangeStr, excelFooter)}
             />
           </div>
           <div className="fleet-table-container" style={{ borderRadius: 0, border: 'none' }}>
             <table className="fleet-table">
               <thead>
                 <tr>
-                  <th>{t('Rank', 'الرتبة')}</th><th>{t('Bus #', 'رقم الحافلة')}</th><th>{t('Driver', 'السائق')}</th><th>{t('Trips', 'الرحلات')}</th>
+                  <th>{t('Rank', 'الرتبة')}</th><th>{vehicleColHeader}</th><th>{t('Driver', 'السائق')}</th><th>{t('Trips', 'الرحلات')}</th>
                   <th>{t('Total km', 'إجمالي كم')}</th><th>{t('Avg Speed', 'متوسط السرعة')}</th><th>{t('Max Speed', 'أقصى سرعة')}</th>
                   <th>{t('Speeding', 'السرعة')}</th><th>{t('Braking', 'فرملة')}</th><th>{t('Cornering', 'انعطاف')}</th><th>{t('Accel', 'تسارع')}</th>
                   <th>{t('Idle (min)', 'خمول (د)')}</th><th>{t('Score', 'الدرجة')}</th>
@@ -861,44 +1100,23 @@ export default function FleetReports() {
                  scError         ? <ErrorState message={scError} onRetry={() => fetchScorecard()} /> :
                  !scFetched      ? <EmptyState /> :
                  scData.length === 0 ? <EmptyState /> :
-                 scData.map((r, i) => {
-                  const badge  = r.scoreBadge;
-                  const isTop  = r.rank === 1;
-                  return (
-                    <tr key={i} style={isTop ? { background: 'var(--theme-accent-glow)', borderLeft: locale === 'ar-SA' ? 'none' : '3px solid var(--theme-accent-border)', borderRight: locale === 'ar-SA' ? '3px solid var(--theme-accent-border)' : 'none' } : {}}>
-                      <td style={{ fontWeight: 900, fontSize: '1rem', color: isTop ? 'var(--theme-accent)' : 'var(--theme-text-muted)' }}>
-                        {isTop ? '🥇' : `#${r.rank.toLocaleString(locale)}`}
-                      </td>
-                      <td style={{ fontWeight: 800 }}>{t('Bus', 'حافلة')} {r.busNumber}</td>
-                      <td style={{ fontWeight: 600 }}>{r.driverName}</td>
-                      <td style={{ color: 'var(--theme-text-muted)' }}>{r.trips.toLocaleString(locale)}</td>
-                      <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem' }}>{r.totalKm.toLocaleString(locale)}</td>
-                      <td style={{ color: 'var(--theme-text-muted)', fontSize: '0.82rem' }}>{r.avgSpeed > 0 ? `${r.avgSpeed.toLocaleString(locale)} ${t('km/h', 'كم/س')}` : '--'}</td>
-                      <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem', color: r.maxSpeed > 120 ? 'var(--status-risk)' : 'var(--theme-text-main)' }}>
-                        {r.maxSpeed > 0 ? `${r.maxSpeed.toLocaleString(locale)} ${t('km/h', 'كم/س')}` : '--'}
-                      </td>
-                      <td style={{ color: r.speeding  > 0 ? 'var(--status-caution)' : 'var(--theme-text-muted)' }}>{r.speeding.toLocaleString(locale)}</td>
-                      <td style={{ color: r.braking   > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)' }}>{r.braking.toLocaleString(locale)}</td>
-                      <td style={{ color: r.cornering > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)' }}>{r.cornering.toLocaleString(locale)}</td>
-                      <td style={{ color: r.accel     > 0 ? 'var(--status-warn)' : 'var(--theme-text-muted)' }}>{r.accel.toLocaleString(locale)}</td>
-                      <td style={{ color: 'var(--theme-text-muted)', fontSize: '0.82rem' }}>{r.idleMins.toLocaleString(locale)}</td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontWeight: 900, fontSize: '1rem', color: badge.color }}>{r.score.toLocaleString(locale)}</span>
-                          <span className="status-badge" style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, fontSize: '0.65rem' }}>
-                            {badge.label}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                 isAll ? (
+                  <>
+                    {scBusRows.length > 0 && <GroupHeaderRow kind="bus" />}
+                    {scBusRows.map(scRowJsx)}
+                    {scBusRows.length > 0 && scSubtotalJsx(t('Bus fleet subtotal', 'إجمالي فرعي — أسطول الحافلات'), scBusRows)}
+                    {scOtherRows.length > 0 && <GroupHeaderRow kind="other" />}
+                    {scOtherRows.map(scRowJsx)}
+                    {scOtherRows.length > 0 && scSubtotalJsx(t('Other vehicles subtotal', 'إجمالي فرعي — مركبات أخرى'), scOtherRows)}
+                  </>
+                 ) :
+                 scData.map(scRowJsx)}
               </tbody>
               {scData.length > 0 && (
                 <tfoot>
                   <tr className="rpt-total-row">
                     <td>—</td>
-                    <td colSpan={2} style={{ fontWeight: 800 }}>{t('FLEET AVERAGE', 'متوسط الأسطول')}</td>
+                    <td colSpan={2} style={{ fontWeight: 800 }}>{isAll ? t('OVERALL AVERAGE', 'المتوسط الكلي') : t('FLEET AVERAGE', 'متوسط الأسطول')}</td>
                     <td style={{ fontWeight: 700 }}>{totalTrips.toLocaleString(locale)}</td>
                     <td style={{ fontWeight: 700 }}>{Math.round(totalKm * 10) / 10}</td>
                     <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
@@ -923,15 +1141,29 @@ export default function FleetReports() {
   // ══════════════════════════════════════════════════════════════════════════
   // RENDER — MAINTENANCE COST (original)
   // ══════════════════════════════════════════════════════════════════════════
-  const AMBER_SCALE = ['#f59e0b', '#fb923c', '#f97316', '#ea580c', '#dc2626', '#c2410c'];
+  // Meadow heat scale: tangerine → burnt orange → ink (low spend → high spend)
+  const AMBER_SCALE = ['#c9a84c', '#b08f3a', '#8a6d1f', '#6b541a', '#4a3a12', '#111114'];
 
-  const renderMaintenance = () => (
+  const renderMaintenance = () => {
+    const maintBusSpend   = maintData.filter(r => r.vClass === 'bus').reduce((s, r) => s + r.spend, 0);
+    const maintOtherSpend = maintData.filter(r => r.vClass !== 'bus').reduce((s, r) => s + r.spend, 0);
+    return (
     <div className="reports-view">
+      {isOthers && (
+        <div className="fsv-scope-note">
+          <Car size={14} />
+          <span>{otherGroupLabel}</span>
+        </div>
+      )}
       <div className="stats-bento">
         <div className="stat-card glass-panel">
           <div className="stat-header"><h3>{t('Total Fleet Spend', 'إجمالي إنفاق الأسطول')}</h3><DollarSign size={16} /></div>
           <div className="stat-value">{maintTotalSpent.toLocaleString(locale)} <span style={{ fontSize: '0.9rem' }}>{t('AED', 'د.إ')}</span></div>
-          <p className="stat-label">{t('Accumulated maintenance cost (Firestore)', 'تكلفة الصيانة المتراكمة (فايرستور)')}</p>
+          <p className="stat-label">
+            {isAll
+              ? `${busGroupLabel}: ${maintBusSpend.toLocaleString(locale)} • ${t('Other vehicles (not part of the bus fleet)', 'مركبات أخرى (ليست ضمن أسطول الحافلات)')}: ${maintOtherSpend.toLocaleString(locale)}`
+              : t('Accumulated maintenance cost (Firestore)', 'تكلفة الصيانة المتراكمة (فايرستور)')}
+          </p>
         </div>
         <div className="stat-card glass-panel">
           <div className="stat-header"><h3>{t('High-Cost Asset', 'الأصول عالية التكلفة')}</h3><TrendingUp size={16} style={{ color: 'var(--status-risk)' }} /></div>
@@ -949,8 +1181,14 @@ export default function FleetReports() {
         <div className="glass-panel">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
             <div className="section-header" style={{ marginBottom: 0 }}>
-              <h2>{t('Expenditure Distribution', 'توزيع النفقات')}</h2>
+              <h2>{t('Expenditure Distribution', 'توزيع النفقات')}{scopeSuffix}</h2>
               <p>{t(`Asset-level financial analysis from internal service logs (${maintStartDate} to ${maintEndDate})`, `تحليل مالي على مستوى الأصول من سجلات الخدمة الداخلية (${maintStartDate} إلى ${maintEndDate})`)}</p>
+              {isAll && (
+                <div className="fsv-chart-legend">
+                  <span className="fsv-legend-item"><span className="fsv-legend-dot fsv-legend-dot--bus" /> {busGroupLabel}</span>
+                  <span className="fsv-legend-item"><span className="fsv-legend-dot fsv-legend-dot--other" /> {otherGroupLabel}</span>
+                </div>
+              )}
             </div>
             <button
               onClick={handleExportMaintPDF}
@@ -958,14 +1196,13 @@ export default function FleetReports() {
               className="btn-premium"
               style={{
                 display: 'flex', gap: '8px', alignItems: 'center', padding: '10px 24px',
-                background: (maintGenerating || maintData.length === 0) ? 'var(--theme-surface-hover)' : 'var(--theme-accent)',
-                color: (maintGenerating || maintData.length === 0) ? 'var(--theme-text-ghost)' : '#000',
-                border: '1px solid',
-                borderColor: (maintGenerating || maintData.length === 0) ? 'var(--theme-border-light)' : 'var(--theme-accent)',
-                borderRadius: '12px', fontWeight: 800, fontSize: '0.85rem', letterSpacing: '0.04em',
+                background: (maintGenerating || maintData.length === 0) ? 'var(--theme-surface-hover)' : 'var(--theme-ink)',
+                color: (maintGenerating || maintData.length === 0) ? 'var(--theme-text-ghost)' : 'var(--theme-ink-text)',
+                border: 'none',
+                borderRadius: '999px', fontWeight: 800, fontSize: '0.85rem', letterSpacing: '0.04em',
                 cursor: (maintGenerating || maintData.length === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.3s var(--ease-spring)',
-                boxShadow: (maintGenerating || maintData.length === 0) ? 'none' : '0 0 24px var(--theme-accent-glow)',
+                boxShadow: (maintGenerating || maintData.length === 0) ? 'none' : 'var(--shadow-sm)',
               }}
             >
               {maintGenerating ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
@@ -981,12 +1218,17 @@ export default function FleetReports() {
                   <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: 'var(--theme-text-muted)', fontSize: 12 }} />
                   <YAxis dataKey="plate" type="category" axisLine={false} tickLine={false} orientation={locale === 'ar-SA' ? 'right' : 'left'} tick={{ fill: 'var(--theme-text-main)', fontSize: 12, fontWeight: 700 }} />
                   <Tooltip
-                    cursor={{ fill: 'var(--theme-accent-glow)' }}
-                    contentStyle={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-accent-border)', borderRadius: '12px' }}
-                    itemStyle={{ color: 'var(--theme-accent)', fontWeight: 700 }}
+                    cursor={{ fill: 'var(--theme-surface-hover)' }}
+                    contentStyle={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: '12px' }}
+                    itemStyle={{ color: 'var(--theme-text-main)', fontWeight: 700 }}
                   />
                   <Bar dataKey="spend" radius={[0, 4, 4, 0]} barSize={30}>
-                    {maintData.map((_, index) => <Cell key={index} fill={AMBER_SCALE[index % AMBER_SCALE.length]} />)}
+                    {maintData.map((entry, index) => (
+                      <Cell
+                        key={index}
+                        fill={isAll && entry.vClass !== 'bus' ? 'var(--theme-text-ghost)' : AMBER_SCALE[index % AMBER_SCALE.length]}
+                      />
+                    ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -1022,9 +1264,9 @@ export default function FleetReports() {
               style={{
                 padding: '10px 20px', opacity: maintLoading ? 0.5 : 1,
                 cursor: maintLoading ? 'wait' : 'pointer',
-                background: maintLoading ? 'var(--theme-accent-glow)' : 'var(--theme-accent)',
-                border: '1px solid var(--theme-accent-border)', borderRadius: '10px',
-                color: maintLoading ? 'var(--theme-accent)' : '#000',
+                background: maintLoading ? 'var(--theme-surface-hover)' : 'var(--theme-ink)',
+                border: 'none', borderRadius: '999px',
+                color: maintLoading ? 'var(--theme-text-muted)' : 'var(--theme-ink-text)',
                 fontWeight: 800, fontSize: '0.8rem', letterSpacing: '0.04em',
                 transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px',
               }}
@@ -1041,7 +1283,8 @@ export default function FleetReports() {
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   // ══════════════════════════════════════════════════════════════════════════
   // MAIN RENDER

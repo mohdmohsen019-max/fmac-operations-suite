@@ -1,464 +1,375 @@
 /* ═══════════════════════════════════════════════════════════
-   FMAC TICKET WIZARD — "Ember Forge" cinematic redesign
-   ═══════════════════════════════════════════════════════════ */
+   REQUEST WIZARD — the suite's light design language.
+   Bone canvas, one white rounded card, ink type, brand-red accents.
+   Everything scoped under .fmac-form-page so generic .form-* classes
+   never leak into the admin / profile forms.
+═══════════════════════════════════════════════════════════ */
 
 .fmac-form-page {
-  --wiz-bg-base:        #0a0a0f;
-  --wiz-card:           rgba(255, 255, 255, 0.03);
-  --wiz-red:            #c0392b;
-  --wiz-red-bright:     #e74c3c;
-  --wiz-gold:           #c9a84c;
-  --wiz-gold-bright:    #e8c96a;
-  --wiz-text-primary:   #f2efe9;
-  --wiz-text-secondary: #a8a395;
-  --wiz-text-ghost:     #5d5a52;
-  --wiz-border:         rgba(201, 168, 76, 0.15);
-  --wiz-border-strong:  rgba(201, 168, 76, 0.32);
-  --wiz-input-bg:       rgba(0, 0, 0, 0.24);
-
-  position: relative;
   min-height: 100vh;
-  background:
-    radial-gradient(900px 420px at 50% -8%, rgba(192, 57, 43, 0.10), transparent 60%),
-    var(--wiz-bg-base);
-  padding: 86px 24px 70px;
-  font-family: 'Inter', 'Tajawal', sans-serif;
-  isolation: isolate;
-  overflow-x: hidden;
+  min-height: 100dvh;
+  background: var(--theme-bg, #faf8f5);
+  color: var(--theme-text-main, #111114);
+  font-family: 'Inter', 'Cairo', sans-serif;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(64px, 9vw, 96px) 18px 48px;
+  position: relative;
 }
 
-[data-theme="light"] .fmac-form-page {
-  --wiz-bg-base:        #f5f0e8;
-  --wiz-card:           rgba(255, 255, 255, 0.72);
-  --wiz-text-primary:   #211a12;
-  --wiz-text-secondary: #6b5f4e;
-  --wiz-text-ghost:     #a59a87;
-  --wiz-border:         rgba(139, 90, 43, 0.18);
-  --wiz-border-strong:  rgba(139, 90, 43, 0.36);
-  --wiz-input-bg:       rgba(255, 255, 255, 0.75);
-}
-
-/* back button */
-.form-back-btn {
-  position: fixed;
+/* Back button — top-start ghost link */
+.fmac-form-page .form-back-btn {
+  position: absolute;
   top: 22px;
-  left: 24px;
-  z-index: 20;
+  inset-inline-start: clamp(16px, 4vw, 40px);
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: color-mix(in srgb, var(--wiz-bg-base) 70%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--wiz-border);
-  color: var(--wiz-text-secondary);
-  padding: 9px 16px;
-  border-radius: 99px;
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  gap: 7px;
+  border: none;
+  background: transparent;
+  color: var(--theme-text-muted, #6f6f78);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  transition: color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  padding: 6px 4px;
 }
-.form-back-btn:hover {
-  color: var(--wiz-gold-bright);
-  border-color: var(--wiz-border-strong);
-  box-shadow: 0 0 18px rgba(201, 168, 76, 0.15);
-}
-[dir="rtl"] .form-back-btn { left: auto; right: 24px; }
-[dir="rtl"] .form-back-btn svg { transform: scaleX(-1); }
+.fmac-form-page .form-back-btn:hover { color: var(--theme-text-main, #111114); }
+[dir="rtl"] .fmac-form-page .form-back-btn svg { transform: scaleX(-1); }
 
-/* ── glass card ─────────────────────────────────────── */
-.fmac-form-container {
-  position: relative;
-  z-index: 5;
-  max-width: 620px;
-  margin: 0 auto;
-  padding: 38px 40px 42px;
+/* The card */
+.fmac-form-page .fmac-form-container {
+  width: min(560px, 100%);
+  background: var(--theme-surface, #ffffff);
   border-radius: 22px;
-  background:
-    linear-gradient(var(--wiz-card), var(--wiz-card)) padding-box,
-    linear-gradient(160deg, rgba(201, 168, 76, 0.38), rgba(201, 168, 76, 0.07) 32%, rgba(192, 57, 43, 0.06) 64%, rgba(192, 57, 43, 0.32)) border-box;
-  border: 1px solid transparent;
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  box-shadow:
-    0 36px 90px -24px rgba(0, 0, 0, 0.65),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: clamp(24px, 4vw, 38px);
 }
 
-/* ── service identity header ────────────────────────── */
-.wiz-type-head {
+/* ── Service identity header ── */
+.fmac-form-page .wiz-type-head {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding-bottom: 20px;
-  margin-bottom: 22px;
-  border-bottom: 1px solid var(--wiz-border);
+  gap: 14px;
+  margin-bottom: 26px;
 }
-.wiz-type-icon {
-  width: 52px;
-  height: 52px;
+.fmac-form-page .wiz-type-icon {
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
   border-radius: 14px;
+  background: #fdeef0;
+  color: #c70017;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--wiz-red-bright);
-  background: rgba(192, 57, 43, 0.10);
-  border: 1px solid rgba(192, 57, 43, 0.28);
-  box-shadow: 0 0 26px -6px rgba(192, 57, 43, 0.4);
-  animation: wiz-icon-glow 3.6s ease-in-out infinite;
 }
-@keyframes wiz-icon-glow {
-  0%, 100% { box-shadow: 0 0 18px -6px rgba(192, 57, 43, 0.35); }
-  50%      { box-shadow: 0 0 32px -4px rgba(192, 57, 43, 0.55); }
-}
-.wiz-type-names {
+.fmac-form-page .wiz-type-names {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
-.wiz-type-ar {
-  font-family: 'Tajawal', sans-serif;
-  font-weight: 800;
-  font-size: 1.3rem;
-  color: var(--wiz-text-primary);
+.fmac-form-page .wiz-type-ar {
+  font-family: 'Cairo', sans-serif;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--theme-text-main, #111114);
 }
-.wiz-type-en {
-  font-family: 'Cinzel', serif;
-  font-size: 0.66rem;
+.fmac-form-page .wiz-type-en {
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--wiz-gold);
+  color: var(--theme-text-ghost, #9a9aa2);
 }
 
-/* ── step indicator ─────────────────────────────────── */
-.wiz-steps {
+/* ── Step indicator ── */
+.fmac-form-page .wiz-steps {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 30px;
 }
-.wiz-step {
+.fmac-form-page .wiz-step {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 7px;
   flex-shrink: 0;
 }
-.wiz-step-node {
+.fmac-form-page .wiz-step-node {
   width: 30px;
   height: 30px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.72rem;
-  font-weight: 800;
-  color: var(--wiz-text-ghost);
-  background: transparent;
-  border: 1.5px solid var(--wiz-border);
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--theme-surface-pearl, #f3f1ec);
+  color: var(--theme-text-ghost, #9a9aa2);
+  transition: background 0.25s ease, color 0.25s ease;
 }
-.wiz-step.active .wiz-step-node {
-  color: #fff;
-  background: linear-gradient(135deg, var(--wiz-red-bright), var(--wiz-red));
-  border-color: var(--wiz-red-bright);
-  box-shadow: 0 0 0 5px rgba(192, 57, 43, 0.15), 0 0 22px rgba(192, 57, 43, 0.45);
-  transform: scale(1.12);
-}
-.wiz-step.done .wiz-step-node {
-  color: var(--wiz-gold-bright);
-  background: rgba(201, 168, 76, 0.12);
-  border-color: var(--wiz-gold);
-}
-.wiz-step-label {
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--wiz-text-ghost);
-  transition: color 0.3s ease;
-}
-.wiz-step.active .wiz-step-label { color: var(--wiz-text-primary); }
-.wiz-step.done .wiz-step-label { color: var(--wiz-gold); }
-
-.wiz-step-line {
-  flex: 1;
-  height: 1.5px;
-  margin: 14px 8px 0;
-  background: var(--wiz-border);
-  position: relative;
-  overflow: hidden;
-}
-.wiz-step-line::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, var(--wiz-gold), var(--wiz-red-bright));
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.wiz-step-line.fill::after { transform: scaleX(1); }
-
-/* ── headings ───────────────────────────────────────── */
-.form-heading-ar {
-  margin: 0;
-  text-align: center;
-  font-family: 'Tajawal', sans-serif;
-  font-weight: 800;
-  font-size: 1.55rem;
-  color: var(--wiz-text-primary);
-  direction: rtl;
-}
-.form-heading-en {
-  margin: 7px 0 24px;
-  text-align: center;
-  font-family: 'Cinzel', serif;
-  font-size: 0.66rem;
+.fmac-form-page .wiz-step-label {
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.34em;
-  color: var(--wiz-gold);
-}
-.form-subtext {
-  text-align: center;
-  font-size: 0.95rem;
-  line-height: 1.8;
-  color: var(--wiz-text-secondary);
-  margin: 0 0 28px;
-}
-
-/* ── fields ─────────────────────────────────────────── */
-.form-group { margin-bottom: 19px; }
-
-.form-label-ar,
-.form-label-en {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--wiz-text-secondary);
+  color: var(--theme-text-ghost, #9a9aa2);
+  transition: color 0.25s ease;
 }
-.form-label-ar {
-  font-family: 'Tajawal', sans-serif;
-  font-size: 0.82rem;
-  letter-spacing: 0.02em;
-  direction: rtl;
-  text-align: right;
+.fmac-form-page .wiz-step.active .wiz-step-node {
+  background: var(--theme-ink, #111114);
+  color: var(--theme-ink-text, #ffffff);
+}
+.fmac-form-page .wiz-step.active .wiz-step-label {
+  color: var(--theme-text-main, #111114);
+}
+.fmac-form-page .wiz-step.done .wiz-step-node {
+  background: #c70017;
+  color: #ffffff;
+}
+.fmac-form-page .wiz-step.done .wiz-step-label {
+  color: var(--theme-text-muted, #6f6f78);
+}
+.fmac-form-page .wiz-step-line {
+  flex: 1;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--theme-border, #efede8);
+  margin: 0 8px;
+  margin-bottom: 21px; /* align with node centre, above labels */
+  transition: background 0.3s ease;
+}
+.fmac-form-page .wiz-step-line.fill { background: #c70017; }
+
+/* ── Headings ── */
+.fmac-form-page .form-heading-ar {
+  margin: 0;
+  font-family: 'Cairo', sans-serif;
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--theme-text-main, #111114);
+}
+.fmac-form-page .form-heading-en {
+  margin: 4px 0 20px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #c70017;
+}
+.fmac-form-page .form-subtext {
+  margin: 0 0 24px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--theme-text-muted, #6f6f78);
 }
 
-.form-input {
+/* ── Fields ── */
+.fmac-form-page .form-group { margin-bottom: 16px; }
+.fmac-form-page .form-label-ar,
+.fmac-form-page .form-label-en {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--theme-text-muted, #6f6f78);
+  margin-bottom: 7px;
+}
+.fmac-form-page .form-label-ar { font-family: 'Cairo', sans-serif; letter-spacing: 0; }
+.fmac-form-page .required-asterisk { color: #c70017; margin-inline-start: 2px; }
+
+.fmac-form-page .form-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 13px 15px;
-  border-radius: 10px;
-  background: var(--wiz-input-bg);
-  border: 1px solid var(--wiz-border);
-  color: var(--wiz-text-primary);
-  font-size: 0.92rem;
+  border: 1px solid var(--theme-border-strong, #e3e1dc);
+  background: var(--theme-surface, #fff);
+  color: var(--theme-text-main, #111114);
+  border-radius: 11px;
+  padding: 11px 14px;
+  font-size: 14px;
   font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+.fmac-form-page textarea.form-input { line-height: 1.6; }
+.fmac-form-page .form-input::placeholder { color: var(--theme-text-ghost, #b5b5bc); }
+.fmac-form-page .form-input:focus {
   outline: none;
-  transition: border-color 0.22s ease, box-shadow 0.22s ease;
+  border-color: var(--theme-text-main, #111114);
 }
-.form-input::placeholder { color: var(--wiz-text-ghost); }
-.form-input:focus {
-  border-color: var(--wiz-gold);
-  box-shadow:
-    0 0 0 3px rgba(201, 168, 76, 0.13),
-    0 0 22px -6px rgba(201, 168, 76, 0.35);
-}
-textarea.form-input { line-height: 1.65; }
 
-/* date input scheme */
-.form-input[type="date"] { color-scheme: dark; }
-[data-theme="light"] .form-input[type="date"] { color-scheme: light; }
-
-.required-asterisk { color: var(--wiz-red-bright); margin: 0 4px; }
-
-/* ── checkbox chips ─────────────────────────────────── */
-.form-checkbox-label {
+/* Checkboxes */
+.fmac-form-page .form-checkbox-label {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 11px 15px;
+  padding: 9px 12px;
+  border: 1px solid var(--theme-border, #efede8);
   border-radius: 10px;
-  background: var(--wiz-input-bg);
-  border: 1px solid var(--wiz-border);
-  font-family: 'Tajawal', 'Inter', sans-serif;
-  font-size: 0.88rem;
-  color: var(--wiz-text-secondary);
+  font-size: 13px;
+  color: var(--theme-text-main, #111114);
   cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-.form-checkbox-label:hover { border-color: var(--wiz-border-strong); }
-.form-checkbox-label:has(.form-checkbox:checked) {
-  border-color: var(--wiz-gold);
-  background: rgba(201, 168, 76, 0.09);
-  color: var(--wiz-text-primary);
-  box-shadow: 0 0 16px -6px rgba(201, 168, 76, 0.35);
-}
-.form-checkbox {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 17px;
-  height: 17px;
+.fmac-form-page .form-checkbox-label:hover { border-color: var(--theme-border-strong, #e3e1dc); }
+.fmac-form-page .form-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #c70017;
   flex-shrink: 0;
-  border-radius: 5px;
-  border: 1.5px solid var(--wiz-border-strong);
-  background: transparent;
   cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
-}
-.form-checkbox:checked {
-  background: linear-gradient(135deg, var(--wiz-gold-bright), var(--wiz-gold));
-  border-color: var(--wiz-gold);
-}
-.form-checkbox:checked::after {
-  content: '';
-  position: absolute;
-  left: 4.5px;
-  top: 1.5px;
-  width: 4px;
-  height: 8px;
-  border: solid #1a1208;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
 }
 
-/* ── buttons ────────────────────────────────────────── */
-.form-actions-row {
-  display: flex;
-  gap: 12px;
-  margin-top: 28px;
-}
-
-.form-btn-primary {
-  position: relative;
-  overflow: hidden;
-  display: flex;
+/* ── Buttons ── */
+.fmac-form-page .form-btn-primary {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   width: 100%;
-  margin-top: 10px;
-  padding: 15px 20px;
-  border-radius: 10px;
-  border: 1px solid rgba(231, 76, 60, 0.5);
-  background: linear-gradient(135deg, var(--wiz-red-bright), var(--wiz-red));
-  color: #fff;
-  font-family: 'Cinzel', 'Tajawal', serif;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  margin-top: 8px;
+  border: none;
+  background: var(--theme-ink, #111114);
+  color: var(--theme-ink-text, #ffffff);
+  border-radius: 999px;
+  padding: 13px 20px;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  box-shadow: 0 12px 34px -10px rgba(192, 57, 43, 0.55);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, opacity 0.2s ease;
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
-.form-btn-primary-ar { font-family: 'Tajawal', sans-serif; letter-spacing: 0.02em; font-size: 0.95rem; }
-.form-btn-primary::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -80%;
-  width: 55%;
-  height: 100%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28), transparent);
-  transform: skewX(-22deg);
-  transition: left 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.form-btn-primary:hover:not(:disabled)::before { left: 130%; }
-.form-btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 44px -10px rgba(192, 57, 43, 0.7);
-}
-.form-btn-primary:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-  box-shadow: none;
-}
+.fmac-form-page .form-btn-primary:hover:not(:disabled) { opacity: 0.9; }
+.fmac-form-page .form-btn-primary:active:not(:disabled) { transform: scale(0.985); }
+.fmac-form-page .form-btn-primary:disabled { opacity: 0.45; cursor: default; }
 
-.form-btn-outline {
-  padding: 15px 20px;
-  border-radius: 10px;
+.fmac-form-page .form-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--theme-border-strong, #e3e1dc);
   background: transparent;
-  border: 1px solid var(--wiz-border-strong);
-  color: var(--wiz-gold);
-  font-family: 'Cinzel', 'Tajawal', serif;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  color: var(--theme-text-main, #111114);
+  border-radius: 999px;
+  padding: 13px 20px;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  transition: all 0.22s ease;
+  transition: border-color 0.15s ease;
 }
-.form-btn-outline:hover {
-  border-color: var(--wiz-gold);
-  box-shadow: 0 0 20px rgba(201, 168, 76, 0.18), inset 0 0 12px rgba(201, 168, 76, 0.06);
+.fmac-form-page .form-btn-outline:hover { border-color: var(--theme-text-main, #111114); }
+
+.fmac-form-page .form-actions-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 22px;
 }
 
-/* ── review summary ─────────────────────────────────── */
-.form-summary-box {
-  padding: 18px 20px;
+/* ── Review summary ── */
+.fmac-form-page .form-summary-box {
+  background: var(--theme-surface-pearl, #f6f4ef);
   border-radius: 14px;
-  background: var(--wiz-input-bg);
-  border: 1px solid var(--wiz-border);
-  margin-bottom: 16px;
-  position: relative;
-  overflow: hidden;
+  padding: 16px 18px;
+  margin-bottom: 14px;
 }
-.form-summary-box::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  inset-inline-start: 0;
-  width: 3px;
-  background: linear-gradient(180deg, var(--wiz-gold), var(--wiz-red));
-}
-.summary-title {
-  margin: 0 0 12px;
-  font-family: 'Cinzel', 'Tajawal', serif;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
+.fmac-form-page .summary-title {
+  margin: 0 0 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--wiz-gold);
+  color: #c70017;
 }
-.summary-item {
-  margin: 0 0 8px;
-  font-size: 0.86rem;
-  line-height: 1.65;
-  color: var(--wiz-text-secondary);
+.fmac-form-page .summary-item {
+  margin: 0 0 7px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--theme-text-muted, #6f6f78);
 }
-.summary-item strong {
-  color: var(--wiz-text-primary);
-  font-weight: 700;
-}
-
-/* ── responsive ─────────────────────────────────────── */
-@media (max-width: 768px) {
-  .fmac-form-page { padding: 78px 14px 50px; }
-  .fmac-form-container { padding: 28px 22px 32px; border-radius: 18px; }
-  .form-back-btn { top: 16px; left: 14px; }
-  [dir="rtl"] .form-back-btn { right: 14px; }
-  .wiz-step-label { display: none; }
-  .wiz-step-line { margin-top: 14px; }
+.fmac-form-page .summary-item strong {
+  color: var(--theme-text-main, #111114);
+  font-weight: 600;
 }
 
-@media (max-width: 480px) {
-  .fmac-form-container { padding: 24px 16px 28px; }
-  .wiz-type-ar { font-size: 1.1rem; }
-  .form-heading-ar { font-size: 1.3rem; }
-  .form-actions-row { flex-direction: column-reverse; }
+/* ── Field hint (phone-verification note etc.) ── */
+.fmac-form-page .form-hint {
+  margin: 6px 2px 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--theme-text-muted, #6f6f78);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .wiz-type-icon { animation: none; }
+/* ── Live priority preview (step 3) — states the basis, no silent default ── */
+.fmac-form-page .wiz-priority {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--theme-border, #efede8);
+  border-inline-start-width: 3px;
+  border-radius: 12px;
+  background: var(--theme-surface-pearl, #f6f4ef);
+}
+.fmac-form-page .wiz-priority-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.fmac-form-page .wiz-priority-body { display: flex; flex-direction: column; gap: 2px; }
+.fmac-form-page .wiz-priority-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--theme-text-muted, #6f6f78);
+}
+.fmac-form-page .wiz-priority-level { font-size: 14px; font-weight: 800; }
+.fmac-form-page .wiz-priority-basis {
+  margin-inline-start: auto;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--theme-text-muted, #6f6f78);
+  text-align: end;
+  max-width: 58%;
+}
+
+/* ── Priority row inside the review summary ── */
+.fmac-form-page .summary-priority {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--theme-border, #efede8);
+  font-size: 13px;
+  color: var(--theme-text-muted, #6f6f78);
+}
+.fmac-form-page .summary-priority strong { color: var(--theme-text-main, #111114); font-weight: 600; }
+.fmac-form-page .summary-priority-basis { font-size: 11.5px; width: 100%; }
+
+/* ── Trust footer under the card ── */
+.fmac-form-page .wiz-trust {
+  position: absolute;
+  bottom: 16px;
+  left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--theme-text-muted, #6f6f78);
+  padding: 0 18px;
+  text-align: center;
+}
+.fmac-form-page .wiz-trust svg { flex-shrink: 0; color: #17b26a; }
+
+/* spinner */
+.fmac-form-page .animate-spin { animation: wiz-spin 0.8s linear infinite; }
+@keyframes wiz-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 520px) {
+  .fmac-form-page .wiz-step-label { display: none; }
+  .fmac-form-page .wiz-step-line { margin-bottom: 0; }
+  .fmac-form-page .wiz-priority-basis { max-width: 100%; margin-inline-start: 0; }
+  .fmac-form-page .wiz-priority { flex-wrap: wrap; }
 }

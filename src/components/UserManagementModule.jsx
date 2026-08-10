@@ -17,6 +17,7 @@ import {
 } from '../utils/jobTitlePermissions';
 import CustomSelect from './CustomSelect';
 import NotificationSettings from './NotificationSettings';
+import ModuleVisibilitySettings from './ModuleVisibilitySettings';
 import './UserManagementModule.css';
 
 /* ── helpers ── */
@@ -33,18 +34,19 @@ const fmtDateTime = (ts) => {
 };
 
 const STATUS_META = {
-  approved:    { en: 'Active',      ar: 'نشط',   color: '#10b981', bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.28)' },
-  pending:     { en: 'Pending',     ar: 'معلق',  color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.28)' },
-  rejected:    { en: 'Rejected',    ar: 'مرفوض', color: '#e11d48', bg: 'rgba(225,29,72,0.1)',   border: 'rgba(225,29,72,0.28)' },
+  approved:    { en: 'Active',      ar: 'نشط',   color: 'var(--status-safe)', bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.28)' },
+  pending:     { en: 'Pending',     ar: 'معلق',  color: 'var(--status-warn)', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.28)' },
+  rejected:    { en: 'Rejected',    ar: 'مرفوض', color: 'var(--status-risk)', bg: 'rgba(225,29,72,0.1)',   border: 'rgba(225,29,72,0.28)' },
   deactivated: { en: 'Deactivated', ar: 'موقوف', color: '#8b8b9e', bg: 'rgba(139,139,158,0.1)', border: 'rgba(139,139,158,0.28)' },
 };
 const statusMeta = (s) => STATUS_META[s] || { en: s || '—', ar: s || '—', color: '#8b8b9e', bg: 'rgba(139,139,158,0.1)', border: 'rgba(139,139,158,0.28)' };
 
-/* ── Avatar: real photo when available, deterministic gradient initials otherwise ── */
+/* ── Avatar: real photo when available, deterministic gradient initials otherwise ──
+   Warm Meadow family — distinct per user, harmonized with the tangerine accent. */
 const AVATAR_GRADIENTS = [
-  ['#8b5cf6', '#6d28d9'], ['#06b6d4', '#0e7490'], ['#f59e0b', '#b45309'],
-  ['#10b981', '#047857'], ['#ec4899', '#be185d'], ['#3b82f6', '#1d4ed8'],
-  ['#f43f5e', '#be123c'], ['#84cc16', '#4d7c0f'],
+  ['#a32d2d', '#872424'], ['#8a6d1f', '#6d5518'], ['#0c7a58', '#096246'],
+  ['#6d4fc4', '#5a3fa6'], ['#2563eb', '#1d4fc0'], ['#0e7490', '#0b5d74'],
+  ['#52525a', '#3c3c44'], ['#b4540b', '#8f430a'],
 ];
 
 function initialsOf(name, email) {
@@ -83,7 +85,45 @@ const MODULE_LABELS = {
   fleet:     { en: 'Fleet',     ar: 'الأسطول' },
   inventory: { en: 'Inventory', ar: 'المخزون' },
   helpDesk:  { en: 'Help Desk', ar: 'الدعم' },
+  assets:    { en: 'Assets',    ar: 'الأصول' },
+  strategy:  { en: 'Strategy',  ar: 'الاستراتيجية' },
+  insights:  { en: 'Insights',  ar: 'الرؤى' },
+  crisis:    { en: 'Crisis',    ar: 'الأزمات' },
 };
+
+const PERM_LEVELS = ['none', 'view', 'edit'];
+
+/* Per-module access editor — master admin & HOD grant None/View/Edit. */
+function PermEditor({ perms, onChange, lang }) {
+  const levelLabel = (lv) => lv === 'edit'
+    ? (lang === 'ar' ? 'تعديل' : 'Edit')
+    : lv === 'view' ? (lang === 'ar' ? 'عرض' : 'View')
+    : (lang === 'ar' ? 'لا شيء' : 'None');
+  return (
+    <div className="um-permgrid">
+      {Object.entries(MODULE_LABELS).map(([key, label]) => {
+        const current = perms?.[key] || 'none';
+        return (
+          <div key={key} className="um-permgrid-row">
+            <span className="um-permgrid-name">{lang === 'ar' ? label.ar : label.en}</span>
+            <div className="um-permgrid-levels">
+              {PERM_LEVELS.map(lv => (
+                <button
+                  key={lv}
+                  type="button"
+                  className={`um-permgrid-btn um-permgrid-btn--${lv}${current === lv ? ' active' : ''}`}
+                  onClick={() => onChange({ ...perms, [key]: lv })}
+                >
+                  {levelLabel(lv)}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function PermPills({ permissions, lang }) {
   if (!permissions) return <span style={{ color: 'var(--theme-text-ghost)', fontSize: '0.75rem' }}>—</span>;
@@ -91,7 +131,7 @@ function PermPills({ permissions, lang }) {
     <div className="um-perms">
       {Object.entries(MODULE_LABELS).map(([key, label]) => {
         const level = permissions[key];
-        const color = level === 'edit' ? '#10b981' : level === 'view' ? '#f59e0b' : '#6b7280';
+        const color = level === 'edit' ? 'var(--status-safe)' : level === 'view' ? 'var(--status-warn)' : 'var(--theme-text-ghost)';
         const levelLabel = level === 'edit'
           ? (lang === 'ar' ? 'تعديل' : 'Edit')
           : level === 'view'
@@ -185,6 +225,7 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
   // Edit modal state
   const [editTarget, setEditTarget] = useState(null);
   const [editJobTitle, setEditJobTitle] = useState('');
+  const [editPerms, setEditPerms] = useState({});
   const [editLoading, setEditLoading] = useState(false);
 
   // Search / filter
@@ -233,25 +274,6 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
     }, () => setLoadingResets(false));
   }, [isMasterAdmin]);
 
-  /* ── Send notification email via Web3Forms ── */
-  const sendNotification = async (toEmail, toName, subject, message) => {
-    try {
-      await fetch('https://api.web3forms.com/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          access_key: 'YOUR_WEB3FORMS_KEY',
-          to: toEmail,
-          subject,
-          message,
-          from_name: 'FMAC Operations Suite',
-        }),
-      });
-    } catch {
-      // Notification failure is non-critical
-    }
-  };
-
   /* ── Approve ── */
   const openApproveModal = (u) => {
     setApproveTarget(u);
@@ -273,12 +295,10 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
         approvedAt: serverTimestamp(),
       });
       showToast(`${lang === 'ar' ? 'تمت الموافقة على' : 'Approved'} ${approveTarget.displayName || approveTarget.email}`);
-      await sendNotification(
-        approveTarget.email,
-        approveTarget.displayName || approveTarget.email,
-        'تمت الموافقة على طلب انضمامك — FMAC Operations Suite',
-        `مرحباً ${approveTarget.displayName || ''},\n\nتمت الموافقة على طلبك.\nالمسمى الوظيفي: ${approveJobTitle}\nيمكنك الآن تسجيل الدخول.`,
-      );
+      // TODO: wire an approval-notification email through utils/notify.js (needs
+      // a 'user_approved' template). The old Web3Forms path used a placeholder
+      // key and silently never sent — removed to avoid the false impression that
+      // the applicant was notified.
       setApproveTarget(null);
     } catch (err) {
       alert('Error: ' + err.message);
@@ -298,12 +318,9 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
     try {
       await updateDoc(doc(db, 'users', u.uid), { status: 'rejected' });
       showToast(`${lang === 'ar' ? 'تم رفض طلب' : 'Rejected'} ${u.displayName || u.email}`);
-      await sendNotification(
-        u.email,
-        u.displayName || u.email,
-        'بشأن طلب انضمامك — FMAC Operations Suite',
-        `مرحباً ${u.displayName || ''},\n\nنأسف لإبلاغك بأنه تعذر قبول طلبك في الوقت الحالي.\nللاستفسار تواصل معنا.`,
-      );
+      // TODO: wire a rejection-notification email through utils/notify.js when a
+      // template exists (the old Web3Forms path had a placeholder key and never
+      // actually sent).
     } catch (err) {
       console.error('handleReject failed:', err);
       showToast(lang === 'ar' ? 'حدث خطأ. حاول مرة أخرى.' : 'Error rejecting request. Try again.');
@@ -313,7 +330,18 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
   /* ── Edit role ── */
   const openEditModal = (u) => {
     setEditTarget(u);
-    setEditJobTitle(u.jobTitle || JOB_TITLES[0]);
+    const title = u.jobTitle || JOB_TITLES[0];
+    setEditJobTitle(title);
+    setEditPerms({
+      ...(JOB_TITLE_PERMISSIONS[title]?.permissions || {}),
+      ...(u.permissions || {}),
+    });
+  };
+
+  /* Changing the job title re-seeds the grid from that title's preset. */
+  const handleEditTitleChange = (title) => {
+    setEditJobTitle(title);
+    setEditPerms(JOB_TITLE_PERMISSIONS[title]?.permissions || {});
   };
 
   const handleEditSave = async () => {
@@ -324,7 +352,9 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
       await updateDoc(doc(db, 'users', editTarget.uid), {
         jobTitle: editJobTitle,
         role: mapping.role,
-        permissions: mapping.permissions,
+        // The grid's custom levels win over the title preset — this is how the
+        // master admin / HOD grants or revokes individual module access.
+        permissions: { ...mapping.permissions, ...editPerms },
       });
       showToast(lang === 'ar' ? 'تم تحديث الدور' : 'Role updated');
       setEditTarget(null);
@@ -492,6 +522,14 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
             {lang === 'ar' ? 'الإشعارات' : 'Notifications'}
           </button>
         )}
+        {isMasterAdmin && (
+          <button
+            className={`tab-item ${activeTab === 'modules' ? 'active' : ''}`}
+            onClick={() => setActiveTab('modules')}
+          >
+            {lang === 'ar' ? 'الوحدات' : 'Modules'}
+          </button>
+        )}
       </nav>
 
       <AnimatePresence mode="wait">
@@ -518,6 +556,10 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
         ) : activeTab === 'notifications' ? (
           <motion.div key="notifications" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             <NotificationSettings isMasterAdmin={isMasterAdmin} />
+          </motion.div>
+        ) : activeTab === 'modules' ? (
+          <motion.div key="modules" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <ModuleVisibilitySettings isMasterAdmin={isMasterAdmin} />
           </motion.div>
         ) : (
           <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
@@ -622,13 +664,13 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
                   <label>{lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title'}</label>
                   <CustomSelect
                     value={editJobTitle}
-                    onChange={setEditJobTitle}
+                    onChange={handleEditTitleChange}
                     options={JOB_TITLES.map(title => ({ value: title, label: title }))}
                   />
                 </div>
                 <div className="um-field">
-                  <label>{lang === 'ar' ? 'معاينة الصلاحيات' : 'Permissions Preview'}</label>
-                  <PermPreview jobTitle={editJobTitle} lang={lang} />
+                  <label>{lang === 'ar' ? 'صلاحيات الوحدات' : 'Module Access'}</label>
+                  <PermEditor perms={editPerms} onChange={setEditPerms} lang={lang} />
                 </div>
               </div>
 
@@ -681,7 +723,7 @@ function PasswordResetsTab({ requests, loading, lang, onSetTemp, onDismiss }) {
       {requests.map(req => (
         <motion.div key={req.id} className="um-card" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <div className="um-card-head">
-            <div className="um-avatar" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '2px solid rgba(245,158,11,0.3)' }}>
+            <div className="um-avatar" style={{ background: 'rgba(245,158,11,0.15)', color: 'var(--status-warn)', border: '2px solid rgba(245,158,11,0.3)' }}>
               <Key size={17} />
             </div>
             <div className="um-card-id">

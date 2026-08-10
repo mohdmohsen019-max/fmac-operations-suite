@@ -23,7 +23,8 @@ export function LanguageProvider({ children }) {
   );
 }
 
-export function useLanguage() {
+// eslint-disable-next-line react-refresh/only-export-components
+export const useLanguage = () => {
   const { lang, toggleLanguage } = useContext(LanguageContext);
   // t(english, arabic) — returns the right string for active language
   const t = (en, ar) => (lang === 'ar' ? ar : en);

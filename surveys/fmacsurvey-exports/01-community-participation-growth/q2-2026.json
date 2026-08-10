@@ -1,0 +1,97 @@
+{
+  "survey": {
+    "id": "q04-participation-growth-q2-2026",
+    "platform": "fmacsurvey.com",
+    "kpiCode": "Q-04",
+    "kpiNameEn": "Growth in community participation in sports activities",
+    "kpiNameAr": "نسبة نمو المشاركة المجتمعية في الأنشطة الرياضية",
+    "titleEn": "Community Activity Sign-in — Q2 2026",
+    "titleAr": "تسجيل حضور الأنشطة المجتمعية — Q2 2026",
+    "descriptionEn": "A short sign-in completed once per participant per activity attended. Responses are tallied afterward against the 2025 base-year count to compute the growth percentage — this form does not ask for a growth rate directly.",
+    "descriptionAr": "نموذج تسجيل قصير يُعبأ مرة واحدة لكل مشارك في كل نشاط. تُجمّع الإجابات لاحقاً ومقارنتها بعدد المشاركين في سنة الأساس 2025 لاحتساب نسبة النمو — لا يُطلب من المشارك تقدير نسبة النمو نفسها.",
+    "language": [
+      "en",
+      "ar"
+    ],
+    "period": {
+      "type": "quarterly",
+      "label": "Q2 2026",
+      "opensOn": "2026-04-01",
+      "closesOn": "2026-06-30"
+    },
+    "target": {
+      "value": 10,
+      "unit": "%",
+      "direction": "up",
+      "baseYear": 2025,
+      "formula": "((current-period participants − 2025 base-year participants) ÷ 2025 base-year participants) × 100"
+    },
+    "questions": [
+      {
+        "id": "full_name",
+        "type": "short_text",
+        "labelEn": "Full name",
+        "labelAr": "الاسم الكامل",
+        "required": true
+      },
+      {
+        "id": "phone",
+        "type": "short_text",
+        "labelEn": "Phone number",
+        "labelAr": "رقم الهاتف",
+        "required": true
+      },
+      {
+        "id": "activity",
+        "type": "single_choice",
+        "labelEn": "Which activity did you attend?",
+        "labelAr": "ما النشاط الذي حضرته؟",
+        "required": true,
+        "options": [
+          "Taekwondo",
+          "Judo",
+          "Fencing",
+          "Boxing",
+          "Archery",
+          "Karate",
+          "Wrestling",
+          "Jiu-Jitsu",
+          "Swimming",
+          "Other community activity"
+        ]
+      },
+      {
+        "id": "attendance_date",
+        "type": "date",
+        "labelEn": "Date of activity",
+        "labelAr": "تاريخ النشاط",
+        "required": true
+      },
+      {
+        "id": "first_time",
+        "type": "single_choice",
+        "labelEn": "Is this your first time attending an FMAC community activity?",
+        "labelAr": "هل هذه أول مرة تحضر فيها نشاطاً مجتمعياً لنادي الفجيرة؟",
+        "required": true,
+        "options": [
+          "Yes — first time",
+          "No — I've attended before"
+        ]
+      }
+    ],
+    "scoringNotes": "Aggregate after collection: growth% = ((count of unique respondents this quarter − 2025 base count) ÷ 2025 base count) × 100."
+  },
+  "formatReference": {
+    "note": "EXAMPLE ONLY — illustrates the expected shape of one respondent's answer for training and format-review purposes. This is not a real submission and must not be counted toward the KPI reading.",
+    "noteAr": "مثال توضيحي فقط — يوضح شكل إجابة مستجيب واحد لأغراض التدريب ومراجعة الصيغة. ليست إجابة حقيقية ولا تُحتسب ضمن قراءة المؤشر.",
+    "exampleContextEn": "Example sign-in for a returning participant at a Judo community session.",
+    "exampleContextAr": "مثال تسجيل حضور لمشارك عائد في حصة جودو مجتمعية.",
+    "exampleResponse": {
+      "full_name": "Ahmed Al Suwaidi",
+      "phone": "050-000-0000",
+      "activity": "Judo",
+      "attendance_date": "2026-04-01",
+      "first_time": "No — I've attended before"
+    }
+  }
+}

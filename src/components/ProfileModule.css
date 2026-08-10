@@ -216,7 +216,7 @@
   animation: fadeIn var(--dur-fast) ease;
 }
 
-.save-status.success { color: #10b981; }
+.save-status.success { color: var(--status-safe); }
 .save-status.info { color: var(--theme-accent-bright); }
 
 /* ── Identity card extras ───────────────────────────────── */
@@ -234,7 +234,7 @@
   border: 1px solid var(--theme-border);
 }
 .pf-status.ok {
-  color: #10b981;
+  color: var(--status-safe);
   background: rgba(16, 185, 129, 0.1);
   border-color: rgba(16, 185, 129, 0.28);
 }
@@ -399,12 +399,12 @@
   font-weight: 600;
 }
 .pf-pw-msg.ok {
-  color: #10b981;
+  color: var(--status-safe);
   background: rgba(16, 185, 129, 0.1);
   border: 1px solid rgba(16, 185, 129, 0.25);
 }
 .pf-pw-msg.err {
-  color: #f43f5e;
+  color: var(--status-risk);
   background: rgba(244, 63, 94, 0.08);
   border: 1px solid rgba(244, 63, 94, 0.22);
 }

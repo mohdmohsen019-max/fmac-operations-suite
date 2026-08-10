@@ -1,0 +1,75 @@
+{
+  "survey": {
+    "id": "q06-customer-happiness-q2-2026",
+    "platform": "fmacsurvey.com",
+    "kpiCode": "Q-06",
+    "kpiNameEn": "Customer happiness rate",
+    "kpiNameAr": "نسبة سعادة المتعاملين",
+    "titleEn": "Customer Happiness Survey — Q2 2026",
+    "titleAr": "استبيان سعادة المتعاملين — Q2 2026",
+    "descriptionEn": "Short survey offered to members and visitors after using a club service.",
+    "descriptionAr": "استبيان قصير يُقدَّم للأعضاء والزوار بعد استخدام إحدى خدمات النادي.",
+    "language": [
+      "en",
+      "ar"
+    ],
+    "period": {
+      "type": "quarterly",
+      "label": "Q2 2026",
+      "opensOn": "2026-04-01",
+      "closesOn": "2026-06-30"
+    },
+    "target": {
+      "value": 90,
+      "unit": "%",
+      "direction": "up",
+      "formula": "share of respondents rating their satisfaction above 90%"
+    },
+    "questions": [
+      {
+        "id": "service_used",
+        "type": "single_choice",
+        "labelEn": "Which service did you use?",
+        "labelAr": "ما الخدمة التي استخدمتها؟",
+        "required": true,
+        "options": [
+          "Membership / registration",
+          "Training program",
+          "Facility booking",
+          "Transport / bus service",
+          "Front desk / inquiry",
+          "Other"
+        ]
+      },
+      {
+        "id": "satisfaction_percent",
+        "type": "percentage_slider",
+        "labelEn": "Overall, how satisfied are you with your experience at FMAC? (0–100%)",
+        "labelAr": "بشكل عام، ما مدى رضاك عن تجربتك في نادي الفجيرة؟ (0–100%)",
+        "required": true,
+        "min": 0,
+        "max": 100,
+        "step": 5
+      },
+      {
+        "id": "comments",
+        "type": "long_text",
+        "labelEn": "Anything you'd like us to know?",
+        "labelAr": "هل تود إخبارنا بأي شيء آخر؟",
+        "required": false
+      }
+    ],
+    "scoringNotes": "Customer happiness rate = (# respondents with satisfaction_percent > 90) ÷ (total respondents) × 100."
+  },
+  "formatReference": {
+    "note": "EXAMPLE ONLY — illustrates the expected shape of one respondent's answer for training and format-review purposes. This is not a real submission and must not be counted toward the KPI reading.",
+    "noteAr": "مثال توضيحي فقط — يوضح شكل إجابة مستجيب واحد لأغراض التدريب ومراجعة الصيغة. ليست إجابة حقيقية ولا تُحتسب ضمن قراءة المؤشر.",
+    "exampleContextEn": "Example response from a member who visited the front desk.",
+    "exampleContextAr": "مثال إجابة من عضو زار مكتب الاستقبال.",
+    "exampleResponse": {
+      "service_used": "Front desk / inquiry",
+      "satisfaction_percent": 95,
+      "comments": "Quick and helpful response to my membership question."
+    }
+  }
+}

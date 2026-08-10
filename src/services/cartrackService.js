@@ -1,7 +1,31 @@
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { BUS_REGS } from './fleetMeta';
 
 const BASE_URL = import.meta.env.VITE_CARTRACK_API_BASE_URL || 'https://fleetapi-me.cartrack.com/rest';
 const API_KEY = import.meta.env.VITE_CARTRACK_API_KEY;
+
+/* -- Fleet scoping -------------------------------------------------
+   Cartrack returns EVERY vehicle registered to the club; historically a
+   hardcoded 14-registration list filtered everything down to the buses.
+   Scoping is now explicit: every fetch takes a `scope` --
+     'buses'  -> bus fleet only (default, matches historical behaviour)
+     'others' -> club vehicles that are not part of the bus fleet
+     'all'    -> everything registered on Cartrack
+   Which class a registration belongs to is decided by a pluggable
+   classifier. The default uses the BUS_REGS seed; FleetScopeContext
+   swaps in a Firestore-backed classifier so reclassifying a vehicle in
+   the Ecosystem tab immediately re-scopes every sub-module.            */
+let classifyReg = (reg) => (BUS_REGS.includes(String(reg || '').toUpperCase().replace(/\s/g, '')) ? 'bus' : 'other');
+
+export function setVehicleClassifier(fn) {
+  if (typeof fn === 'function') classifyReg = fn;
+}
+
+export function regMatchesScope(reg, scope = 'buses') {
+  if (scope === 'all') return true;
+  const cls = classifyReg(reg);
+  return scope === 'others' ? cls === 'other' : cls === 'bus';
+}
 
 // Helper to get headers
 const getHeaders = () => {
@@ -19,7 +43,7 @@ export const cartrackService = {
   /**
    * Fetch all vehicles and merge with their latest status (odometer, etc)
    */
-  async getVehicles() {
+  async getVehicles(scope = 'buses') {
     try {
       const [vehiclesRes, statusRes] = await Promise.all([
         fetch(`${BASE_URL}/vehicles?limit=250`, { headers: getHeaders() }),
@@ -33,31 +57,22 @@ export const cartrackService = {
       const vehiclesData = await vehiclesRes.json();
       const statusData = await statusRes.json();
 
-      const FLEET_REGS = [
-        'A21248', 'A33867', 'A33876', 'C29769', 'C37069',
-        'C37072', 'C37074', 'C37075', 'M85750', 'M85751',
-        'M85756', 'M85759', 'M99268', 'M99270'
-      ];
-
       const vehicles = vehiclesData.data || [];
       const statuses = statusData.data || [];
 
-      // Filter for the 14 specific buses only
       const merged = vehicles
-        .filter(v => FLEET_REGS.includes(v.registration))
+        .filter(v => regMatchesScope(v.registration, scope))
         .map(v => {
-
-
           const status = statuses.find(s => s.registration === v.registration);
           return {
             ...v,
+            vehicleClass: classifyReg(v.registration),
             odometer: status ? status.odometer : 0,
             ignition: status ? status.ignition : false,
             location: status ? status.location : null,
             speed: status ? status.speed : 0
           };
         });
-
 
       return merged;
     } catch (error) {
@@ -137,7 +152,7 @@ export const cartrackService = {
   /**
    * Derive risk events from recent trips (since /alerts is restricted)
    */
-  async getRiskEvents(days = 3) {
+  async getRiskEvents(days = 3, scope = 'buses') {
     try {
       const end = format(endOfDay(new Date()), 'yyyy-MM-dd HH:mm:ss');
       const start = format(startOfDay(subDays(new Date(), days)), 'yyyy-MM-dd HH:mm:ss');
@@ -145,15 +160,9 @@ export const cartrackService = {
       const trips = await this.getTrips(start, end);
       if (!trips) return [];
 
-      const FLEET_REGS = [
-        'A21248', 'A33867', 'A33876', 'C29769', 'C37069',
-        'C37072', 'C37074', 'C37075', 'M85750', 'M85751',
-        'M85756', 'M85759', 'M99268', 'M99270'
-      ];
-
       const events = [];
       trips.forEach(t => {
-        if (!FLEET_REGS.includes(t.registration)) return;
+        if (!regMatchesScope(t.registration, scope)) return;
         const hasHarsh = (t.harsh_braking_events > 0 || t.harsh_acceleration_events > 0 || t.harsh_cornering_events > 0 || t.road_speeding_events > 0);
 
         if (hasHarsh) {
@@ -217,7 +226,7 @@ export const cartrackService = {
    * @param {number} days - Number of days to look back
    * @param {object} settings - Optional settings: { speedingLimit, brakingMultiplier }
    */
-  async getDriverScorecards(days = 7, settings = {}) {
+  async getDriverScorecards(days = 7, settings = {}, scope = 'buses') {
     const {
       speedingLimit = 120,      // km/h — currently informational (trip-level events don't include speed magnitude)
       brakingMultiplier = 0.7,  // 0.5–2.0 — scales the per-event braking penalty weight
@@ -233,17 +242,11 @@ export const cartrackService = {
       const trips = await this.getTrips(start, end);
       if (!trips) return null;
 
-      const FLEET_REGS = [
-        'A21248', 'A33867', 'A33876', 'C29769', 'C37069',
-        'C37072', 'C37074', 'C37075', 'M85750', 'M85751',
-        'M85756', 'M85759', 'M99268', 'M99270'
-      ];
-
       const fleetStats = {};
 
       trips.forEach(t => {
         const reg = t.registration;
-        if (!FLEET_REGS.includes(reg)) return;
+        if (!regMatchesScope(reg, scope)) return;
 
         if (!fleetStats[reg]) {
           fleetStats[reg] = {
@@ -321,20 +324,16 @@ export const cartrackService = {
   /**
    * Fetch live status for Fleet Live Map
    */
-  async getLiveStatus() {
+  async getLiveStatus(scope = 'buses') {
     try {
       const response = await fetch(`${BASE_URL}/vehicles/status?limit=250&odometer_in_km=true`, { headers: getHeaders() });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
-      
-      const FLEET_REGS = [
-        'A21248', 'A33867', 'A33876', 'C29769', 'C37069',
-        'C37072', 'C37074', 'C37075', 'M85750', 'M85751',
-        'M85756', 'M85759', 'M99268', 'M99270'
-      ];
-      
+
       const statuses = result.data || [];
-      return statuses.filter(s => FLEET_REGS.includes(s.registration));
+      return statuses
+        .filter(s => regMatchesScope(s.registration, scope))
+        .map(s => ({ ...s, vehicleClass: classifyReg(s.registration) }));
     } catch (error) {
       console.error('Cartrack API: Failed to fetch live status', error);
       return [];

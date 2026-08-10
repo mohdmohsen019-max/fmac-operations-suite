@@ -1,0 +1,180 @@
+{
+  "survey": {
+    "id": "q03-team-satisfaction-13th-fujairah-open-taekwondo-championship",
+    "platform": "fmacsurvey.com",
+    "kpiCode": "Q-03",
+    "kpiNameEn": "Participating teams' satisfaction rate",
+    "kpiNameAr": "نسبة رضا الفرق المشاركة",
+    "titleEn": "Team Satisfaction Survey — 13th Fujairah Open Taekwondo Championship",
+    "titleAr": "استبيان رضا الفرق المشاركة — بطولة الفجيرة المفتوحة الـ13 للتايكوندو",
+    "descriptionEn": "Sent to each participating team/delegation after the tournament concludes.",
+    "descriptionAr": "يُرسل لكل فريق/وفد مشارك بعد انتهاء البطولة.",
+    "language": [
+      "en",
+      "ar"
+    ],
+    "period": {
+      "type": "quarterly",
+      "label": "13th Fujairah Open Taekwondo Championship (2026-02-01 – 2026-02-05)",
+      "opensOn": "2026-02-01",
+      "closesOn": "2026-02-05"
+    },
+    "target": {
+      "value": 90,
+      "unit": "%",
+      "direction": "up",
+      "formula": "share of teams rating overall experience 'Satisfied' or 'Very satisfied'"
+    },
+    "questions": [
+      {
+        "id": "team_name",
+        "type": "short_text",
+        "labelEn": "Team/delegation name",
+        "labelAr": "اسم الفريق/الوفد",
+        "required": true
+      },
+      {
+        "id": "country_or_club",
+        "type": "short_text",
+        "labelEn": "Country or club represented",
+        "labelAr": "الدولة أو النادي الممثَّل",
+        "required": true
+      },
+      {
+        "id": "overall_experience",
+        "type": "scale_5",
+        "labelEn": "Rate your overall experience at this tournament",
+        "labelAr": "قيّم تجربتك العامة في هذه البطولة",
+        "required": true,
+        "scaleLabelsEn": [
+          "Very dissatisfied",
+          "Dissatisfied",
+          "Neutral",
+          "Satisfied",
+          "Very satisfied"
+        ],
+        "scaleLabelsAr": [
+          "غير راضٍ إطلاقاً",
+          "غير راضٍ",
+          "محايد",
+          "راضٍ",
+          "راضٍ جداً"
+        ]
+      },
+      {
+        "id": "organization_scheduling",
+        "type": "scale_5",
+        "labelEn": "Organization & scheduling",
+        "labelAr": "التنظيم والجدول الزمني",
+        "required": true,
+        "scaleLabelsEn": [
+          "Very dissatisfied",
+          "Dissatisfied",
+          "Neutral",
+          "Satisfied",
+          "Very satisfied"
+        ],
+        "scaleLabelsAr": [
+          "غير راضٍ إطلاقاً",
+          "غير راضٍ",
+          "محايد",
+          "راضٍ",
+          "راضٍ جداً"
+        ]
+      },
+      {
+        "id": "venue_facilities",
+        "type": "scale_5",
+        "labelEn": "Venue & facilities",
+        "labelAr": "المكان والمرافق",
+        "required": true,
+        "scaleLabelsEn": [
+          "Very dissatisfied",
+          "Dissatisfied",
+          "Neutral",
+          "Satisfied",
+          "Very satisfied"
+        ],
+        "scaleLabelsAr": [
+          "غير راضٍ إطلاقاً",
+          "غير راضٍ",
+          "محايد",
+          "راضٍ",
+          "راضٍ جداً"
+        ]
+      },
+      {
+        "id": "officiating_fairness",
+        "type": "scale_5",
+        "labelEn": "Officiating fairness",
+        "labelAr": "عدالة التحكيم",
+        "required": true,
+        "scaleLabelsEn": [
+          "Very dissatisfied",
+          "Dissatisfied",
+          "Neutral",
+          "Satisfied",
+          "Very satisfied"
+        ],
+        "scaleLabelsAr": [
+          "غير راضٍ إطلاقاً",
+          "غير راضٍ",
+          "محايد",
+          "راضٍ",
+          "راضٍ جداً"
+        ]
+      },
+      {
+        "id": "hospitality_support",
+        "type": "scale_5",
+        "labelEn": "Hospitality & support",
+        "labelAr": "الضيافة والدعم",
+        "required": true,
+        "scaleLabelsEn": [
+          "Very dissatisfied",
+          "Dissatisfied",
+          "Neutral",
+          "Satisfied",
+          "Very satisfied"
+        ],
+        "scaleLabelsAr": [
+          "غير راضٍ إطلاقاً",
+          "غير راضٍ",
+          "محايد",
+          "راضٍ",
+          "راضٍ جداً"
+        ]
+      },
+      {
+        "id": "comments",
+        "type": "long_text",
+        "labelEn": "Additional comments",
+        "labelAr": "ملاحظات إضافية",
+        "required": false
+      }
+    ],
+    "linkedEvent": {
+      "nameEn": "13th Fujairah Open Taekwondo Championship",
+      "nameAr": "بطولة الفجيرة المفتوحة الـ13 للتايكوندو",
+      "start": "2026-02-01",
+      "end": "2026-02-05"
+    },
+    "scoringNotes": "Satisfaction rate = (# teams rating overall_experience 4 or 5) ÷ (total responding teams) × 100."
+  },
+  "formatReference": {
+    "note": "EXAMPLE ONLY — illustrates the expected shape of one respondent's answer for training and format-review purposes. This is not a real submission and must not be counted toward the KPI reading.",
+    "noteAr": "مثال توضيحي فقط — يوضح شكل إجابة مستجيب واحد لأغراض التدريب ومراجعة الصيغة. ليست إجابة حقيقية ولا تُحتسب ضمن قراءة المؤشر.",
+    "exampleContextEn": "Example response from a participating delegation.",
+    "exampleContextAr": "مثال إجابة من وفد مشارك.",
+    "exampleResponse": {
+      "team_name": "Fujairah Falcons",
+      "country_or_club": "UAE",
+      "overall_experience": 4,
+      "organization_scheduling": 4,
+      "venue_facilities": 5,
+      "officiating_fairness": 4,
+      "hospitality_support": 5,
+      "comments": "Well-run event, would attend again next year."
+    }
+  }
+}

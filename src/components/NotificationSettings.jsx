@@ -69,7 +69,7 @@ function Toggle({ on, onClick, disabled }) {
       disabled={disabled}
       style={{
         width: 42, height: 24, borderRadius: 999, border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-        background: on ? '#10b981' : 'var(--theme-border-strong, var(--theme-border))',
+        background: on ? 'var(--status-safe)' : 'var(--theme-border-strong, var(--theme-border))',
         position: 'relative', transition: 'background 0.2s ease', flexShrink: 0, opacity: disabled ? 0.5 : 1, padding: 0,
       }}
       aria-pressed={on}
@@ -325,7 +325,7 @@ export default function NotificationSettings({ isMasterAdmin }) {
                                   <button
                                     onClick={() => removeRecipient(type, r.email)}
                                     title={t('Remove', 'إزالة')}
-                                    style={{ background: 'rgba(244,63,94,0.1)', border: 'none', color: '#f43f5e', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                    style={{ background: 'rgba(244,63,94,0.1)', border: 'none', color: 'var(--status-risk)', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                                   >
                                     <Trash2 size={14} />
                                   </button>
@@ -368,7 +368,7 @@ export default function NotificationSettings({ isMasterAdmin }) {
                       </button>
                     </div>
                     {draft.error && (
-                      <p style={{ color: '#f43f5e', fontSize: '0.78rem', margin: '0.5rem 0 0' }}>{draft.error}</p>
+                      <p style={{ color: 'var(--status-risk)', fontSize: '0.78rem', margin: '0.5rem 0 0' }}>{draft.error}</p>
                     )}
                   </div>
                 </motion.div>
@@ -391,7 +391,7 @@ export default function NotificationSettings({ isMasterAdmin }) {
             </span>
           </div>
           {isMasterAdmin && logs.length > 0 && (
-            <button className="um-btn um-btn-ghost" onClick={clearLog} style={{ color: '#f43f5e' }}>
+            <button className="um-btn um-btn-ghost" onClick={clearLog} style={{ color: 'var(--status-risk)' }}>
               <Trash2 size={14} /> {t('Clear Log', 'مسح السجل')}
             </button>
           )}
@@ -417,7 +417,7 @@ export default function NotificationSettings({ isMasterAdmin }) {
                   const failed = log.status === 'failed';
                   const tl = TYPE_LABEL[log.type];
                   return (
-                    <tr key={log.id} style={failed ? { boxShadow: 'inset 3px 0 0 #f43f5e' } : undefined}>
+                    <tr key={log.id} style={failed ? { boxShadow: 'inset 3px 0 0 var(--status-risk)' } : undefined}>
                       <td style={{ ...TD, color: 'var(--theme-text-muted)', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>{fmtLogTime(log.timestamp)}</td>
                       <td style={{ ...TD, fontSize: '0.8rem' }}>{tl ? (lang === 'ar' ? tl.ar : tl.en) : log.type}</td>
                       <td style={{ ...TD, fontSize: '0.8rem' }}>
@@ -428,7 +428,7 @@ export default function NotificationSettings({ isMasterAdmin }) {
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.72rem', fontWeight: 700,
                           padding: '3px 9px', borderRadius: 99,
-                          color: failed ? '#f43f5e' : '#10b981',
+                          color: failed ? 'var(--status-risk)' : 'var(--status-safe)',
                           background: failed ? 'rgba(244,63,94,0.1)' : 'rgba(16,185,129,0.1)',
                         }} title={log.error || ''}>
                           {failed ? <X size={11} /> : <Check size={11} />}

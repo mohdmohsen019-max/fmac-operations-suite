@@ -14,16 +14,16 @@
 
 import { db } from '../../firebase'
 import {
-  collection, addDoc, serverTimestamp,
+  collection, addDoc, serverTimestamp, doc, runTransaction,
 } from 'firebase/firestore'
 
 export const ASSET_STATUSES = ['Active', 'Under Maintenance', 'Disposed', 'Missing']
 
 export const STATUS_META = {
-  Active:              { en: 'Active',            ar: 'نشط',          color: '#10b981', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.30)' },
-  'Under Maintenance': { en: 'Under Maintenance', ar: 'تحت الصيانة',  color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.30)' },
+  Active:              { en: 'Active',            ar: 'نشط',          color: '#2c9c5c', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.30)' },
+  'Under Maintenance': { en: 'Under Maintenance', ar: 'تحت الصيانة',  color: '#d4a008', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.30)' },
   Disposed:            { en: 'Disposed',          ar: 'مُستبعد',       color: '#8b8b9e', bg: 'rgba(139,139,158,0.12)', border: 'rgba(139,139,158,0.30)' },
-  Missing:             { en: 'Missing',           ar: 'مفقود',        color: '#f43f5e', bg: 'rgba(244,63,94,0.12)',   border: 'rgba(244,63,94,0.30)' },
+  Missing:             { en: 'Missing',           ar: 'مفقود',        color: '#de4a41', bg: 'rgba(244,63,94,0.12)',   border: 'rgba(244,63,94,0.30)' },
 }
 
 export const CHANGE_TYPE_META = {
@@ -96,6 +96,27 @@ export function roomLabel(room, lang) {
   return lang === 'ar' ? (room.name_ar || room.name_en || '—') : (room.name_en || room.name_ar || '—')
 }
 
+// Atomically reserve the next FMAC-#### asset code. New assets whose barcode,
+// sku and asset_code are all left blank fall back to a generated code, so that
+// code MUST stay unique even when two users add an asset in the same snapshot
+// window. A plain in-memory max scan can hand both the same number; a Firestore
+// transaction on a single counter doc serialises the allocation instead.
+//
+// `scannedMax` is the highest FMAC-#### currently seen in memory. The counter is
+// bumped to max(storedCounter, scannedMax) + 1, so it bootstraps correctly above
+// the ~700 pre-existing register codes on first use and stays monotonic after.
+export async function nextAssetCode(scannedMax = 0) {
+  const ref = doc(db, 'asset_counters', 'codes')
+  const next = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    const stored = snap.exists() ? Number(snap.data().value) || 0 : 0
+    const n = Math.max(stored, Number(scannedMax) || 0) + 1
+    tx.set(ref, { value: n, updated_at: serverTimestamp() }, { merge: true })
+    return n
+  })
+  return `FMAC-${String(next).padStart(4, '0')}`
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    STRATEGIC ASSET MANAGEMENT — register schema, condition/criticality,
    the club's 4 strategic goals, and the smart-default engine that lets the
@@ -106,10 +127,10 @@ export function roomLabel(room, lang) {
 // ── Physical condition ────────────────────────────────────────────────
 export const CONDITIONS = ['Good', 'Fair', 'Needs Maintenance', 'Poor']
 export const CONDITION_META = {
-  'Good':              { en: 'Good',              ar: 'جيدة',        color: '#10b981' },
-  'Fair':              { en: 'Fair',              ar: 'مقبولة',      color: '#06b6d4' },
-  'Needs Maintenance': { en: 'Needs Maintenance', ar: 'تحتاج صيانة', color: '#f59e0b' },
-  'Poor':              { en: 'Poor',              ar: 'ضعيفة',       color: '#f43f5e' },
+  'Good':              { en: 'Good',              ar: 'جيدة',        color: '#2c9c5c' },
+  'Fair':              { en: 'Fair',              ar: 'مقبولة',      color: '#e26a15' },
+  'Needs Maintenance': { en: 'Needs Maintenance', ar: 'تحتاج صيانة', color: '#d4a008' },
+  'Poor':              { en: 'Poor',              ar: 'ضعيفة',       color: '#de4a41' },
 }
 export function conditionLabel(c, lang) {
   return CONDITION_META[c] ? (lang === 'ar' ? CONDITION_META[c].ar : CONDITION_META[c].en) : (c || '—')
@@ -118,9 +139,9 @@ export function conditionLabel(c, lang) {
 // ── Strategic criticality ─────────────────────────────────────────────
 export const CRITICALITIES = ['Critical', 'High', 'Medium', 'Low']
 export const CRITICALITY_META = {
-  Critical: { en: 'Critical', ar: 'حرجة',    color: '#f43f5e', rank: 4 },
-  High:     { en: 'High',     ar: 'مرتفعة',  color: '#f59e0b', rank: 3 },
-  Medium:   { en: 'Medium',   ar: 'متوسطة',  color: '#06b6d4', rank: 2 },
+  Critical: { en: 'Critical', ar: 'حرجة',    color: '#de4a41', rank: 4 },
+  High:     { en: 'High',     ar: 'مرتفعة',  color: '#d4a008', rank: 3 },
+  Medium:   { en: 'Medium',   ar: 'متوسطة',  color: '#e26a15', rank: 2 },
   Low:      { en: 'Low',      ar: 'منخفضة',  color: '#8b8b9e', rank: 1 },
 }
 export function criticalityLabel(c, lang) {
@@ -149,7 +170,7 @@ export const STRATEGIC_GOALS = [
     code: 'G1',
     ar: 'تطبيق مبادرات وأنشطة فعالة تسهم في إنشاء مجتمع رياضي في إمارة الفجيرة',
     shortAr: 'مجتمع رياضي في الفجيرة', shortEn: 'Sports community',
-    color: '#06b6d4', match: ['مجتمع رياضي'],
+    color: '#e26a15', match: ['مجتمع رياضي'],
   },
   {
     code: 'G2',
@@ -161,19 +182,19 @@ export const STRATEGIC_GOALS = [
     code: 'G3',
     ar: 'تطوير آليات مستدامة لاكتشاف واستقطاب المواهب الرياضية',
     shortAr: 'اكتشاف واستقطاب المواهب', shortEn: 'Talent discovery & attraction',
-    color: '#10b981', match: ['اكتشاف واستقطاب', 'آليات مستدامة'],
+    color: '#2c9c5c', match: ['اكتشاف واستقطاب', 'آليات مستدامة'],
   },
   {
     code: 'G4',
     ar: 'تنظيم واستضافة بطولات ذات تصنيف من الاتحادات الدولية',
     shortAr: 'استضافة البطولات الدولية', shortEn: 'Hosting ranked championships',
-    color: '#f59e0b', match: ['استضافة بطولات', 'تنظيم واستضافة'],
+    color: '#d4a008', match: ['استضافة بطولات', 'تنظيم واستضافة'],
   },
   {
     code: 'G5',
     ar: 'تدعيم برامج النخبة وبرامج وأنشطة مساندة لتطوير لاعبين مؤهلين لخوض التصفيات الأولمبية وتحقيق إنجاز أولمبي',
     shortAr: 'برامج النخبة والإنجاز الأولمبي', shortEn: 'Elite Olympic programs',
-    color: '#f43f5e', match: ['برامج النخبة', 'إنجاز أولمبي'],
+    color: '#de4a41', match: ['برامج النخبة', 'إنجاز أولمبي'],
   },
   {
     code: 'G6',

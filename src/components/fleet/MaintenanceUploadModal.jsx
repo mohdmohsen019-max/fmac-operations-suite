@@ -10,8 +10,16 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { pdfService } from '../../services/pdfService';
+import { statementExcelService } from '../../services/statementExcelService';
 import { SectionTitle, FleetTable } from './FleetSharedUI';
 import { useLanguage } from '../../contexts/LanguageContext';
+
+/* Accepted statement formats. Decided by extension — Office MIME types are
+   inconsistent across browsers and operating systems, extensions are not. */
+const STATEMENT_ACCEPT = '.pdf,.xlsx,.xlsm,.xls,.csv';
+const isExcelStatement = (f) => /\.(xlsx|xlsm|xls|csv)$/i.test(f?.name || '');
+const isPdfStatement = (f) => /\.pdf$/i.test(f?.name || '');
+const isSupportedStatement = (f) => isExcelStatement(f) || isPdfStatement(f);
 
 export default function MaintenanceUploadModal({ isOpen, onClose, onImportComplete }) {
   const { t, locale } = useLanguage();
@@ -28,12 +36,23 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
   const [rawOcrText, setRawOcrText] = useState('');
   const [showRawOcr, setShowRawOcr] = useState(false);
 
+  async function fetchVehicles() {
+    try {
+      const snap = await getDocs(collection(db, 'vehicles'));
+      setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error('Error fetching vehicles:', err);
+    }
+  }
+
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchVehicles();
       resetState();
     }
   }, [isOpen]);
+
 
   const resetState = () => {
     setStep(1);
@@ -48,23 +67,21 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
     setShowRawOcr(false);
   };
 
-  const fetchVehicles = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'vehicles'));
-      setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) {
-      console.error('Error fetching vehicles:', err);
-    }
+  const handleFileSelect = (e) => {
+    acceptFile(e.target.files[0]);
   };
 
-  const handleFileSelect = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile && selectedFile.type === 'application/pdf') {
-      setFile(selectedFile);
-      setError(null);
-    } else {
-      setError(t('Please select a valid PDF statement.', 'يرجى تحديد كشف حساب PDF صالح.'));
+  /* Shared by the picker and the drop zone. Type is decided by extension —
+     Office MIME types vary by browser and OS, the extension does not. */
+  const acceptFile = (selectedFile) => {
+    if (!selectedFile) return;
+    if (!isSupportedStatement(selectedFile)) {
+      setError(t('Please select a PDF or Excel statement (.pdf, .xlsx, .xls, .csv).',
+                 'يرجى تحديد كشف حساب بصيغة PDF أو Excel (.pdf, .xlsx, .xls, .csv).'));
+      return;
     }
+    setFile(selectedFile);
+    setError(null);
   };
 
   const [validationResult, setValidationResult] = useState(null);
@@ -76,7 +93,10 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
     setError(null);
     setValidationResult(null);
     
-    const result = await pdfService.parseStatement(file, (msg) => {
+    /* A spreadsheet is parsed directly — the figures are already machine-
+       readable, so it is exact and instant. Only a PDF needs the vision pass. */
+    const parser = isExcelStatement(file) ? statementExcelService : pdfService;
+    const result = await parser.parseStatement(file, (msg) => {
       // Map common status messages to Arabic
       const localizedMsg = {
         'Initializing...': t('Initializing...', 'جارٍ البدء...'),
@@ -108,11 +128,18 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
       setRecords(enhanced);
       setStatementPeriod(result.statementPeriod);
       
-      // Warnings for UI
-      if (result.validation.actualCount < 10) {
-        setError(t(`Warning: Only ${result.validation.actualCount} records detected — please verify or add missing rows manually.`, `تحذير: تم اكتشاف ${result.validation.actualCount} سجل فقط - يرجى التحقق أو إضافة الصفوف المفقودة يدوياً.`));
-      } else if (!result.validation.isTotalValid) {
-        setError(t(`Reconciliation Warning: Extracted total does not match expected statement total (AED 15,334.94).`, `تحذير المطابقة: الإجمالي المستخرج لا يطابق إجمالي الكشف المتوقع (15,334.94 د.إ).`));
+      /* Reconciliation. A spreadsheet carries its own TOTAL row, so we compare
+         against the statement's stated figures rather than a fixed expectation
+         — that reconciles every month, not just one particular statement. */
+      const v = result.validation;
+      if (!v.isTotalValid && v.statedTotal != null) {
+        setError(t(
+          `Reconciliation warning: the rows total AED ${v.actualTotal.toFixed(2)} but the statement states AED ${v.statedTotal.toFixed(2)}. Check for a missing or duplicated row.`,
+          `تحذير المطابقة: مجموع الصفوف ${v.actualTotal.toFixed(2)} د.إ بينما الكشف يذكر ${v.statedTotal.toFixed(2)} د.إ. تحقق من وجود صف ناقص أو مكرر.`));
+      } else if (v.actualCount < 5) {
+        setError(t(
+          `Only ${v.actualCount} record(s) detected — please verify the statement or add missing rows manually.`,
+          `تم اكتشاف ${v.actualCount} سجل فقط — يرجى التحقق من الكشف أو إضافة الصفوف الناقصة يدوياً.`));
       }
 
       setStep(3);
@@ -262,11 +289,10 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault();
-                  const f = e.dataTransfer.files[0];
-                  if (f?.type === 'application/pdf') setFile(f);
+                  acceptFile(e.dataTransfer.files[0]);
                 }}
                 style={{
-                  border: '2px dashed rgba(212, 175, 55, 0.3)',
+                  border: '2px dashed var(--theme-accent-border)',
                   borderRadius: '12px',
                   padding: '48px',
                   background: 'rgba(255,255,255,0.02)',
@@ -278,16 +304,18 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
                   type="file" 
                   id="pdf-upload" 
                   hidden 
-                  accept=".pdf" 
-                  onChange={handleFileSelect} 
+                  accept={STATEMENT_ACCEPT}
+                  onChange={handleFileSelect}
                 />
                 <label htmlFor="pdf-upload" style={{ cursor: 'pointer' }}>
                   <Upload size={48} className="text-gold" style={{ marginBottom: '16px', opacity: 0.6 }} />
                   <p style={{ fontWeight: 700, margin: '0 0 8px' }}>
-                    {file ? file.name : t('Drop PDF here or click to browse', 'ألقِ ملف PDF هنا أو انقر للتصفح')}
+                    {file ? file.name : t('Drop a PDF or Excel file here, or click to browse', 'ألقِ ملف PDF أو Excel هنا أو انقر للتصفح')}
                   </p>
-                  <p style={{ fontSize: '0.8rem', color: '#8888AA' }}>
-                    {t('Supports scanned statements from Abu Thahnun Garage', 'يدعم الكشوفات الممسوحة ضوئياً من مرآب أبو طحنون')}
+                  <p style={{ fontSize: '0.8rem', color: 'var(--theme-text-muted)' }}>
+                    {file && isExcelStatement(file)
+                      ? t('Excel — read directly, no scanning needed', 'Excel — تُقرأ مباشرة دون الحاجة للمسح الضوئي')
+                      : t('Scanned PDF statements or Excel workbooks from the garage', 'كشوفات PDF الممسوحة ضوئياً أو ملفات Excel من المرآب')}
                   </p>
                 </label>
               </div>
@@ -323,12 +351,12 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
             <div>
               {error && (
                 <div style={{ 
-                  background: 'rgba(245, 158, 11, 0.1)', 
-                  border: '1px solid rgba(245, 158, 11, 0.3)', 
+                  background: 'var(--status-warn-bg)', 
+                  border: '1px solid var(--status-warn-border)', 
                   padding: '10px 16px', 
                   borderRadius: '8px', 
                   marginBottom: '16px',
-                  color: '#F59E0B',
+                  color: 'var(--status-warn)',
                   fontSize: '0.85rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -339,8 +367,8 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
                 </div>
               )}
               <div style={{ 
-                background: 'rgba(212, 175, 55, 0.05)', 
-                border: '1px solid rgba(212, 175, 55, 0.2)', 
+                background: 'var(--theme-surface-pearl)', 
+                border: '1px solid var(--theme-border)', 
                 padding: '12px 16px',
                 borderRadius: '8px',
                 marginBottom: '20px',
@@ -352,24 +380,24 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
                   <Receipt size={18} className="text-gold" />
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t('Period:', 'الفترة:')} {statementPeriod}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#8888AA' }}>{t(`${records.length} records detected. You can edit any field before importing.`, `تم اكتشاف ${records.length} سجل. يمكنك تعديل أي حقل قبل الاستيراد.`)}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--theme-text-muted)' }}>{t(`${records.length} records detected. You can edit any field before importing.`, `تم اكتشاف ${records.length} سجل. يمكنك تعديل أي حقل قبل الاستيراد.`)}</div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '20px' }}>
                   <div style={{ textAlign: locale === 'ar-SA' ? 'left' : 'right' }}>
-                    <div style={{ fontSize: '0.7rem', color: '#8888AA' }}>{t('VAT TOTAL', 'إجمالي الضريبة')}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--theme-text-muted)' }}>{t('VAT TOTAL', 'إجمالي الضريبة')}</div>
                     <div style={{ fontWeight: 800 }}>{t('AED', 'د.إ')} {records.filter(r => r.selected).reduce((sum, r) => sum + (parseFloat(r.vat) || 0), 0).toLocaleString(locale)}</div>
                   </div>
                   <div style={{ textAlign: locale === 'ar-SA' ? 'left' : 'right' }}>
-                    <div style={{ fontSize: '0.7rem', color: '#8888AA', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--theme-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
                       {t('GRAND TOTAL', 'المجموع الكلي')}
                       {validationResult?.isTotalValid ? (
                         <CheckCircle2 size={12} className="text-green-500" style={{ color: '#10B981' }} />
                       ) : (
-                        <AlertTriangle size={12} className="text-amber-500" style={{ color: '#F59E0B' }} />
+                        <AlertTriangle size={12} className="text-amber-500" style={{ color: 'var(--status-warn)' }} />
                       )}
                     </div>
-                    <div style={{ fontWeight: 800, color: validationResult?.isTotalValid ? '#10B981' : '#D4AF37' }}>
+                    <div style={{ fontWeight: 800, color: validationResult?.isTotalValid ? 'var(--status-safe)' : 'var(--theme-accent)' }}>
                       {t('AED', 'د.إ')} {records.filter(r => r.selected).reduce((sum, r) => sum + (parseFloat(r.total) || 0), 0).toLocaleString(locale)}
                     </div>
                   </div>
@@ -414,7 +442,7 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
                             placeholder={t('Plate', 'اللوحة')}
                             value={r.plateNumber} 
                             onChange={(e) => updateRecord(r.id, 'plateNumber', e.target.value)} 
-                            style={{ color: r.status === 'warning' ? '#F59E0B' : '#D4AF37', fontWeight: 800 }}
+                            style={{ color: r.status === 'warning' ? 'var(--status-warn)' : 'var(--theme-accent)', fontWeight: 800 }}
                           />
                         </td>
                         <td>
@@ -491,10 +519,10 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
           {/* STEP 4: FALLBACK REDIRECT */}
           {step === 4 && (
             <div style={{ textAlign: 'center', padding: '20px' }}>
-              <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '20px', borderRadius: '12px', marginBottom: '24px' }}>
-                <AlertTriangle size={48} style={{ color: '#F59E0B', margin: '0 auto 16px' }} />
+              <div style={{ background: 'var(--status-warn-bg)', padding: '20px', borderRadius: '12px', marginBottom: '24px' }}>
+                <AlertTriangle size={48} style={{ color: 'var(--status-warn)', margin: '0 auto 16px' }} />
                 <h3>{t('Low Confidence Extraction', 'استخراج منخفض الثقة')}</h3>
-                <p style={{ color: '#8888AA', fontSize: '0.9rem' }}>
+                <p style={{ color: 'var(--theme-text-muted)', fontSize: '0.9rem' }}>
                   {t('The PDF appears to be a raw scan without searchable text. Would you like to enter the records manually?', 'يبدو أن ملف PDF هو مسح ضوئي خام بدون نص قابل للبحث. هل ترغب في إدخال السجلات يدوياً؟')}
                 </p>
               </div>
@@ -512,7 +540,7 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
               </button>
               <button 
                 onClick={() => setStep(1)}
-                style={{ background: 'transparent', border: 'none', color: '#8888AA', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--theme-text-muted)', cursor: 'pointer' }}
               >
                 {t('Try Another File', 'تجربة ملف آخر')}
               </button>
@@ -529,15 +557,15 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
           display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;
         }
         .fleet-modal-content {
-          background: #0A1128; border: 1px solid rgba(212, 175, 55, 0.2);
+          background: var(--theme-surface); border: 1px solid var(--theme-border);
           border-radius: 16px; width: 100%; box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5); overflow: hidden;
         }
         .fleet-modal-header {
-          padding: 20px 24px; border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+          padding: 20px 24px; border-bottom: 1px solid var(--theme-border-light);
           display: flex; justify-content: space-between; align-items: center;
         }
         .upload-dropzone:hover {
-          background: rgba(212, 175, 55, 0.05) !important; border-color: #D4AF37 !important;
+          background: var(--theme-accent-soft) !important; border-color: var(--theme-accent) !important;
         }
         .preview-input {
           background: transparent; border: none; color: #FFFFFF;
@@ -546,7 +574,7 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
         }
         .preview-input:focus {
           background: rgba(255,255,255,0.05);
-          box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.3);
+          box-shadow: inset 0 0 0 1px var(--theme-accent-border);
         }
         .row-disabled { opacity: 0.4; background: rgba(0,0,0,0.2); }
         .editable-table input[type="number"]::-webkit-inner-spin-button { display: none; }

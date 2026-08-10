@@ -1,0 +1,103 @@
+{
+  "survey": {
+    "id": "q01-complaints-fujairah-open-judo-championships",
+    "platform": "fmacsurvey.com",
+    "kpiCode": "Q-01",
+    "kpiNameEn": "Complaints during the tournament",
+    "kpiNameAr": "الشكاوى خلال البطولة",
+    "titleEn": "Complaint Form — Fujairah Open Judo Championships",
+    "titleAr": "نموذج تقديم شكوى — بطولة الفجيرة المفتوحة للجودو",
+    "descriptionEn": "Open to any participant, delegation, or visitor to report an issue during the tournament.",
+    "descriptionAr": "متاح لأي مشارك أو وفد أو زائر للإبلاغ عن مشكلة خلال البطولة.",
+    "language": [
+      "en",
+      "ar"
+    ],
+    "period": {
+      "type": "quarterly",
+      "label": "Fujairah Open Judo Championships (2026-05-02 – 2026-05-03)",
+      "opensOn": "2026-05-02",
+      "closesOn": "2026-05-03"
+    },
+    "target": {
+      "value": 5,
+      "unit": "count",
+      "direction": "down",
+      "formula": "count of complaints received during the tournament window (target: fewer than 5)"
+    },
+    "questions": [
+      {
+        "id": "reporter_name",
+        "type": "short_text",
+        "labelEn": "Your name (optional — leave blank to report anonymously)",
+        "labelAr": "اسمك (اختياري — اتركه فارغاً للإبلاغ دون ذكر الاسم)",
+        "required": false
+      },
+      {
+        "id": "contact",
+        "type": "short_text",
+        "labelEn": "Contact email or phone (optional)",
+        "labelAr": "البريد الإلكتروني أو الهاتف (اختياري)",
+        "required": false
+      },
+      {
+        "id": "team_or_role",
+        "type": "short_text",
+        "labelEn": "Team/delegation, or your role (spectator, official, etc.)",
+        "labelAr": "الفريق/الوفد، أو صفتك (متفرج، مسؤول، إلخ)",
+        "required": false
+      },
+      {
+        "id": "category",
+        "type": "single_choice",
+        "labelEn": "What is your complaint about?",
+        "labelAr": "ما موضوع الشكوى؟",
+        "required": true,
+        "options": [
+          "Officiating / refereeing",
+          "Facilities",
+          "Scheduling",
+          "Staff conduct",
+          "Registration",
+          "Accommodation/transport",
+          "Other"
+        ]
+      },
+      {
+        "id": "description",
+        "type": "long_text",
+        "labelEn": "Please describe the issue",
+        "labelAr": "يرجى وصف المشكلة",
+        "required": true
+      },
+      {
+        "id": "occurred_on",
+        "type": "date",
+        "labelEn": "Date the issue occurred",
+        "labelAr": "تاريخ حدوث المشكلة",
+        "required": true
+      }
+    ],
+    "linkedEvent": {
+      "nameEn": "Fujairah Open Judo Championships",
+      "nameAr": "بطولة الفجيرة المفتوحة للجودو",
+      "start": "2026-05-02",
+      "end": "2026-05-03"
+    },
+    "scoringNotes": "Reading = raw count of complaint submissions received during the tournament dates. Target: under 5."
+  },
+  "formatReference": {
+    "note": "EXAMPLE ONLY — illustrates the expected shape of one respondent's answer for training and format-review purposes. This is not a real submission and must not be counted toward the KPI reading.",
+    "noteAr": "مثال توضيحي فقط — يوضح شكل إجابة مستجيب واحد لأغراض التدريب ومراجعة الصيغة. ليست إجابة حقيقية ولا تُحتسب ضمن قراءة المؤشر.",
+    "exampleContextEn": "Example anonymous complaint about a scheduling delay.",
+    "exampleContextAr": "مثال شكوى مجهولة عن تأخر في الجدول الزمني.",
+    "exampleResponse": {
+      "reporter_name": "",
+      "contact": "",
+      "team_or_role": "Spectator",
+      "category": "Scheduling",
+      "description": "One bout started later than the posted schedule.",
+      "occurred_on": "2026-05-02"
+    }
+  }
+}

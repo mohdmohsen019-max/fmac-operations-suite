@@ -82,9 +82,9 @@ export const DEFAULT_AMS_CONFIG = {
     consequenceAr: ['ضئيل', 'طفيف', 'متوسط', 'كبير', 'جسيم'],
     bands: [
       { max: 4, ar: 'منخفض', en: 'Low', color: '#8b8b9e' },
-      { max: 9, ar: 'متوسط', en: 'Medium', color: '#06b6d4' },
-      { max: 15, ar: 'مرتفع', en: 'High', color: '#f59e0b' },
-      { max: 25, ar: 'حرج', en: 'Critical', color: '#f43f5e' },
+      { max: 9, ar: 'متوسط', en: 'Medium', color: '#e26a15' },
+      { max: 15, ar: 'مرتفع', en: 'High', color: '#d4a008' },
+      { max: 25, ar: 'حرج', en: 'Critical', color: '#de4a41' },
     ],
   },
 
@@ -259,9 +259,9 @@ export function complianceStatus(row) {
   const due = new Date(row.nextDue)
   const now = new Date()
   const days = Math.round((due - now) / 86400000)
-  if (days < 0) return { ar: 'متأخر', en: 'Overdue', color: '#f43f5e', days }
-  if (days <= 60) return { ar: 'يستحق قريباً', en: 'Due soon', color: '#f59e0b', days }
-  return { ar: 'مطابق', en: 'Compliant', color: '#10b981', days }
+  if (days < 0) return { ar: 'متأخر', en: 'Overdue', color: '#de4a41', days }
+  if (days <= 60) return { ar: 'يستحق قريباً', en: 'Due soon', color: '#d4a008', days }
+  return { ar: 'مطابق', en: 'Compliant', color: '#2c9c5c', days }
 }
 
 /* ═══════════════ SHARED SUB-COMPUTATIONS (single source of truth) ═══════════════ */

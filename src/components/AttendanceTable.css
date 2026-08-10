@@ -137,12 +137,12 @@
 }
 
 .status-toggle.is-present {
-  background: #10B981; /* Success Green */
+  background: var(--status-safe); /* Success Green */
   box-shadow: 0 0 15px rgba(16, 185, 129, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .status-toggle.is-absent {
-  background: #EF4444; /* Danger Red */
+  background: var(--status-risk); /* Danger Red */
   box-shadow: 0 0 15px rgba(239, 68, 68, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -168,8 +168,8 @@
   transition: color 0.3s ease;
 }
 
-.status-text.present { color: #10B981; }
-.status-text.absent { color: #EF4444; }
+.status-text.present { color: var(--status-safe); }
+.status-text.absent { color: var(--status-risk); }
 
 /* MOBILE CARDS (Luxury) */
 .player-card {

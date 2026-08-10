@@ -2,9 +2,9 @@ import React from 'react';
 import { motion } from 'framer-motion';
 
 export const KPICard = ({ label, value, unit, icon: Icon, trend, color }) => (
-  <motion.div 
+  <motion.div
     className="fleet-kpi-card"
-    whileHover={{ y: -4, borderColor: '#D4AF37' }}
+    whileHover={{ y: -4 }}
   >
     <div className="fleet-kpi-label">{label}</div>
     <div className="fleet-kpi-value">
@@ -12,12 +12,12 @@ export const KPICard = ({ label, value, unit, icon: Icon, trend, color }) => (
       {unit && <span className="unit">{unit}</span>}
     </div>
     {trend && (
-      <div className="fleet-kpi-trend" style={{ color: trend.startsWith('+') ? '#10B981' : '#EF4444' }}>
+      <div className="fleet-kpi-trend" style={{ color: trend.startsWith('+') ? 'var(--status-safe)' : 'var(--status-risk)' }}>
         {trend} vs last month
       </div>
     )}
     {Icon && (
-      <div style={{ position: 'absolute', right: '20px', bottom: '20px', opacity: 0.1, color: color || '#D4AF37' }}>
+      <div style={{ position: 'absolute', right: '20px', bottom: '20px', opacity: 0.12, color: color || 'var(--theme-accent)' }}>
         <Icon size={48} />
       </div>
     )}

@@ -14,6 +14,7 @@ export default function FuelStatementModal({ isOpen, onClose, onSave }) {
     year: new Date().getFullYear(),
     totalLitres: 0,
     totalCost: 0,
+    pricePerLitre: '', // AED per litre — the one manual input the statement lacks
     notes: '',
     vehicleAllocations: [] // Extracted per-vehicle data
   });
@@ -135,8 +136,12 @@ export default function FuelStatementModal({ isOpen, onClose, onSave }) {
         throw new Error(t("Please upload a valid ADNOC statement first.", "يرجى تحميل كشف حساب أدنوك صالح أولاً."));
       }
 
+      const parsedPrice = parseFloat(formData.pricePerLitre);
       await addDoc(collection(db, 'fuelStatements'), {
         ...formData,
+        pricePerLitre: Number.isFinite(parsedPrice) && parsedPrice > 0
+          ? Math.round(parsedPrice * 1000) / 1000
+          : null,
         monthName: months[formData.month - 1],
         createdAt: serverTimestamp()
       });
@@ -149,6 +154,7 @@ export default function FuelStatementModal({ isOpen, onClose, onSave }) {
         year: new Date().getFullYear(),
         totalLitres: 0,
         totalCost: 0,
+        pricePerLitre: '',
         notes: '',
         vehicleAllocations: []
       });
@@ -189,7 +195,7 @@ export default function FuelStatementModal({ isOpen, onClose, onSave }) {
           }}
         >
           {/* Header */}
-          <div style={{ padding: '24px', borderBottom: '1px solid var(--fuel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(212,175,55,0.02)' }}>
+          <div style={{ padding: '24px', borderBottom: '1px solid var(--fuel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--theme-surface-pearl)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--fuel-orange-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--fuel-border)' }}>
                 <Fuel size={22} color="var(--fuel-amber)" />
@@ -226,13 +232,39 @@ export default function FuelStatementModal({ isOpen, onClose, onSave }) {
               </div>
               <div className="fuel-input-group">
                 <label className="fuel-kpi-label">{t('Reporting Year', 'سنة التقرير')}</label>
-                <input 
-                  type="number" 
-                  className="fuel-input" 
-                  value={formData.year} 
+                <input
+                  type="number"
+                  className="fuel-input"
+                  value={formData.year}
                   onChange={e => setFormData({...formData, year: parseInt(e.target.value)})}
                 />
               </div>
+            </div>
+
+            <div className="fuel-input-group" style={{ marginBottom: '24px' }}>
+              <label className="fuel-kpi-label">{t('Price per Litre (AED)', 'سعر اللتر (درهم)')}</label>
+              <input
+                type="number"
+                className="fuel-input"
+                min="0"
+                step="0.001"
+                placeholder={
+                  formData.totalLitres > 0
+                    ? t(
+                        `Implied from statement: ${(formData.totalCost / formData.totalLitres).toFixed(3)}`,
+                        `المستنتج من الكشف: ${(formData.totalCost / formData.totalLitres).toFixed(3)}`
+                      )
+                    : t('e.g. 3.140', 'مثال: 3.140')
+                }
+                value={formData.pricePerLitre}
+                onChange={e => setFormData({ ...formData, pricePerLitre: e.target.value })}
+              />
+              <span style={{ fontSize: '0.72rem', color: 'var(--theme-text-muted)' }}>
+                {t(
+                  'The official pump price this month. Leave empty to derive it from cost ÷ litres.',
+                  'سعر المضخة الرسمي لهذا الشهر. اتركه فارغاً ليُحسب من التكلفة ÷ اللترات.'
+                )}
+              </span>
             </div>
 
             {/* UPLOAD ZONE */}
@@ -282,7 +314,7 @@ export default function FuelStatementModal({ isOpen, onClose, onSave }) {
               <motion.div 
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
-                style={{ background: 'rgba(212,175,55,0.08)', borderRadius: '16px', padding: '20px', marginBottom: '24px', border: '1px solid rgba(212,175,55,0.1)' }}
+                style={{ background: 'var(--theme-accent-soft)', borderRadius: '16px', padding: '20px', marginBottom: '24px', border: '1px solid var(--theme-border-light)' }}
               >
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                   <div>

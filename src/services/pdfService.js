@@ -1,10 +1,13 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker locally using Vite-compatible URL
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.js',
-  import.meta.url
-).href;
+/* PDF.js worker — served from /public so it is delivered byte-for-byte.
+   Anything resolved through the bundler (`new URL(..., import.meta.url)` or an
+   `?url` import) gets handed to Vite's JS transform in dev, which rewrites this
+   classic worker script into an ES module — a classic Worker cannot load that
+   ("Cannot use import statement outside a module"). Files in /public bypass the
+   pipeline entirely, so this works identically in dev and in the build.
+   Keep public/pdf.worker.min.js in sync — `npm run sync-pdf-worker`. */
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 export const pdfService = {
   /**

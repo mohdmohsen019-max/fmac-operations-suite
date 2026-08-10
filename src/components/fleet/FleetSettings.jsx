@@ -20,38 +20,47 @@ function sensitivityColor(val) {
   return '#DC2626';
 }
 
-function Toggle({ label, checked, onChange, badge, t }) {
+/* `unavailable` marks a feature that isn't wired up yet: the switch is inert
+   and dimmed, and the row says so plainly instead of pretending it can be
+   turned on. */
+function Toggle({ label, checked, onChange, badge, t, unavailable }) {
+  const on = unavailable ? false : checked;
+  const handle = unavailable ? undefined : onChange;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', opacity: unavailable ? 0.55 : 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <div 
-          onClick={onChange} 
-          style={{ 
-            width: '44px', 
-            height: '24px', 
-            borderRadius: '12px', 
-            background: checked ? 'var(--theme-accent)' : 'rgba(255,255,255,0.1)', 
-            position: 'relative', 
-            cursor: 'pointer', 
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
-            flexShrink: 0 
+        <div
+          onClick={handle}
+          style={{
+            width: '44px',
+            height: '24px',
+            borderRadius: '12px',
+            background: on ? 'var(--theme-accent)' : 'rgba(255,255,255,0.1)',
+            position: 'relative',
+            cursor: unavailable ? 'not-allowed' : 'pointer',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            flexShrink: 0
           }}
         >
-          <div style={{ 
-            position: 'absolute', 
-            top: '3px', 
-            left: checked ? '23px' : '3px', 
-            width: '18px', 
-            height: '18px', 
-            borderRadius: '50%', 
-            background: 'white', 
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
-            boxShadow: '0 2px 4px rgba(0,0,0,0.3)' 
+          <div style={{
+            position: 'absolute',
+            top: '3px',
+            left: on ? '23px' : '3px',
+            width: '18px',
+            height: '18px',
+            borderRadius: '50%',
+            background: 'white',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
           }} />
         </div>
-        <label style={{ margin: 0, cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }} onClick={onChange}>{label}</label>
+        <label style={{ margin: 0, cursor: unavailable ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.9rem' }} onClick={handle}>{label}</label>
       </div>
-      {badge && (
+      {unavailable ? (
+        <span className="status-badge muted" style={{ opacity: 0.75 }}>
+          {t('Not available', 'غير متاح')}
+        </span>
+      ) : badge && (
         <span className={`status-badge ${checked ? 'active' : 'muted'}`} style={{ opacity: checked ? 1 : 0.5 }}>
           {checked ? t('Online', 'متصل') : t('Offline', 'غير متصل')}
         </span>
@@ -103,6 +112,7 @@ export default function FleetSettings() {
 
   const formatLastSync = () => {
     if (!lastSynced) return t('Never', 'أبداً');
+    // eslint-disable-next-line
     const diff = Math.round((Date.now() - lastSynced.getTime()) / 60000);
     if (diff < 1) return t('Just now', 'الآن');
     if (diff === 1) return t('1 minute ago', 'منذ دقيقة واحدة');
@@ -138,7 +148,7 @@ export default function FleetSettings() {
           </div>
           
           <div className="fleet-input-group" style={{ marginBottom: '24px', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
-            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px' }}>{t('Regional Currency', 'العملة الإقليمية')}</label>
+            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: 'var(--theme-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>{t('Regional Currency', 'العملة الإقليمية')}</label>
             <CustomSelect value={draft.currency} onChange={(v) => canEdit && set('currency', v)} disabled={!canEdit}
               options={[
                 { value: 'AED', label: t('AED — United Arab Emirates Dirham', 'درهم — درهم الإمارات العربية المتحدة') },
@@ -148,7 +158,7 @@ export default function FleetSettings() {
           </div>
 
           <div className="fleet-input-group" style={{ marginBottom: '24px', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
-            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px' }}>{t('Measurement Standard', 'معيار القياس')}</label>
+            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: 'var(--theme-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>{t('Measurement Standard', 'معيار القياس')}</label>
             <CustomSelect value={draft.measurementUnit} onChange={(v) => canEdit && set('measurementUnit', v)} disabled={!canEdit}
               options={[
                 { value: 'km', label: t('Metric (Kilometers)', 'متري (كيلومترات)') },
@@ -157,7 +167,7 @@ export default function FleetSettings() {
           </div>
 
           <div className="fleet-input-group" style={{ textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
-            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px' }}>{t('Operational Timezone', 'المنطقة الزمنية للتشغيل')}</label>
+            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: 'var(--theme-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>{t('Operational Timezone', 'المنطقة الزمنية للتشغيل')}</label>
             <CustomSelect value={draft.timezone} onChange={(v) => canEdit && set('timezone', v)} disabled={!canEdit}
               options={[
                 { value: 'Asia/Dubai', label: t('(GMT+04:00) Gulf Standard Time', '(GMT+04:00) توقيت الخليج القياسي') },
@@ -175,7 +185,7 @@ export default function FleetSettings() {
           
           <div className="fleet-input-group" style={{ marginBottom: '24px', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexDirection: locale === 'ar-SA' ? 'row-reverse' : 'row' }}>
-              <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#6b7280', textTransform: 'uppercase' }}>{t('Speeding Violation Limit', 'حد مخالفة السرعة')}</label>
+              <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--theme-text-muted)', textTransform: 'uppercase' }}>{t('Speeding Violation Limit', 'حد مخالفة السرعة')}</label>
               <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--theme-accent)' }}>{draft.speedingLimit.toLocaleString(locale)} {t('KM/H', 'كم/س')}</span>
             </div>
             <input 
@@ -192,7 +202,7 @@ export default function FleetSettings() {
 
           <div className="fleet-input-group" style={{ marginBottom: '24px', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexDirection: locale === 'ar-SA' ? 'row-reverse' : 'row' }}>
-              <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#6b7280', textTransform: 'uppercase' }}>{t('Harsh Braking Sensitivity', 'حساسية الفرملة الشديدة')}</label>
+              <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--theme-text-muted)', textTransform: 'uppercase' }}>{t('Harsh Braking Sensitivity', 'حساسية الفرملة الشديدة')}</label>
               <span className="status-badge" style={{ background: `${sensitivityColor(draft.brakingSensitivity)}22`, color: sensitivityColor(draft.brakingSensitivity), border: 'none' }}>
                 {sensitivityLabel(draft.brakingSensitivity, t)}
               </span>
@@ -215,6 +225,7 @@ export default function FleetSettings() {
             onChange={() => canEdit && set('enableRealTimeAlerts', !draft.enableRealTimeAlerts)}
             badge
             t={t}
+            unavailable
           />
         </div>
 
@@ -226,10 +237,10 @@ export default function FleetSettings() {
           </div>
           <Toggle label={t('Email Security Summaries', 'ملخصات أمان البريد الإلكتروني')} checked={draft.emailNotifications} onChange={() => canEdit && set('emailNotifications', !draft.emailNotifications)} t={t} />
           <Toggle label={t('SMS Critical Alerting', 'تنبيهات SMS الحرجة')} checked={draft.smsAlerts} onChange={() => canEdit && set('smsAlerts', !draft.smsAlerts)} t={t} />
-          <Toggle label={t('WhatsApp Operations Sync', 'مزامنة عمليات واتساب')} checked={draft.whatsappIntegration} onChange={() => canEdit && set('whatsappIntegration', !draft.whatsappIntegration)} t={t} />
+          <Toggle label={t('WhatsApp Operations Sync', 'مزامنة عمليات واتساب')} checked={draft.whatsappIntegration} onChange={() => canEdit && set('whatsappIntegration', !draft.whatsappIntegration)} t={t} unavailable />
           
           <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
-            <p style={{ margin: 0, fontSize: '0.75rem', color: '#6b7280', lineHeight: 1.6 }}>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--theme-text-muted)', lineHeight: 1.6 }}>
               <strong style={{ color: 'var(--theme-accent)' }}>{t('PROTOCOL:', 'بروتوكول:')}</strong> {t('Dispatch preferences are synchronized across the operational cloud. Critical alerts bypass these settings during security breaches.', 'تتم مزامنة تفضيلات الإرسال عبر السحابة التشغيلية. تتجاوز التنبيهات الحرجة هذه الإعدادات أثناء الاختراقات الأمنية.')}
             </p>
           </div>
@@ -239,24 +250,24 @@ export default function FleetSettings() {
         <div className="glass-panel">
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '24px', flexDirection: locale === 'ar-SA' ? 'row-reverse' : 'row' }}>
             <Database size={20} className="text-safe" />
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800 }}>{t('Telematics Connectivity', 'اتصال تكنولوجيا المعلومات والاتصالات')}</h3>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800 }}>{t('Vehicle Tracking Connection', 'الاتصال بنظام تتبع المركبات')}</h3>
           </div>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexDirection: locale === 'ar-SA' ? 'row-reverse' : 'row' }}>
-             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>{t('Satellite Link Status:', 'حالة رابط القمر الصناعي:')}</span>
-             <span style={{ fontSize: '0.85rem', fontWeight: 800, color: lastSynced ? 'var(--theme-accent)' : '#ef4444' }}>
+             <span style={{ fontSize: '0.85rem', color: 'var(--theme-text-muted)' }}>{t('Connection:', 'حالة الاتصال:')}</span>
+             <span style={{ fontSize: '0.85rem', fontWeight: 800, color: lastSynced ? 'var(--theme-accent)' : 'var(--status-risk)' }}>
                {lastSynced ? t('CONNECTED', 'متصل') : t('DISCONNECTED', 'غير متصل')}
              </span>
           </div>
 
           <div style={{ padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', marginBottom: '24px', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '8px', flexDirection: locale === 'ar-SA' ? 'row-reverse' : 'row' }}>
-               <span style={{ color: '#6b7280' }}>{t('LAST SYNC SEQUENCE:', 'آخر تسلسل مزامنة:')}</span>
+               <span style={{ color: 'var(--theme-text-muted)' }}>{t('Last updated:', 'آخر تحديث:')}</span>
                <span style={{ fontWeight: 700 }}>{formatLastSync()}</span>
              </div>
              {syncState === 'error' && (
-               <div style={{ color: '#ef4444', fontSize: '0.7rem', fontWeight: 600, marginTop: '8px' }}>
-                 <AlertTriangle size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> {t('HANDSHAKE FAILED: RETRYING...', 'فشل الاتصال: جارٍ إعادة المحاولة...')}
+               <div style={{ color: 'var(--status-risk)', fontSize: '0.7rem', fontWeight: 600, marginTop: '8px' }}>
+                 <AlertTriangle size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> {t('Could not connect — trying again…', 'تعذّر الاتصال — جارٍ إعادة المحاولة…')}
                </div>
              )}
           </div>
@@ -268,23 +279,23 @@ export default function FleetSettings() {
               onClick={handleSyncNow}
               disabled={syncState === 'syncing'}
             >
-              {syncState === 'syncing' ? <Loader2 size={16} className="animate-spin" /> : <><RefreshCw size={14} style={{ marginRight: locale === 'ar-SA' ? '0' : '8px', marginLeft: locale === 'ar-SA' ? '8px' : '0' }} /> {t('RE-INITIALIZE SYNC', 'إعادة تهيئة المزامنة')}</>}
+              {syncState === 'syncing' ? <Loader2 size={16} className="animate-spin" /> : <><RefreshCw size={14} style={{ marginRight: locale === 'ar-SA' ? '0' : '8px', marginLeft: locale === 'ar-SA' ? '8px' : '0' }} /> {t('Update now', 'تحديث الآن')}</>}
             </button>
           )}
 
           {canEdit && (!showResetConfirm ? (
             <button
-              style={{ width: '100%', background: 'transparent', border: 'none', color: '#ef4444', fontSize: '0.75rem', fontWeight: 700, marginTop: '16px', cursor: 'pointer', textDecoration: 'underline' }}
+              style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--status-risk)', fontSize: '0.75rem', fontWeight: 700, marginTop: '16px', cursor: 'pointer', textDecoration: 'underline' }}
               onClick={() => setShowResetConfirm(true)}
             >
-              {t('PURGE LOCAL CONFIGURATION', 'تطهير التكوين المحلي')}
+              {t('Reset these settings', 'إعادة تعيين هذه الإعدادات')}
             </button>
           ) : (
             <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(239,68,68,0.05)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.1)', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
-              <p style={{ margin: '0 0 12px', fontSize: '0.75rem', color: 'var(--theme-text-main)' }}>{t('Are you sure? This will wipe all local settings.', 'هل أنت متأكد؟ سيؤدي هذا إلى مسح جميع الإعدادات المحلية.')}</p>
+              <p style={{ margin: '0 0 12px', fontSize: '0.75rem', color: 'var(--theme-text-main)' }}>{t('Reset every setting on this page back to its default?', 'إعادة جميع إعدادات هذه الصفحة إلى وضعها الافتراضي؟')}</p>
               <div style={{ display: 'flex', gap: '8px', flexDirection: locale === 'ar-SA' ? 'row-reverse' : 'row' }}>
-                <button onClick={handleReset} style={{ flex: 1, background: '#ef4444', color: 'white', border: 'none', padding: '6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 800 }}>{t('WIPE', 'مسح')}</button>
-                <button onClick={() => setShowResetConfirm(false)} style={{ flex: 1, background: 'var(--theme-surface-pearl)', color: 'var(--theme-text-main)', border: '1px solid var(--theme-border)', padding: '6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600 }}>{t('CANCEL', 'إلغاء')}</button>
+                <button onClick={handleReset} style={{ flex: 1, background: 'var(--status-risk)', color: 'white', border: 'none', padding: '6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 800 }}>{t('Reset', 'إعادة تعيين')}</button>
+                <button onClick={() => setShowResetConfirm(false)} style={{ flex: 1, background: 'var(--theme-surface-pearl)', color: 'var(--theme-text-main)', border: '1px solid var(--theme-border)', padding: '6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600 }}>{t('Cancel', 'إلغاء')}</button>
               </div>
             </div>
           ))}

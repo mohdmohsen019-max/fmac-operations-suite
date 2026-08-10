@@ -1,0 +1,200 @@
+/* ═══════════════════════════════════════════════════════════
+   ACTIVITY LOG — one naked timeline across every module.
+═══════════════════════════════════════════════════════════ */
+
+.act {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 4px 28px 48px;
+}
+.act * { min-width: 0; }
+
+.act-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.act-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--theme-text-main);
+}
+
+.act-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--theme-text-muted);
+}
+
+.act-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--theme-surface);
+  border: none;
+  border-radius: 16px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--theme-text-main);
+  cursor: pointer;
+}
+.act-refresh:disabled { opacity: 0.6; cursor: default; }
+.act-spin { animation: act-spin 1s linear infinite; }
+@keyframes act-spin { to { transform: rotate(360deg); } }
+
+/* Filter chips */
+.act-filters {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.act-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 11px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  transition: color var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+.act-chip:hover { color: var(--theme-text-main); }
+.act-chip.active {
+  background: var(--theme-surface);
+  color: var(--theme-text-main);
+  font-weight: 600;
+}
+
+.act-chip-n {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--theme-surface-pearl);
+  color: var(--theme-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.act-chip.active .act-chip-n {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Timeline */
+.act-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.act-day {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--theme-text-ghost);
+  padding: 18px 0 6px;
+  border-bottom: 1px solid var(--theme-border);
+  margin-bottom: 2px;
+}
+.act-day:first-child { padding-top: 4px; }
+
+.act-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 2px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--theme-border-light);
+  border-radius: 8px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: start;
+  width: 100%;
+  transition: background 0.12s ease;
+}
+.act-row:hover { background: var(--theme-surface-hover); }
+
+.act-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.act-icon { color: var(--theme-text-ghost); flex-shrink: 0; }
+
+.act-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.act-row-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--theme-text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.act-row-sub {
+  font-size: 12px;
+  color: var(--theme-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.act-time {
+  font-size: 11px;
+  color: var(--theme-text-ghost);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.act-more {
+  margin: 18px auto 0;
+  background: var(--theme-surface);
+  border: none;
+  border-radius: 16px;
+  padding: 9px 20px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--theme-text-main);
+  cursor: pointer;
+}
+
+.act-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 70px 0;
+  color: var(--theme-text-ghost);
+  font-size: 13px;
+}
+.act-empty p { margin: 0; }
+
+@media (max-width: 720px) {
+  .act { padding: 4px 16px 40px; }
+  .act-time { display: none; }
+}

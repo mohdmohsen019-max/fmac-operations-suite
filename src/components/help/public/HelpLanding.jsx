@@ -1,12 +1,16 @@
+/**
+ * Public landing — the light editorial face of the suite.
+ * Same design language as the staff console: bone canvas, ink type, brand-red
+ * accents, flat white cards, per-module tint chips. All routes and the
+ * request-wizard entry points are unchanged.
+ */
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { ChevronDown, ArrowRight, ArrowUpRight } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import LanguageToggle from '../../shared/LanguageToggle';
 import ThemeToggle from '../../shared/ThemeToggle';
-import FMACLogo from '../../FMACLogo';
-import CinematicBackdrop from '../../shared/CinematicBackdrop';
 import './HelpLanding.css';
 
 /* ── Service icon paths ─────────────────────────────── */
@@ -32,94 +36,45 @@ const DISCIPLINES = [
   { ar: 'سباحة', en: 'SWIMMING' },
 ];
 
-/* ── Kinetic headline: word-by-word rise reveal ─────── */
-function KineticHeadline({ text, className }) {
-  const words = text.split(' ');
-  return (
-    <h1 className={className} dir="rtl">
-      {words.map((w, i) => (
-        <span className="kinetic-word-mask" key={i}>
-          <motion.span
-            className="kinetic-word"
-            initial={{ y: '115%', rotate: 4, filter: 'blur(6px)' }}
-            animate={{ y: '0%', rotate: 0, filter: 'blur(0px)' }}
-            transition={{ delay: 0.55 + i * 0.09, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          >
-            {w}
-          </motion.span>
-        </span>
-      ))}
-    </h1>
-  );
-}
+/* Per-card module tints — the suite's identity colours as icon chips. */
+const CARD_TINTS = [
+  { bg: '#fdeef0', ink: '#a32d2d' },
+  { bg: '#e8f0fd', ink: '#2563eb' },
+  { bg: '#e9f7f1', ink: '#0c7a58' },
+  { bg: '#f8f3e6', ink: '#8a6d1f' },
+  { bg: '#f3efff', ink: '#6d4fc4' },
+  { bg: '#e6f4f7', ink: '#0e7490' },
+];
 
-/* ── Animated counter ───────────────────────────────── */
+/* ── Count-up number (kept from the previous design) ── */
 function CountUp({ to, suffix = '' }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-40px' });
   const [val, setVal] = useState(0);
-
   useEffect(() => {
-    if (!inView) return undefined;
-    let raf;
-    const start = performance.now();
-    const dur = 1400;
+    if (!inView) return;
+    let raf; const t0 = performance.now(); const dur = 1100;
     const tick = (now) => {
-      const p = Math.min(1, (now - start) / dur);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setVal(Math.round(to * eased));
+      const p = Math.min(1, (now - t0) / dur);
+      setVal(Math.round(to * (1 - Math.pow(1 - p, 3))));
       if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [inView, to]);
-
   return <span ref={ref}>{val}{suffix}</span>;
 }
 
-/* ── 3D tilt card with glare ────────────────────────── */
-function TiltCard({ children, className, onClick }) {
-  const ref = useRef(null);
+const rise = {
+  initial: { opacity: 0, y: 22 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, margin: '-40px' },
+  transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
+};
 
-  const onMove = (e) => {
-    const el = ref.current;
-    if (!el || window.matchMedia('(pointer: coarse)').matches) return;
-    const r = el.getBoundingClientRect();
-    const px = (e.clientX - r.left) / r.width;
-    const py = (e.clientY - r.top) / r.height;
-    el.style.setProperty('--tilt-x', `${(py - 0.5) * -9}deg`);
-    el.style.setProperty('--tilt-y', `${(px - 0.5) * 9}deg`);
-    el.style.setProperty('--glare-x', `${px * 100}%`);
-    el.style.setProperty('--glare-y', `${py * 100}%`);
-  };
-
-  const onLeave = () => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.setProperty('--tilt-x', '0deg');
-    el.style.setProperty('--tilt-y', '0deg');
-  };
-
-  return (
-    <div
-      ref={ref}
-      className={className}
-      onPointerMove={onMove}
-      onPointerLeave={onLeave}
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter') onClick?.(); }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/* ════════════════════════════════════════════════════ */
 export default function HelpLanding() {
   const navigate = useNavigate();
-  const { t, lang } = useLanguage();
+  const { lang } = useLanguage();
   const isAr = lang === 'ar';
   const [scrolled, setScrolled] = useState(false);
 
@@ -144,235 +99,197 @@ export default function HelpLanding() {
   const marqueeItems = [...DISCIPLINES, ...DISCIPLINES]; // doubled for seamless loop
 
   return (
-    <div className="fmac-landing">
+    <div className="pl">
 
       {/* ── Nav ── */}
-      <nav className={`landing-nav ${scrolled ? 'scrolled' : ''}`}>
-        <img src="/fmac-logo-new.png" alt="FMAC" className="landing-nav-logo" />
-        <div className="landing-nav-actions">
+      <nav className={`pl-nav ${scrolled ? 'pl-nav--scrolled' : ''}`}>
+        <div className="pl-nav-brand">
+          <img src="/fmac-ops-logo.png" alt="FMAC" className="pl-nav-logo" />
+          <span className="pl-nav-word">{isAr ? 'إدارة العمليات' : 'Operations'}</span>
+        </div>
+        <div className="pl-nav-actions">
           <LanguageToggle />
           <ThemeToggle />
-          <button className="landing-nav-staff-btn" onClick={() => navigate('/login')}>
+          <button className="pl-btn pl-btn--ghost pl-btn--sm" onClick={() => navigate('/track')}>
+            <Search size={13} />
+            {isAr ? 'تتبّع طلب' : 'Track a request'}
+          </button>
+          <button className="pl-btn pl-btn--ink pl-btn--sm" onClick={() => navigate('/login')}>
             {isAr ? 'دخول الموظفين' : 'Staff Login'}
-            <ArrowUpRight size={14} />
+            <ArrowUpRight size={13} />
           </button>
         </div>
       </nav>
 
       {/* ── Hero ── */}
-      <section className="landing-hero">
-        <CinematicBackdrop intensity={1} />
-        <div className="hero-ghost-word" aria-hidden="true">عمليات</div>
+      <header className="pl-hero">
+        {/* Atmosphere layer — texture keeps the bone canvas from reading empty */}
+        <div className="pl-hero-bg" aria-hidden="true">
+          <div className="pl-hero-glow" />
+          <span className="pl-hero-ghost">FMAC</span>
+          <div className="pl-hero-frame" />
+        </div>
 
-        <div className="landing-hero-content">
-          <motion.div
-            className="hero-logo-wrap"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <FMACLogo size="md" />
-          </motion.div>
-
-          <KineticHeadline
-            className="hero-text-arabic"
-            text="مركز عمليات نادي الفجيرة للفنون القتالية"
-          />
-
-          <motion.div
-            className="hero-divider"
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: 1 }}
-            transition={{ delay: 1.3, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          />
-
-          <motion.p
-            className="hero-text-english"
-            initial={{ opacity: 0, letterSpacing: '0.6em' }}
-            animate={{ opacity: 1, letterSpacing: '0.34em' }}
-            transition={{ delay: 1.35, duration: 1, ease: [0.16, 1, 0.3, 1] }}
-          >
+        <div className="pl-hero-inner">
+          <motion.p className="pl-kicker"
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}>
             FMAC OPERATIONS SUITE
           </motion.p>
 
-          <motion.p
-            className={`hero-subtitle ${isAr ? 'hero-subtitle-ar' : ''}`}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.55, duration: 0.6 }}
-          >
+          <motion.h1 className="pl-hero-title" dir="rtl"
+            initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}>
+            مركز عمليات نادي الفجيرة
+            <span> للفنون القتالية</span>
+          </motion.h1>
+
+          <motion.p className="pl-hero-sub" dir="auto"
+            initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.18 }}>
             {isAr
               ? 'تقديم الطلبات والدعم والوصول إلى لوحة التحكم الموحدة'
               : 'Submit requests, get support, access the unified console'}
           </motion.p>
 
-          <motion.div
-            className="hero-buttons"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.75, duration: 0.6 }}
-          >
-            <button className="hero-btn-primary" onClick={scrollToServices}>
-              <span>{isAr ? 'تقديم طلب' : 'Submit a Request'}</span>
+          <motion.div className="pl-hero-actions"
+            initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.28 }}>
+            <button className="pl-btn pl-btn--ink" onClick={scrollToServices}>
+              {isAr ? 'تقديم طلب' : 'Submit a Request'}
             </button>
-            <button className="hero-btn-secondary" onClick={() => navigate('/login')}>
-              <span>{isAr ? 'دخول الموظفين' : 'Staff Login'}</span>
+            <button className="pl-btn pl-btn--ghost" onClick={() => navigate('/login')}>
+              {isAr ? 'دخول الموظفين' : 'Staff Login'}
             </button>
           </motion.div>
-        </div>
 
-        <motion.div
-          className="landing-scroll-indicator"
-          onClick={scrollToServices}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 2.3, duration: 0.8 }}
-        >
-          <span className="scroll-indicator-text">{isAr ? 'اكتشف المزيد' : 'Discover'}</span>
-          <ChevronDown className="scroll-indicator-chevron" size={18} />
-        </motion.div>
-      </section>
+          {/* Quick-access request bar — immediate action, fills the hero */}
+          <motion.div className="pl-hero-quick"
+            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.4 }}>
+            <span className="pl-hero-quick-label">{isAr ? 'طلب سريع' : 'Quick request'}</span>
+            <div className="pl-hero-quick-row">
+              {SERVICES.map((s, i) => {
+                const tint = CARD_TINTS[i % CARD_TINTS.length];
+                return (
+                  <button key={s.id} className="pl-quick"
+                    onClick={() => navigate(`/submit/${s.id}?step=1`)}>
+                    <span className="pl-quick-icon" style={{ background: tint.bg, color: tint.ink }}>
+                      <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                        <path d={s.icon} />
+                      </svg>
+                    </span>
+                    <span>{isAr ? s.titleAr : s.titleEn}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        </div>
+      </header>
 
       {/* ── Disciplines marquee ── */}
-      <div className="landing-marquee" dir="ltr">
-        <div className="marquee-track">
+      <div className="pl-marquee" dir="ltr">
+        <div className="pl-marquee-track">
           {marqueeItems.map((d, i) => (
-            <span className="marquee-item" key={i}>
-              <span className="marquee-ar">{d.ar}</span>
-              <span className="marquee-diamond">◆</span>
-              <span className="marquee-en">{d.en}</span>
-              <span className="marquee-diamond dim">◆</span>
+            <span className="pl-marquee-item" key={i}>
+              <span className="pl-marquee-ar">{d.ar}</span>
+              <span className="pl-marquee-diamond">◆</span>
+              <span className="pl-marquee-en">{d.en}</span>
+              <span className="pl-marquee-diamond pl-marquee-diamond--dim">◆</span>
             </span>
           ))}
         </div>
       </div>
 
       {/* ── Services ── */}
-      <section className="landing-services" id="landing-services">
-        <div className="services-header">
-          <motion.h2
-            className="services-title-ar"
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          >
-            خدماتنا
-          </motion.h2>
-          <motion.div
-            className="services-divider"
-            initial={{ scaleX: 0 }}
-            whileInView={{ scaleX: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-          />
-          <motion.p
-            className="services-title-en"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            OUR SERVICES
-          </motion.p>
-        </div>
+      <section className="pl-section" id="landing-services">
+        <motion.div className="pl-section-head" {...rise}>
+          <h2 className="pl-section-title" dir="rtl">خدماتنا</h2>
+          <div className="pl-section-rule" />
+          <p className="pl-section-sub">OUR SERVICES</p>
+        </motion.div>
 
-        <div className="services-grid">
-          {SERVICES.map((service, i) => (
-            <motion.div
-              key={service.id}
-              initial={{ opacity: 0, y: 36 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-40px' }}
-              transition={{ delay: (i % 3) * 0.1, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <TiltCard
-                className="service-card"
+        <div className="pl-services">
+          {SERVICES.map((service, i) => {
+            const tint = CARD_TINTS[i % CARD_TINTS.length];
+            return (
+              <motion.button
+                key={service.id}
+                className="pl-card"
                 onClick={() => navigate(`/submit/${service.id}?step=1`)}
+                initial={{ opacity: 0, y: 26 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-40px' }}
+                transition={{ delay: (i % 3) * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
               >
-                <div className="service-card-glare" />
-                <span className="service-card-num">{String(i + 1).padStart(2, '0')}</span>
-
-                <div className="service-card-icon">
-                  <svg width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                    <path d={service.icon} />
-                  </svg>
+                <div className="pl-card-top">
+                  <span className="pl-card-icon" style={{ background: tint.bg, color: tint.ink }}>
+                    <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d={service.icon} />
+                    </svg>
+                  </span>
+                  <span className="pl-card-num">{String(i + 1).padStart(2, '0')}</span>
                 </div>
-
-                <h3 className="service-card-title-ar">{service.titleAr}</h3>
-                <p className="service-card-title-en">{service.titleEn}</p>
-                <p className={`service-card-desc ${isAr ? 'service-card-desc-ar' : ''}`}>
+                <h3 className="pl-card-title" dir="rtl">{service.titleAr}</h3>
+                <p className="pl-card-title-en">{service.titleEn}</p>
+                <p className="pl-card-desc" dir="auto">
                   {isAr ? service.descAr : service.descEn}
                 </p>
-
-                <div className="service-card-cta">
-                  <span>{isAr ? 'ابدأ الطلب' : 'Start request'}</span>
-                  <ArrowRight size={14} className="service-card-cta-arrow" />
-                </div>
-              </TiltCard>
-            </motion.div>
-          ))}
+                <span className="pl-card-cta">
+                  {isAr ? 'ابدأ الطلب' : 'Start request'}
+                  <ArrowRight size={13} className="pl-card-arrow" />
+                </span>
+              </motion.button>
+            );
+          })}
         </div>
       </section>
 
       {/* ── About + counters ── */}
-      <section className="landing-about">
-        <div className="about-container">
-          <motion.div
-            className="about-text-col"
-            initial={{ opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <h2 className="about-text-header-ar">قسم العمليات</h2>
-            <div className="about-divider" />
-            <p className="about-text-header-en">OPERATIONS DEPARTMENT</p>
+      <section className="pl-section pl-section--about">
+        <div className="pl-about">
+          <motion.div className="pl-about-text" {...rise}>
+            <h2 className="pl-section-title" dir="rtl">قسم العمليات</h2>
+            <div className="pl-section-rule pl-section-rule--start" />
+            <p className="pl-section-sub">OPERATIONS DEPARTMENT</p>
 
-            <p className="about-text-body about-text-body-ar">
+            <p className="pl-about-body" dir="rtl">
               يُعد قسم العمليات في نادي الفجيرة للفنون القتالية العمود الفقري للنادي، حيث يدير الخدمات اللوجستية
               والأسطول والمرافق لضمان سير العمل بكفاءة. نسعى لتقديم أعلى مستويات الخدمة والدعم لجميع الأعضاء
               والموظفين والزوار.
             </p>
-            <p className="about-text-body">
+            <p className="pl-about-body pl-about-body--en">
               The Operations Department at Fujairah Martial Arts Club is the backbone of the organization,
               managing logistics, fleet, and facilities to ensure smooth daily operations. We are committed
               to delivering the highest levels of service and support to all members, staff, and visitors.
             </p>
           </motion.div>
 
-          <motion.div
-            className="about-stats"
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <div className="about-stat">
-              <span className="about-stat-value"><CountUp to={9} suffix="+" /></span>
-              <span className="about-stat-label">{isAr ? 'رياضة قتالية' : 'Martial Disciplines'}</span>
+          <motion.div className="pl-stats" {...rise}>
+            <div className="pl-stat" style={{ background: '#fdeef0' }}>
+              <span className="pl-stat-num" style={{ color: '#a32d2d' }}><CountUp to={9} suffix="+" /></span>
+              <span className="pl-stat-label">{isAr ? 'رياضة قتالية' : 'Martial Disciplines'}</span>
             </div>
-            <div className="about-stat">
-              <span className="about-stat-value"><CountUp to={2} /></span>
-              <span className="about-stat-label">{isAr ? 'فرع — الفجيرة ودبا' : 'Branches — Fujairah & Dibba'}</span>
+            <div className="pl-stat" style={{ background: '#e9f7f1' }}>
+              <span className="pl-stat-num" style={{ color: '#0c7a58' }}><CountUp to={3} /></span>
+              <span className="pl-stat-label">{isAr ? 'فروع — الفجيرة ودبا والبدية' : 'Branches — Fujairah, Dibba & Al Bidya'}</span>
             </div>
-            <div className="about-stat">
-              <span className="about-stat-value"><CountUp to={6} /></span>
-              <span className="about-stat-label">{isAr ? 'قنوات خدمة' : 'Service Channels'}</span>
+            <div className="pl-stat" style={{ background: '#e8f0fd' }}>
+              <span className="pl-stat-num" style={{ color: '#2563eb' }}><CountUp to={6} /></span>
+              <span className="pl-stat-label">{isAr ? 'قنوات خدمة' : 'Service Channels'}</span>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="landing-footer">
-        <div className="footer-inner">
-          <img src="/fmac-logo-new.png" alt="FMAC" className="footer-logo" />
-          <p className="footer-text-ar">نادي الفجيرة للفنون القتالية</p>
-          <p className="footer-text-en">FUJAIRAH MARTIAL ARTS CLUB — OPERATIONS</p>
-          <div className="footer-rule" />
-          <p className="footer-text-copy">© 2026 All Rights Reserved</p>
-        </div>
+      {/* ── Footer — the frame ink band ── */}
+      <footer className="pl-footer">
+        <img src="/fmac-ops-logo-light.png" alt="FMAC" className="pl-footer-logo" />
+        <p className="pl-footer-ar" dir="rtl">نادي الفجيرة للفنون القتالية</p>
+        <p className="pl-footer-en">FUJAIRAH MARTIAL ARTS CLUB — OPERATIONS</p>
+        <div className="pl-footer-rule" />
+        <p className="pl-footer-copy">© 2026 All Rights Reserved</p>
       </footer>
     </div>
   );

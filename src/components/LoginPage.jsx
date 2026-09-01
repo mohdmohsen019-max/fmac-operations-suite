@@ -10,23 +10,27 @@ import LanguageToggle from './shared/LanguageToggle';
 import ThemeToggle from './shared/ThemeToggle';
 import CustomSelect from './CustomSelect';
 import { useLanguage } from '../contexts/LanguageContext';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
+import portalArtwork from '../assets/fmac-portal/fujairah-city-portal.webp';
+import portalLogo from '../assets/fmac-portal/fmac-ops-mark-ivory.png';
 import { auth, db } from '../firebase';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, getDocs, updateDoc, serverTimestamp, collection, addDoc, query, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { JOB_TITLES, MASTER_ADMIN_EMAIL } from '../utils/jobTitlePermissions';
+import { applyAuthPersistence, REMEMBERED_SESSION_DAYS, saveAuthSession } from '../services/authSession';
 
 const MODE_COPY = {
   login:  { ar: 'دخول الموظفين',      en: 'Staff sign in' },
   signup: { ar: 'إنشاء حساب جديد',    en: 'New staff account' },
   forgot: { ar: 'استعادة كلمة المرور', en: 'Password recovery' },
 };
+
+const FMAC_EMAIL_PATTERN = /^[A-Za-z0-9._%+-]+@fmac[.]fujairah[.]ae$/i;
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -40,6 +44,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(true);
 
   const switchMode = (next) => {
     setMode(next);
@@ -51,6 +56,7 @@ export default function LoginPage() {
   };
 
   const handleLogin = async () => {
+    await applyAuthPersistence(auth, rememberDevice);
     const credential = await signInWithEmailAndPassword(auth, email, password);
     const userDoc = await getDoc(doc(db, 'users', credential.user.uid));
 
@@ -59,6 +65,7 @@ export default function LoginPage() {
 
     // Master admin bypasses all status checks
     if (credential.user.email === MASTER_ADMIN_EMAIL) {
+      saveAuthSession(credential.user.uid, rememberDevice);
       stampLogin();
       navigate('/dashboard');
       return;
@@ -108,6 +115,7 @@ export default function LoginPage() {
       return;
     }
 
+    saveAuthSession(credential.user.uid, rememberDevice);
     stampLogin();
     navigate('/dashboard');
   };
@@ -154,43 +162,23 @@ export default function LoginPage() {
       setError(isAr ? 'يرجى إدخال البريد الإلكتروني.' : 'Please enter your email address.');
       return;
     }
-
-    // Validate that the email is actually registered
-    const usersSnap = await getDocs(query(collection(db, 'users'), where('email', '==', normalizedEmail)));
-    if (usersSnap.empty) {
-      setError(isAr
-        ? 'هذا البريد الإلكتروني غير مسجل في النظام.'
-        : 'This email address is not registered in the system.');
+    if (!FMAC_EMAIL_PATTERN.test(normalizedEmail)) {
+      setError(isAr ? 'استخدم بريدك الرسمي ‎@fmac.fujairah.ae.' : 'Use your official @fmac.fujairah.ae email address.');
       return;
     }
 
-    // Check for an existing pending request to avoid duplicates
-    const existingSnap = await getDocs(query(
-      collection(db, 'password_reset_requests'),
-      where('email', '==', normalizedEmail),
-      where('status', '==', 'pending')
-    ));
-    if (!existingSnap.empty) {
-      setInfo(isAr
-        ? 'لديك طلب معلق بالفعل. يرجى انتظار مراجعة المدير.'
-        : 'You already have a pending request. Please wait for admin review.');
-      setError('');
-      switchMode('login');
-      return;
-    }
-
-    const userDoc = usersSnap.docs[0];
+    // This screen is intentionally unauthenticated. Do not query the private
+    // users collection here: doing so both fails the rules and leaks whether an
+    // employee account exists. The admin resolves this email after signing in.
     await addDoc(collection(db, 'password_reset_requests'), {
       email: normalizedEmail,
-      uid: userDoc.id,
-      displayName: userDoc.data().displayName || '',
       status: 'pending',
       requestedAt: serverTimestamp(),
     });
 
     setInfo(isAr
-      ? 'تم إرسال طلبك بنجاح. سيقوم المدير بمراجعته وستتمكن من تسجيل الدخول بكلمة مرور مؤقتة قريباً.'
-      : 'Your request has been submitted. An admin will review it and you will be able to sign in with a temporary password shortly.');
+      ? 'تم إرسال طلبك. إذا كان البريد مسجلاً، سيراجع المدير الطلب.'
+      : 'Your request has been submitted. If the email is registered, an admin will review it.');
     setError('');
     switchMode('login');
   };
@@ -217,150 +205,160 @@ export default function LoginPage() {
     }
   };
 
-  const goToPortal = () => {
-    window.history.pushState({}, '', '/');
-    window.location.reload();
-  };
+  const modeDescription = mode === 'login'
+    ? (isAr ? 'سجّل الدخول بحسابك، أو اطلب حساباً جديداً.' : 'Sign in with your account, or request a new one.')
+    : mode === 'signup'
+      ? (isAr ? 'أنشئ طلب حساب جديد. يبدأ الوصول بعد موافقة الإدارة.' : 'Create a new account request. Access starts after administrator approval.')
+      : (isAr ? 'أرسل طلب الاستعادة باستخدام بريدك الرسمي المسجل.' : 'Send a recovery request using your registered official email.');
 
   return (
-    <div className="lgn">
+    <div className={`lgn${isAr ? ' lgn--ar' : ''}`}>
+      <div className="lgn-backdrop" aria-hidden="true">
+        <img src={portalArtwork} alt="" />
+      </div>
       <motion.div
-        className="lgn-panel"
+        className="lgn-shell"
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
-        {/* ── Brand side ── */}
-        <div className="lgn-brand">
-          <button className="lgn-back" onClick={goToPortal}>
-            {isAr ? <ArrowRight size={13} /> : <ArrowLeft size={13} />}
-            {isAr ? 'العودة للبوابة' : 'Back to portal'}
-          </button>
-
-          <div className="lgn-brand-center">
-            <img src="/fmac-ops-logo.png" alt="FMAC" className="lgn-logo" />
-            <div className="lgn-brand-rule" />
-            <h2 className="lgn-club-ar">نادي الفجيرة للفنون القتالية</h2>
-            <p className="lgn-club-en">Fujairah Martial Arts Club</p>
-          </div>
-
-          <div className="lgn-brand-foot">
-            <span>{isAr ? 'منظومة العمليات الموحدة' : 'Unified operations console'}</span>
-          </div>
-        </div>
-
-        {/* ── Form side ── */}
-        <div className="lgn-form-col">
+        <header className="lgn-topbar">
           <div className="lgn-toggles">
             <LanguageToggle />
             <ThemeToggle />
           </div>
+        </header>
 
-          <div className="lgn-form-inner">
-            <p className="lgn-kicker">{isAr ? 'بوابة الموظفين' : 'Staff console'}</p>
-            <h1 className="lgn-title" dir="auto">
-              {isAr ? MODE_COPY[mode].ar : MODE_COPY[mode].en}
-            </h1>
+        <div className="lgn-layout">
+          <aside className="lgn-brand" aria-label={isAr ? 'هوية إدارة العمليات' : 'Operations Department identity'}>
+            <img className="lgn-brand-art" src={portalArtwork} alt="" />
+            <div className="lgn-brand-shade" aria-hidden="true" />
+            <div className="lgn-brand-head">
+              <img className="lgn-brand-logo" src={portalLogo} alt="FMAC Operations Department" />
+            </div>
+            <div className="lgn-brand-copy">
+              <p>{isAr ? 'منظومة العمليات' : 'Operations suite'}</p>
+              <h2>{isAr ? 'بوابة فريق العمل' : 'The staff gateway'}</h2>
+              <span>{isAr ? 'نادي الفجيرة للفنون القتالية' : 'Fujairah Martial Arts Club'}</span>
+            </div>
+          </aside>
 
-            {info && (
-              <motion.div className="lgn-msg lgn-msg--ok"
-                initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
-                {info}
-              </motion.div>
-            )}
+          <main className="lgn-form-col">
+            <div className="lgn-form-inner">
+              <h1 className="lgn-title" dir="auto">
+                {isAr ? MODE_COPY[mode].ar : MODE_COPY[mode].en}
+              </h1>
+              <p className="lgn-description">{modeDescription}</p>
 
-            <form onSubmit={handleSubmit} className="lgn-form">
-              {mode === 'signup' && (
-                <label className="lgn-field">
-                  <span>{isAr ? 'الاسم الكامل' : 'Display name'}</span>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder={isAr ? 'اسمك' : 'Your name'}
-                    required
-                    dir="auto"
-                  />
-                </label>
+              {info && (
+                <motion.div className="lgn-msg lgn-msg--ok" role="status" aria-live="polite"
+                  initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
+                  {info}
+                </motion.div>
               )}
 
-              {mode === 'forgot' && (
-                <p className="lgn-hint">
-                  {isAr
-                    ? 'أدخل بريدك الإلكتروني وسيتواصل معك المدير بعد مراجعة طلبك.'
-                    : 'Enter your email address and an admin will review your request and send you a reset link.'}
-                </p>
-              )}
+              <form onSubmit={handleSubmit} className="lgn-form">
+                {mode === 'signup' && (
+                  <label className="lgn-field">
+                    <span>{isAr ? 'الاسم الكامل' : 'Display name'}</span>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder={isAr ? 'اسمك' : 'Your name'}
+                      required
+                      autoComplete="name"
+                      dir="auto"
+                    />
+                  </label>
+                )}
 
-              <label className="lgn-field">
-                <span>{isAr ? 'البريد الإلكتروني' : 'Email address'}</span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="staff@fmac.ae"
-                  required
-                  dir="ltr"
-                />
-              </label>
-
-              {mode !== 'forgot' && (
                 <label className="lgn-field">
-                  <span>{isAr ? 'كلمة المرور' : 'Password'}</span>
+                  <span>{isAr ? 'البريد الإلكتروني' : 'Email address'}</span>
                   <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="staff@fmac.fujairah.ae"
                     required
+                    autoComplete="email"
                     dir="ltr"
                   />
                 </label>
-              )}
 
-              {mode === 'signup' && (
-                <div className="lgn-field">
-                  <span>{isAr ? 'المسمى الوظيفي' : 'Job title'}</span>
-                  <CustomSelect
-                    value={jobTitle}
-                    onChange={setJobTitle}
-                    placeholder={isAr ? '— اختر المسمى الوظيفي —' : '— Select job title —'}
-                    options={JOB_TITLES.map(title => ({ value: title, label: title }))}
-                  />
-                </div>
-              )}
-
-              <button type="submit" className="lgn-submit" disabled={loading}>
-                {loading
-                  ? (isAr ? 'جارٍ التحقق…' : 'Verifying…')
-                  : mode === 'signup'
-                    ? (isAr ? 'تقديم الطلب' : 'Submit request')
-                    : mode === 'forgot'
-                      ? (isAr ? 'إرسال الطلب' : 'Send request')
-                      : (isAr ? 'دخول' : 'Sign in')}
-              </button>
-
-              {error && (
-                <motion.p className="lgn-msg lgn-msg--err"
-                  initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
-                  {error}
-                </motion.p>
-              )}
-
-              <div className="lgn-links">
-                {mode === 'login' && (
-                  <button type="button" onClick={() => switchMode('forgot')}>
-                    {isAr ? 'نسيت كلمة المرور؟' : 'Forgot password?'}
-                  </button>
+                {mode !== 'forgot' && (
+                  <label className="lgn-field">
+                    <span>{isAr ? 'كلمة المرور' : 'Password'}</span>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                      dir="ltr"
+                    />
+                  </label>
                 )}
-                <button type="button" onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}>
-                  {mode === 'login'
-                    ? (isAr ? 'إنشاء حساب جديد' : 'Create an account')
-                    : (isAr ? 'العودة لتسجيل الدخول' : 'Back to sign in')}
+
+                {mode === 'login' && (
+                  <label className="lgn-remember">
+                    <input
+                      type="checkbox"
+                      checked={rememberDevice}
+                      onChange={(event) => setRememberDevice(event.target.checked)}
+                    />
+                    <span>
+                      <strong>{isAr ? `ابقَ مسجلاً لمدة ${REMEMBERED_SESSION_DAYS} أيام` : `Keep me signed in for ${REMEMBERED_SESSION_DAYS} days`}</strong>
+                      <small>{isAr ? 'على جهاز موثوق فقط' : 'On a trusted device only'}</small>
+                    </span>
+                  </label>
+                )}
+
+                {mode === 'signup' && (
+                  <div className="lgn-field">
+                    <span>{isAr ? 'المسمى الوظيفي' : 'Job title'}</span>
+                    <CustomSelect
+                      value={jobTitle}
+                      onChange={setJobTitle}
+                      placeholder={isAr ? '— اختر المسمى الوظيفي —' : '— Select job title —'}
+                      options={JOB_TITLES.map(title => ({ value: title, label: title }))}
+                    />
+                  </div>
+                )}
+
+                <button type="submit" className="lgn-submit" disabled={loading}>
+                  {loading
+                    ? (isAr ? 'جارٍ التحقق…' : 'Verifying…')
+                    : mode === 'signup'
+                      ? (isAr ? 'تقديم طلب الحساب' : 'Submit account request')
+                      : mode === 'forgot'
+                        ? (isAr ? 'إرسال طلب الاستعادة' : 'Send recovery request')
+                        : (isAr ? 'الدخول إلى المنظومة' : 'Enter operations suite')}
                 </button>
-              </div>
-            </form>
-          </div>
+
+                {error && (
+                  <motion.p className="lgn-msg lgn-msg--err" role="alert" aria-live="assertive"
+                    initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
+                    {error}
+                  </motion.p>
+                )}
+
+                <div className="lgn-links">
+                  {mode === 'login' && (
+                    <button type="button" onClick={() => switchMode('forgot')}>
+                      {isAr ? 'نسيت كلمة المرور؟' : 'Forgot password?'}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}>
+                    {mode === 'login'
+                      ? (isAr ? 'طلب حساب جديد' : 'Request an account')
+                      : (isAr ? 'العودة لتسجيل الدخول' : 'Back to sign in')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </main>
         </div>
       </motion.div>
     </div>

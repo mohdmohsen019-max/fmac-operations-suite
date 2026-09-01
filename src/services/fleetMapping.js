@@ -19,8 +19,32 @@ export const FLEET_MAPPING = {
   'M99268': { busNumber: '4', driverName: 'Mohamed Khalifa', manufacturer: 'Toyota', model: 'Coaster' }
 };
 
+const normalizeRegistration = (registration) =>
+  String(registration || '').toUpperCase().replace(/\s/g, '');
+
+/**
+ * Resolve historical records that contain only the numeric portion of a bus
+ * plate (for example `85750`) to the known full registration (`M85750`).
+ * A suffix is accepted only when it identifies exactly one bus.
+ */
+export const resolveKnownBusRegistration = (registration) => {
+  const raw = normalizeRegistration(registration);
+  const reg = raw.endsWith('-CAM') ? raw.slice(0, -4) : raw;
+  if (FLEET_MAPPING[reg]) return reg;
+  if (!/^\d+$/.test(reg)) return reg;
+
+  const matches = Object.keys(FLEET_MAPPING).filter((knownReg) =>
+    knownReg.replace(/^\D+/, '') === reg
+  );
+  return matches.length === 1 ? matches[0] : reg;
+};
+
+/** True only for registrations in the confirmed FMAC bus registry. */
+export const isKnownBusRegistration = (registration) =>
+  Boolean(FLEET_MAPPING[resolveKnownBusRegistration(registration)]);
+
 export const getVehicleMeta = (registration) => {
-  const reg = registration?.toUpperCase().replace(/\s/g, '');
+  const reg = resolveKnownBusRegistration(registration);
   return FLEET_MAPPING[reg] || { 
     busNumber: '--', 
     driverName: 'Unassigned', 

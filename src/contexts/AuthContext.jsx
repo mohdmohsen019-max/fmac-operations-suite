@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
-import { onAuthStateChanged } from 'firebase/auth'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '../firebase'
+import { clearAuthSession, getAuthSessionExpiry, restoreAuthSession } from '../services/authSession'
 
 const AuthContext = createContext(null)
 
@@ -10,18 +11,42 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const unsubProfileRef = useRef(null)
+  const expiryTimerRef = useRef(null)
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (expiryTimerRef.current) {
+        clearTimeout(expiryTimerRef.current)
+        expiryTimerRef.current = null
+      }
+
       // Clean up any existing profile listener
       if (unsubProfileRef.current) {
         unsubProfileRef.current()
         unsubProfileRef.current = null
       }
 
-      setUser(firebaseUser)
-
       if (firebaseUser) {
+        if (!restoreAuthSession(firebaseUser.uid)) {
+          setUser(null)
+          setUserProfile(null)
+          setLoading(false)
+          await signOut(auth)
+          return
+        }
+
+        setUser(firebaseUser)
+        const armExpiryTimer = () => {
+          const expiresAt = getAuthSessionExpiry(firebaseUser.uid)
+          if (!expiresAt) return
+          const remaining = expiresAt - Date.now()
+          if (remaining <= 0) {
+            signOut(auth)
+            return
+          }
+          expiryTimerRef.current = setTimeout(armExpiryTimer, remaining + 250)
+        }
+        armExpiryTimer()
         unsubProfileRef.current = onSnapshot(
           doc(db, 'users', firebaseUser.uid),
           (snap) => {
@@ -34,6 +59,8 @@ export function AuthProvider({ children }) {
           }
         )
       } else {
+        clearAuthSession()
+        setUser(null)
         setUserProfile(null)
         setLoading(false)
       }
@@ -42,6 +69,7 @@ export function AuthProvider({ children }) {
     return () => {
       unsubAuth()
       if (unsubProfileRef.current) unsubProfileRef.current()
+      if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current)
     }
   }, [])
 

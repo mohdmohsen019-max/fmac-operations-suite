@@ -181,6 +181,7 @@ export default function AssetReports({ assets, rooms, lang, t, amsConfig, snapsh
   // condition and replacement plan. The "click of a button" working file.
   const exportExcel = () => {
     try {
+      const arabic = lang === 'ar'
       const roomById = Object.fromEntries((rooms || []).map(r => [r.id, r]))
       const rows = assets
         .filter(a => a.status !== 'Disposed')
@@ -189,20 +190,20 @@ export default function AssetReports({ assets, rooms, lang, t, amsConfig, snapsh
           const g = goalByCode(resolveGoalCode(d))
           const room = roomById[a.location_room]
           return {
-            'Asset ID': a.asset_code || '',
-            'Asset Name': a.name_en || a.name_ar || '',
-            'Location / Department': a.department || room?.name_en || '',
-            'Category': normalizeCategory(a.category),
-            'Quantity': Number(a.quantity) || 1,
-            'Unit': a.unit || 'PCS',
-            'Condition': conditionLabel(d.condition, 'en'),
-            'Criticality': criticalityLabel(d.criticality, 'en'),
-            'Strategic Goal': g ? `${g.code} — ${g.ar}` : '',
-            'Replacement Year': d.replacement_year,
-            'Est. Cost (AED)': d.est_replacement_cost,
-            'Cost Basis': d.cost_is_estimate ? 'Estimated' : 'Recorded',
-            'Funding Source': d.funding_source,
-            'Status': a.status || 'Active',
+            [arabic ? 'رقم الأصل' : 'Asset ID']: a.asset_code || '',
+            [arabic ? 'اسم الأصل' : 'Asset Name']: arabic ? (a.name_ar || a.name_en || '') : (a.name_en || a.name_ar || ''),
+            [arabic ? 'الموقع / الإدارة' : 'Location / Department']: a.department || (arabic ? (room?.name_ar || room?.name_en) : room?.name_en) || '',
+            [arabic ? 'التصنيف' : 'Category']: normalizeCategory(a.category),
+            [arabic ? 'الكمية' : 'Quantity']: Number(a.quantity) || 1,
+            [arabic ? 'الوحدة' : 'Unit']: a.unit || 'PCS',
+            [arabic ? 'الحالة' : 'Condition']: conditionLabel(d.condition, arabic ? 'ar' : 'en'),
+            [arabic ? 'الأهمية' : 'Criticality']: criticalityLabel(d.criticality, arabic ? 'ar' : 'en'),
+            [arabic ? 'الهدف الاستراتيجي' : 'Strategic Goal']: g ? `${g.code} — ${g.ar}` : '',
+            [arabic ? 'سنة الاستبدال' : 'Replacement Year']: d.replacement_year,
+            [arabic ? 'التكلفة التقديرية (درهم)' : 'Est. Cost (AED)']: d.est_replacement_cost,
+            [arabic ? 'أساس التكلفة' : 'Cost Basis']: d.cost_is_estimate ? (arabic ? 'تقديرية' : 'Estimated') : (arabic ? 'مسجلة' : 'Recorded'),
+            [arabic ? 'مصدر التمويل' : 'Funding Source']: d.funding_source,
+            [arabic ? 'حالة السجل' : 'Status']: a.status || (arabic ? 'نشط' : 'Active'),
           }
         })
       const ws = XLSX.utils.json_to_sheet(rows)
@@ -212,7 +213,8 @@ export default function AssetReports({ assets, rooms, lang, t, amsConfig, snapsh
         { wch: 18 }, { wch: 10 },
       ]
       const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Enriched Asset Register')
+      if (arabic) wb.Workbook = { Views: [{ RTL: true }] }
+      XLSX.utils.book_append_sheet(wb, ws, arabic ? 'سجل الأصول المُثرى' : 'Enriched Asset Register')
       XLSX.writeFile(wb, `FMAC-Enriched-Asset-Register-${new Date().toISOString().slice(0, 10)}.xlsx`)
     } catch (e) {
       console.error('[assets] excel export failed:', e)

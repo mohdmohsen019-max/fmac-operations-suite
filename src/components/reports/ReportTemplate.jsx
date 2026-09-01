@@ -47,16 +47,16 @@ const KPI_DEFS = {
     { key: 'totalSpent', label: 'إجمالي التكاليف', unit: 'د.إ' },
     { key: 'taskCount', label: 'مهام الصيانة', unit: '' },
   ],
-  complaints: [
-    { key: 'total', label: 'إجمالي الشكاوى', unit: '' },
-    { key: 'closed', label: 'تم الحل', unit: '' },
-    { key: 'open', label: 'قيد الانتظار', unit: '' },
-  ],
   fuel: [
     { key: 'totalCost', label: 'إجمالي التكاليف', unit: 'د.إ' },
     { key: 'totalLiters', label: 'إجمالي اللترات', unit: 'لتر' },
     { key: 'totalKm', label: 'المسافة المقطوعة', unit: 'كم' },
   ],
+  ridership: [{ key: 'totalRiders', label: 'إجمالي الركاب', unit: '' }, { key: 'recordedSessions', label: 'الحصص المسجلة', unit: '' }, { key: 'activeBuses', label: 'الحافلات النشطة', unit: '' }],
+  external_transport: [{ key: 'requestCount', label: 'طلبات النقل', unit: '' }, { key: 'driverCount', label: 'السائقون', unit: '' }, { key: 'vehicleCount', label: 'المركبات', unit: '' }],
+  driver_overtime: [{ key: 'totalHours', label: 'إجمالي الساعات', unit: 'ساعة' }, { key: 'entryCount', label: 'السجلات', unit: '' }, { key: 'driverCount', label: 'السائقون', unit: '' }],
+  traffic_fines: [{ key: 'fineCount', label: 'عدد المخالفات', unit: '' }, { key: 'totalAmount', label: 'قيمة المخالفات', unit: 'د.إ' }, { key: 'vehicleCount', label: 'المركبات', unit: '' }],
+  registration_compliance: [{ key: 'valid', label: 'سارية', unit: '' }, { key: 'expiring', label: 'تحتاج متابعة', unit: '' }, { key: 'expired', label: 'منتهية', unit: '' }],
 }
 
 function arHeader(h) { return HEADER_AR[h] || h }

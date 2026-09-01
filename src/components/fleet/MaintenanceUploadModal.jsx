@@ -11,6 +11,8 @@ import {
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { pdfService } from '../../services/pdfService';
 import { statementExcelService } from '../../services/statementExcelService';
+import { resolveKnownBusRegistration } from '../../services/fleetMapping';
+import { templateCategoryFromRecord } from './maintenance/preventiveMaintenance';
 import { SectionTitle, FleetTable } from './FleetSharedUI';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -114,9 +116,13 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
       
       // Enhance records with vehicle info
       const enhanced = result.records.map(r => {
-        const matchedVehicle = vehicles.find(v => v.plateNumber === String(r.plateNumber));
+        const normalizedPlate = resolveKnownBusRegistration(r.plateNumber);
+        const matchedVehicle = vehicles.find(v =>
+          resolveKnownBusRegistration(v.plateNumber) === normalizedPlate
+        );
         return {
           ...r,
+          plateNumber: normalizedPlate,
           id: Math.random().toString(36).substr(2, 9),
           vehicleId: matchedVehicle ? matchedVehicle.id : null,
           vehicleName: matchedVehicle ? `${t('Bus', 'حافلة')} ${matchedVehicle.busNumber} (${matchedVehicle.plateNumber})` : t('Unknown Vehicle', 'مركبة غير معروفة'),
@@ -171,12 +177,19 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
         }
 
         const newDoc = doc(mainColl);
+        const canonicalPlate = resolveKnownBusRegistration(r.plateNumber);
         batch.set(newDoc, {
           date: saveDate,
+          completedAt: saveDate,
           invoiceNumber: r.invoiceNumber,
-          plateNumber: r.plateNumber,
+          plateNumber: canonicalPlate,
+          canonicalPlate,
           vehicleId: r.vehicleId,
           description: r.description,
+          maintenanceType: 'corrective',
+          serviceCategory: templateCategoryFromRecord(r),
+          odometerKm: Number(r.odometerKm) || null,
+          partsServiced: [],
           amount: parseFloat(r.amount) || 0,
           vat: parseFloat(r.vat) || 0,
           total: parseFloat(r.total) || 0,
@@ -185,7 +198,9 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
           fileUrl: null, // Skipping upload due to CORS
           importedAt: serverTimestamp(),
           importedBy: auth.currentUser?.uid || 'system',
-          source: 'AI_IMPORT'
+          source: 'AI_IMPORT',
+          updatedAt: serverTimestamp(),
+          updatedBy: auth.currentUser?.email || auth.currentUser?.uid || 'system'
         });
       });
 
@@ -244,7 +259,10 @@ export default function MaintenanceUploadModal({ isOpen, onClose, onImportComple
         }
         // Re-match vehicle if plate changes
         if (field === 'plateNumber') {
-          const matched = vehicles.find(v => v.plateNumber === value);
+          const normalizedPlate = resolveKnownBusRegistration(value);
+          const matched = vehicles.find(v =>
+            resolveKnownBusRegistration(v.plateNumber) === normalizedPlate
+          );
           updated.vehicleId = matched ? matched.id : null;
           updated.vehicleName = matched ? `${t('Bus', 'حافلة')} ${matched.busNumber} (${matched.plateNumber})` : t('Unknown Vehicle', 'مركبة غير معروفة');
           updated.status = matched ? 'matched' : 'warning';

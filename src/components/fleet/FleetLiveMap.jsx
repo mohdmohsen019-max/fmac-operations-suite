@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 import { cartrackService } from '../../services/cartrackService';
+import { mergeCanonicalVehicles } from '../../services/fleetIdentity';
 import { useFleetScope } from './FleetScopeContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { Search, Map as MapIcon, AlertTriangle, Bus, Car } from 'lucide-react';
+import { Search, Map as MapIcon, AlertTriangle, Bus, Car, X, Gauge, UserRound, MapPin, Clock3 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import './FleetEcosystem.css';
 // Vision API — uncomment to re-enable live cameras:
@@ -74,7 +75,7 @@ const createOtherMarkerIcon = (statusColor) => {
 export default function FleetLiveMap() {
   const { theme } = useTheme();
   const { t, locale, lang } = useLanguage();
-  const { scope, metaOf, displayName } = useFleetScope();
+  const { scope, metaOf, displayName, aliasMap } = useFleetScope();
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY
@@ -148,7 +149,7 @@ export default function FleetLiveMap() {
     try {
       const data = await cartrackService.getLiveStatus(scope);
       if (data) {
-        const enhanced = data.map(v => {
+        const enhanced = mergeCanonicalVehicles(data, aliasMap).map(v => {
           const meta = metaOf(v.registration);
           const isBus = meta.vehicleClass === 'bus';
           return {
@@ -182,7 +183,7 @@ export default function FleetLiveMap() {
     } finally {
       setLoading(false);
     }
-  }, [t, lang, scope, metaOf, displayName]);
+  }, [t, lang, scope, metaOf, displayName, aliasMap]);
 
   useEffect(() => {
     fetchLiveStatus();
@@ -360,45 +361,27 @@ export default function FleetLiveMap() {
             );
           })}
 
-          {selectedVehicle && selectedVehicle.location && (
-            <InfoWindow
-              position={{ lat: selectedVehicle.location.latitude, lng: selectedVehicle.location.longitude }}
-              onCloseClick={() => setSelectedVehicle(null)}
-              options={{
-                pixelOffset: new window.google.maps.Size(0, -20)
-              }}
-            >
-              <div className="map-info-window" style={{ textAlign: locale === 'ar-SA' ? 'right' : 'left' }}>
-                <div className="info-header">
-                  <h3>{selectedVehicle.display_name}</h3>
-                  <span className="info-plate">{selectedVehicle.registration}</span>
-                </div>
-                <div className="info-body">
-                  <p><strong>{t('Driver:', 'السائق:')}</strong> {selectedVehicle.driver_name}</p>
-                  <p><strong>{t('Speed:', 'السرعة:')}</strong> {selectedVehicle.speed} {t('km/h', 'كم/س')}</p>
-                  <p>
-                    <strong>{t('Status:', 'الحالة:')}</strong> 
-                    <span style={{ color: selectedVehicle.color, marginLeft: '4px', marginRight: '4px', fontWeight: 'bold' }}>
-                      {selectedVehicle.statusText}
-                    </span>
-                  </p>
-                  <p><strong>{t('Location:', 'الموقع:')}</strong> {
-                    isLocationError(selectedVehicle.location.position_description)
-                      ? `${selectedVehicle.location.latitude.toFixed(5)}, ${selectedVehicle.location.longitude.toFixed(5)}`
-                      : (selectedVehicle.location.position_description || t('Unknown', 'غير معروف'))
-                  }</p>
-                </div>
-                <div className="info-footer">
-                  {t('Updated:', 'تحديث:')} {selectedVehicle.location.timestamp ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(selectedVehicle.location.timestamp)) : new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(lastUpdated)}
-                </div>
-                {/* Vision API — uncomment to re-enable:
-                <button className="watch-live-btn" onClick={() => setCameraVehicle(selectedVehicle)}>
-                  <span className="watch-live-dot" /> Watch Live
-                </button> */}
-              </div>
-            </InfoWindow>
-          )}
         </GoogleMap>
+        )}
+        {selectedVehicle && (
+          <aside className="map-vehicle-inspector" aria-label={t('Selected vehicle details', 'تفاصيل المركبة المحددة')}>
+            <div className="map-inspector-head">
+              <span className="map-inspector-class">{selectedVehicle.vehicleClass === 'bus' ? <Bus size={14} /> : <Car size={14} />}</span>
+              <div><strong>{selectedVehicle.display_name}</strong><small dir="ltr">{selectedVehicle.registration}</small></div>
+              <button onClick={() => setSelectedVehicle(null)} aria-label={t('Close details', 'إغلاق التفاصيل')}><X size={15} /></button>
+            </div>
+            <div className="map-inspector-status">
+              <i style={{ background: selectedVehicle.color }} />
+              <span>{selectedVehicle.statusText}</span>
+              <b dir="ltr">{selectedVehicle.speed || 0} {t('km/h', 'كم/س')}</b>
+            </div>
+            <dl className="map-inspector-grid">
+              <div><dt><UserRound size={12} />{t('Driver', 'السائق')}</dt><dd>{selectedVehicle.driver_name || '—'}</dd></div>
+              <div><dt><Gauge size={12} />{t('Odometer', 'العداد')}</dt><dd dir="ltr">{Number.isFinite(Number(selectedVehicle.odometer)) ? `${Math.round(Number(selectedVehicle.odometer)).toLocaleString(locale)} km` : t('Unavailable', 'غير متاح')}</dd></div>
+              <div className="wide"><dt><MapPin size={12} />{t('Location', 'الموقع')}</dt><dd>{isLocationError(selectedVehicle.location?.position_description) ? (selectedVehicle.location ? `${selectedVehicle.location.latitude.toFixed(5)}, ${selectedVehicle.location.longitude.toFixed(5)}` : '—') : selectedVehicle.location.position_description}</dd></div>
+            </dl>
+            <div className="map-inspector-foot"><Clock3 size={12} />{t('Updated', 'آخر تحديث')}<span dir="ltr">{selectedVehicle.location?.timestamp ? new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(selectedVehicle.location.timestamp)) : '—'}</span></div>
+          </aside>
         )}
         {!mapAuthFailed && !loadError && scope !== 'buses' && (
           <div className="eco-map-legend">

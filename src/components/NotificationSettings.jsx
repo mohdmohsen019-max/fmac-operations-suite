@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell, Inbox, ArrowUpCircle, PackageX, CalendarClock,
   ChevronDown, Plus, Trash2, Send, Check, X, Loader2, ScrollText,
+  BusFront, Route, Clock3, ShieldAlert, IdCard, Wrench,
 } from 'lucide-react';
 import { db, auth } from '../firebase';
 import {
@@ -40,6 +41,12 @@ const SECTIONS = [
     descEn: 'Sent automatically on the 1st of each month at 08:00 GST.',
     descAr: 'يُرسل تلقائياً في اليوم الأول من كل شهر الساعة 8 صباحاً.',
   },
+  { type: 'fleet_driver_changed', icon: BusFront, titleEn: 'Bus Driver Assignment Changed', titleAr: 'تغيير تعيين سائق حافلة', descEn: 'Fires when a bus is assigned to a different driver.', descAr: 'يُرسل عند تعيين سائق مختلف لإحدى الحافلات.' },
+  { type: 'fleet_external_transport', icon: Route, titleEn: 'External Transportation Logged', titleAr: 'تسجيل نقل خارجي', descEn: 'Fires when a new external transportation activity is recorded.', descAr: 'يُرسل عند تسجيل نشاط نقل خارجي جديد.' },
+  { type: 'fleet_overtime_logged', icon: Clock3, titleEn: 'Driver Overtime Logged', titleAr: 'تسجيل عمل إضافي', descEn: 'Fires when a driver overtime entry is created.', descAr: 'يُرسل عند إنشاء سجل عمل إضافي للسائق.' },
+  { type: 'fleet_fine_logged', icon: ShieldAlert, titleEn: 'Traffic Fine Logged', titleAr: 'تسجيل مخالفة مرورية', descEn: 'Fires when a new traffic fine is added to the Fleet register.', descAr: 'يُرسل عند إضافة مخالفة مرورية جديدة إلى سجل الأسطول.' },
+  { type: 'fleet_registration_expiry', icon: IdCard, titleEn: 'Vehicle Renewal Attention', titleAr: 'تنبيه تجديد مركبة', descEn: 'Fires when saved registration or insurance dates are expired or within 60 days.', descAr: 'يُرسل عندما يكون تسجيل المركبة أو تأمينها منتهياً أو خلال 60 يوماً من الانتهاء.' },
+  { type: 'fleet_maintenance_completed', icon: Wrench, titleEn: 'Preventive Maintenance Completed', titleAr: 'إكمال صيانة وقائية', descEn: 'Fires when a preventive service is completed and its plan advances.', descAr: 'يُرسل عند إكمال خدمة وقائية وتحديث موعدها التالي.' },
 ];
 
 const TYPE_LABEL = {
@@ -47,6 +54,12 @@ const TYPE_LABEL = {
   escalated_ticket: { en: 'Escalated', ar: 'مُصعَّد' },
   inventory_low: { en: 'Low Stock', ar: 'نقص مخزون' },
   monthly_report_reminder: { en: 'Monthly Reminder', ar: 'تذكير شهري' },
+  fleet_driver_changed: { en: 'Driver Changed', ar: 'تغيير سائق' },
+  fleet_external_transport: { en: 'External Transport', ar: 'نقل خارجي' },
+  fleet_overtime_logged: { en: 'Overtime', ar: 'عمل إضافي' },
+  fleet_fine_logged: { en: 'Traffic Fine', ar: 'مخالفة مرورية' },
+  fleet_registration_expiry: { en: 'Renewal Attention', ar: 'تنبيه تجديد' },
+  fleet_maintenance_completed: { en: 'Maintenance', ar: 'صيانة' },
 };
 
 function samplePayload(type) {
@@ -56,6 +69,12 @@ function samplePayload(type) {
     case 'escalated_ticket': return { ticketId: 'FMAC-2026-TEST01', type: 'complaint', escalatedBy: 'Test CHR', escalatedAt: new Date().toISOString() };
     case 'inventory_low': return { nameEn: 'Test Item', nameAr: 'صنف تجريبي', quantity: 3, threshold: 5, category: 'Equipment' };
     case 'monthly_report_reminder': return { monthLabel };
+    case 'fleet_driver_changed': return { registration: 'C37072', driverName: 'Test Driver', effectiveDate: new Date().toISOString().slice(0, 10), changedBy: 'Test User' };
+    case 'fleet_external_transport': return { registration: 'M99271', personName: 'Test Driver', date: new Date().toISOString().slice(0, 10), reason: 'Test activity' };
+    case 'fleet_overtime_logged': return { personName: 'Test Driver', date: new Date().toISOString().slice(0, 10), hours: 2.5, reason: 'Test overtime' };
+    case 'fleet_fine_logged': return { registration: 'M99271', driverName: 'Test Driver', date: new Date().toISOString().slice(0, 10), amountAed: 300, referenceNo: 'TEST-001' };
+    case 'fleet_registration_expiry': return { registration: 'C37072', registrationExpiry: new Date().toISOString().slice(0, 10), insuranceExpiry: new Date().toISOString().slice(0, 10), status: 'Due within 60 days' };
+    case 'fleet_maintenance_completed': return { registration: 'C37072', service: 'Engine oil service', date: new Date().toISOString().slice(0, 10), odometerKm: 340580, costAed: 250 };
     default: return {};
   }
 }

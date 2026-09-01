@@ -2,6 +2,7 @@
 import {
   safeDiv, delta, previousPeriod, rowsToTotals, fleetKpis,
   compareFleet, vehicleMetrics, compareVehicles, decomposeCostDelta, generateInsights,
+  statementTotalsForScope,
 } from './fuelAnalytics.js';
 
 let failures = 0;
@@ -58,6 +59,13 @@ assert('B4 (new) verdict null', by.B4.verdict === null && by.B4.deltaL100.pct ==
 assert('B5 (prev 0 km) verdict null, no NaN', by.B5.verdict === null && !Number.isNaN(by.B5.litresPer100km));
 assert('costPerKm delta computed', close(by.B1.deltaCostPerKm.pct, ((280 / 1000) - (300 / 1000)) / (300 / 1000) * 100));
 
+const incompleteTelemetry = compareVehicles(
+  [{ plate: 'M99270', km: 282, litres: 937, cost: 3000, telemetry: { firstOdometer: 238024000, lastOdometer: 238306000 } }],
+  [{ plate: 'M99270', km: 1336, litres: 409, cost: 1300, telemetry: { firstOdometer: 233187000, lastOdometer: 234523000 } }],
+)[0];
+assert('large odometer coverage gap invalidates comparison', incompleteTelemetry.comparisonReliable === false);
+assert('coverage gap cannot produce a deterioration verdict', incompleteTelemetry.verdict === null && incompleteTelemetry.deltaL100.pct === null);
+
 /* 3 — price-vs-volume cost decomposition */
 const prevT = { totalCost: 3000, totalLitres: 1000, totalKm: 10000, pricePerLitre: 3.0 };
 const currT = { totalCost: 3520, totalLitres: 1100, totalKm: 10500, pricePerLitre: 3.2 };
@@ -78,6 +86,26 @@ assert('manual price wins', close(km.pricePerLitre, 2.9) && km.priceSource === '
 /* fleet comparison + rowsToTotals */
 const totals = rowsToTotals(currRows, 3.2);
 assert('rowsToTotals sums', close(totals.totalKm, 4300) && close(totals.totalLitres, 436) && close(totals.totalCost, 1325));
+
+/* scope-aware historical trend totals */
+const scopedStatement = {
+  totalCost: 1000,
+  totalLitres: 300,
+  vehicleAllocations: [
+    { plate: 'C1', cost: 650, litres: 200 },
+    { registration: 'A2', cost: 350, litres: 100 },
+  ],
+};
+const busesTrend = statementTotalsForScope(scopedStatement, 'buses', (plate) => plate === 'C1');
+const othersTrend = statementTotalsForScope(scopedStatement, 'others', (plate) => plate === 'A2');
+const allTrend = statementTotalsForScope(scopedStatement, 'all', () => false);
+assert('bus trend totals use only bus allocations', busesTrend.totalCost === 650 && busesTrend.totalLitres === 200 && busesTrend.vehicleCount === 1);
+assert('other-vehicle trend totals use only other allocations', othersTrend.totalCost === 350 && othersTrend.totalLitres === 100 && othersTrend.vehicleCount === 1);
+assert('all trend totals use every allocation', allTrend.totalCost === 1000 && allTrend.totalLitres === 300 && allTrend.vehicleCount === 2);
+
+const legacyBusTrend = statementTotalsForScope({ busTotals: { cost: 420, litres: 130, vehicleCount: 14 } }, 'buses');
+assert('legacy trend falls back to stored bus summary', legacyBusTrend.totalCost === 420 && legacyBusTrend.totalLitres === 130);
+
 const fc = compareFleet(currT, prevT);
 assert('fleet delta cost pct', close(fc.deltas.totalCost.pct, (520 / 3000) * 100));
 assert('fleet no-prev -> null deltas', compareFleet(currT, null).deltas.totalCost.pct === null);
@@ -91,6 +119,10 @@ assert('has decomposition insight', ins.some((x) => x.id === 'cost-decomposition
 assert('has best improver', ins.some((x) => x.id === 'best-improver' && x.en.includes('B1')));
 assert('has worst decliner', ins.some((x) => x.id === 'worst-decliner' && x.en.includes('B2')));
 assert('no NaN in strings', ins.every((x) => !x.en.includes('NaN') && !x.ar.includes('NaN')));
+
+const guardedInsights = generateInsights({ fleet: fc, vehicles: [incompleteTelemetry], decomposition: null, currency: 'AED' });
+assert('unreliable telemetry is explained', guardedInsights.some((x) => x.id === 'telemetry-coverage'));
+assert('unreliable telemetry is never ranked', !guardedInsights.some((x) => x.id === 'worst-decliner' || x.id === 'priciest-per-km'));
 
 /* insights with no previous data — should not throw, minimal output */
 const insNoPrev = generateInsights({ fleet: compareFleet(currT, null), vehicles: compareVehicles(currRows, []), decomposition: null });

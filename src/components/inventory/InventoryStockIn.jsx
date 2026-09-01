@@ -1,55 +1,14 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Plus, Trash2, Check, Upload, Search, Package, RefreshCw
+  Plus, Trash2, Check, Search, RefreshCw, ShieldAlert
 } from 'lucide-react'
-import { db, auth } from '../../firebase'
-import {
-  collection, addDoc, updateDoc, doc, serverTimestamp,
-  increment, query, where, getDocs
-} from 'firebase/firestore'
-import * as XLSX from 'xlsx'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { usePermissions } from '../../hooks/usePermissions'
-import { getSportLabel, getCatLabel, getUnitLabel, buildSKU, DEFAULT_SPORTS, DEFAULT_CATEGORIES, DEFAULT_UNITS } from './shared'
+import { DEFAULT_SPORTS } from './shared'
 import CustomSelect from '../CustomSelect'
-
-async function doStockIn(item, qty, reason, notes, deliveryRef, supplierId) {
-  const user = auth.currentUser
-  const prev = item.currentStock || 0
-  const newStock = prev + qty
-
-  // Reset the low-stock flag once stock recovers above its threshold, so a
-  // future dip will alert again.
-  const threshold = item.minThreshold ?? 5
-  const clearLow = newStock > threshold && item.low_stock_notified === true
-
-  await updateDoc(doc(db, 'inventory_items', item.id), {
-    currentStock: increment(qty),
-    updatedAt: serverTimestamp(),
-    ...(clearLow ? { low_stock_notified: false } : {}),
-  })
-
-  await addDoc(collection(db, 'inventory_movements'), {
-    itemId: item.id,
-    itemNameAr: item.nameAr,
-    itemNameEn: item.nameEn,
-    itemSku: item.sku,
-    type: 'stock_in',
-    quantity: qty,
-    previousStock: prev,
-    newStock,
-    reason: reason || 'purchase',
-    issuedTo: null,
-    deliveryNoteRef: deliveryRef || null,
-    receiptId: null,
-    supplierId: supplierId || null,
-    performedBy: user?.uid || 'unknown',
-    performedByName: user?.displayName || user?.email || 'Unknown',
-    createdAt: serverTimestamp(),
-    notes: notes || null,
-  })
-}
+import InventoryEvidencePicker from './InventoryEvidencePicker'
+import { submitInventoryRequest } from './inventoryApprovalService'
 
 function ItemSearchRow({ items, lang, sports, onSelect }) {
   const { t } = useLanguage()
@@ -96,21 +55,20 @@ function ItemSearchRow({ items, lang, sports, onSelect }) {
   )
 }
 
-function QuickAddTab({ items, settings, isAdmin }) {
+function QuickAddTab({ items, settings }) {
   const { t, lang } = useLanguage()
-  const { can } = usePermissions()
+  const { can, userProfile } = usePermissions()
   const [selectedItem, setSelectedItem] = useState(null)
   const [qty, setQty] = useState(1)
   const [reason, setReason] = useState('purchase')
   const [deliveryRef, setDeliveryRef] = useState('')
   const [notes, setNotes] = useState('')
+  const [evidenceFiles, setEvidenceFiles] = useState([])
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [permError, setPermError] = useState('')
 
   const sports = settings?.sports || DEFAULT_SPORTS
-  const categories = settings?.categories || DEFAULT_CATEGORIES
-
   const handleSubmit = async () => {
     if (!can('inventory', 'edit')) {
       setPermError(lang === 'ar' ? 'ليس لديك صلاحية إضافة مخزون' : 'You do not have permission to add stock')
@@ -120,15 +78,30 @@ function QuickAddTab({ items, settings, isAdmin }) {
     setPermError('')
     setSaving(true)
     try {
-      await doStockIn(selectedItem, qty, reason, notes, deliveryRef, null)
+      await submitInventoryRequest({
+        type: 'stock_in',
+        items: [{
+          itemId: selectedItem.id,
+          itemNameAr: selectedItem.nameAr,
+          itemNameEn: selectedItem.nameEn,
+          itemSku: selectedItem.sku,
+          size: selectedItem.size || null,
+          quantity: qty,
+          reason,
+        }],
+        details: { reason, deliveryNoteRef: deliveryRef || null, supplierId: null },
+        notes,
+      }, evidenceFiles, userProfile)
       setSuccess(true)
       setSelectedItem(null)
       setQty(1)
       setDeliveryRef('')
       setNotes('')
+      setEvidenceFiles([])
       setTimeout(() => setSuccess(false), 2500)
     } catch (err) {
       console.error(err)
+      setPermError(err.message || t('Could not submit the request.', 'تعذر تقديم الطلب.'))
     } finally {
       setSaving(false)
     }
@@ -164,6 +137,13 @@ function QuickAddTab({ items, settings, isAdmin }) {
           <button className="inv-qty-btn" onClick={() => setQty(q => q + 1)}>+</button>
         </div>
       </div>
+
+      <InventoryEvidencePicker
+        files={evidenceFiles}
+        onChange={setEvidenceFiles}
+        title={t('Receiving evidence', 'إثبات الاستلام')}
+        description={t('Attach the delivery note, invoice or other proof that this stock was received.', 'أرفق وصل التسليم أو الفاتورة أو أي إثبات آخر على استلام المخزون.')}
+      />
 
       <div className="inv-form-row">
         <label className="inv-label">{t('Reason', 'السبب')}</label>
@@ -205,7 +185,7 @@ function QuickAddTab({ items, settings, isAdmin }) {
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
           >
-            <Check size={14} /> {t('Stock added successfully', 'تمت إضافة المخزون بنجاح')}
+            <Check size={14} /> {t('Request submitted for approval', 'تم تقديم الطلب للاعتماد')}
           </motion.span>
         )}
         <button
@@ -214,7 +194,7 @@ function QuickAddTab({ items, settings, isAdmin }) {
           onClick={handleSubmit}
         >
           {saving ? <RefreshCw size={15} className="inv-spin" /> : <Plus size={15} />}
-          {t('Add Stock', 'إضافة مخزون')}
+          {t('Submit stock-in request', 'تقديم طلب إضافة المخزون')}
         </button>
       </div>
     </div>
@@ -223,10 +203,11 @@ function QuickAddTab({ items, settings, isAdmin }) {
 
 function BatchReceiveTab({ items, settings }) {
   const { t, lang } = useLanguage()
-  const { can } = usePermissions()
+  const { can, userProfile } = usePermissions()
   const [rows, setRows] = useState([])
   const [deliveryRef, setDeliveryRef] = useState('')
   const [notes, setNotes] = useState('')
+  const [evidenceFiles, setEvidenceFiles] = useState([])
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [permError, setPermError] = useState('')
@@ -253,16 +234,29 @@ function BatchReceiveTab({ items, settings }) {
     setPermError('')
     setSaving(true)
     try {
-      await Promise.all(
-        rows.map(r => doStockIn(r.item, r.qty, r.reason, notes, deliveryRef, null))
-      )
+      await submitInventoryRequest({
+        type: 'stock_in',
+        items: rows.map((row) => ({
+          itemId: row.item.id,
+          itemNameAr: row.item.nameAr,
+          itemNameEn: row.item.nameEn,
+          itemSku: row.item.sku,
+          size: row.item.size || null,
+          quantity: row.qty,
+          reason: row.reason,
+        })),
+        details: { deliveryNoteRef: deliveryRef || null, supplierId: null },
+        notes,
+      }, evidenceFiles, userProfile)
       setRows([])
       setDeliveryRef('')
       setNotes('')
+      setEvidenceFiles([])
       setSuccess(true)
       setTimeout(() => setSuccess(false), 2500)
     } catch (err) {
       console.error(err)
+      setPermError(err.message || t('Could not submit the request.', 'تعذر تقديم الطلب.'))
     } finally {
       setSaving(false)
     }
@@ -340,6 +334,13 @@ function BatchReceiveTab({ items, settings }) {
         />
       </div>
 
+      <InventoryEvidencePicker
+        files={evidenceFiles}
+        onChange={setEvidenceFiles}
+        title={t('Receiving evidence', 'إثبات الاستلام')}
+        description={t('One delivery note, invoice or receiving document may support the whole batch.', 'يمكن لوصل تسليم أو فاتورة أو مستند استلام واحد أن يدعم الدفعة كاملة.')}
+      />
+
       <div className="inv-form-row">
         <label className="inv-label">{t('Notes', 'ملاحظات')}</label>
         <textarea className="inv-textarea" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
@@ -349,7 +350,7 @@ function BatchReceiveTab({ items, settings }) {
         {permError && <div className="inv-error-msg">{permError}</div>}
         {success && (
           <motion.span className="inv-success-msg" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <Check size={14} /> {t('All items added', 'تمت إضافة جميع الأصناف')}
+            <Check size={14} /> {t('Batch request submitted', 'تم تقديم طلب الدفعة')}
           </motion.span>
         )}
         <button
@@ -358,16 +359,26 @@ function BatchReceiveTab({ items, settings }) {
           onClick={handleConfirm}
         >
           {saving ? <RefreshCw size={15} className="inv-spin" /> : <Check size={15} />}
-          {t('Confirm All', 'تأكيد الكل')} ({rows.length})
+          {t('Submit batch request', 'تقديم طلب الدفعة')} ({rows.length})
         </button>
       </div>
     </div>
   )
 }
 
-export default function InventoryStockIn({ items, settings, isAdmin }) {
+export default function InventoryStockIn({ items, settings, canRequest }) {
   const { t } = useLanguage()
   const [method, setMethod] = useState('quick')
+
+  if (!canRequest) {
+    return (
+      <div className="inv-workflow-guard">
+        <ShieldAlert size={28} />
+        <strong>{t('Stock-in requests are initiated by the Warehouse/Store Manager.', 'يتم تقديم طلبات إضافة المخزون من مدير المخزن.')}</strong>
+        <span>{t('Use the Approvals tab to review requests assigned to your role.', 'استخدم تبويب الاعتمادات لمراجعة الطلبات المسندة إلى دورك.')}</span>
+      </div>
+    )
+  }
 
   return (
     <div className="inv-stockin">
@@ -395,7 +406,7 @@ export default function InventoryStockIn({ items, settings, isAdmin }) {
           transition={{ duration: 0.18 }}
         >
           {method === 'quick'
-            ? <QuickAddTab items={items} settings={settings} isAdmin={isAdmin} />
+            ? <QuickAddTab items={items} settings={settings} />
             : <BatchReceiveTab items={items} settings={settings} />
           }
         </motion.div>

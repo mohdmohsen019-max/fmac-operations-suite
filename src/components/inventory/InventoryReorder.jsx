@@ -55,6 +55,11 @@ export default function InventoryReorder({ items, settings }) {
   const outCount = rows.filter(r => r.out).length
   const lowCount = rows.length - outCount
   const totalUnits = rows.reduce((s, r) => s + r.suggested, 0)
+  const categoryPressure = Object.entries(rows.reduce((acc, row) => {
+    const key = row.category || '—'
+    acc[key] = (acc[key] || 0) + row.suggested
+    return acc
+  }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5)
   const today = new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })
 
   /* ── Copy as plain text ── */
@@ -168,6 +173,8 @@ export default function InventoryReorder({ items, settings }) {
           <p>{t('Nothing needs reordering — every item is above its minimum.', 'لا شيء يحتاج إعادة طلب — كل الأصناف فوق حدها الأدنى.')}</p>
         </div>
       ) : (
+        <div className="rl-layout">
+        <div className="rl-table-wrap">
         <table className="rl-table">
           <thead>
             <tr>
@@ -199,6 +206,23 @@ export default function InventoryReorder({ items, settings }) {
             ))}
           </tbody>
         </table>
+        </div>
+        <aside className="rl-context">
+          <span className="rl-context-kicker">{t('REORDER PRESSURE', 'ضغط إعادة الطلب')}</span>
+          <strong>{totalUnits.toLocaleString(locale)}</strong>
+          <p>{t('units suggested across', 'وحدة مقترحة عبر')} {rows.length.toLocaleString(locale)} {t('items', 'صنفاً')}</p>
+          <div className="rl-context-list">
+            {categoryPressure.map(([category, units]) => (
+              <div key={category}>
+                <span dir="auto">{category}</span>
+                <b dir="ltr">{units.toLocaleString(locale)}</b>
+                <i style={{ transform: `scaleX(${units / Math.max(categoryPressure[0]?.[1] || 1, 1)})` }} />
+              </div>
+            ))}
+          </div>
+          <small>{t('Suggested quantities restore each item to twice its minimum threshold.', 'تعيد الكميات المقترحة كل صنف إلى ضعف حده الأدنى.')}</small>
+        </aside>
+        </div>
       )}
     </div>
   )

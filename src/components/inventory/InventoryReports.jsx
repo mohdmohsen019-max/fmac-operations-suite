@@ -6,7 +6,7 @@ import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/
 import { useLanguage } from '../../contexts/LanguageContext'
 import { getSportLabel, getCatLabel, getItemStatus, fmtDate, DEFAULT_SPORTS } from './shared'
 import CustomSelect from '../CustomSelect'
-import * as XLSX from 'xlsx'
+import { exportInventoryAnalyticsExcel, exportInventoryAnalyticsPdf } from './inventoryAnalyticsReport'
 
 const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
@@ -186,6 +186,7 @@ export default function InventoryReports({ items, settings }) {
   const [srStart, setSrStart] = useState('')
   const [srEnd,   setSrEnd]   = useState('')
   const [stockLoading, setStockLoading] = useState(false)
+  const [exporting, setExporting] = useState('')
 
   const sports = settings?.sports || DEFAULT_SPORTS
   const years  = Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i)
@@ -219,7 +220,7 @@ export default function InventoryReports({ items, settings }) {
         totalQty: data.totalQty,
         topItems: Object.entries(data.items).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n,q])=>`${n} (${q})`).join(', '),
       })).sort((a,b) => b.totalQty - a.totalQty)
-      setReportData({ type: 'monthly', rows, month: selectedMonth, year: selectedYear })
+      setReportData({ type: 'monthly', rows, month: selectedMonth, year: selectedYear, period: `${lang === 'ar' ? MONTHS_AR[selectedMonth] : MONTHS_EN[selectedMonth]} ${selectedYear}` })
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
   }, [selectedYear, selectedMonth, lang, sports])
@@ -237,8 +238,8 @@ export default function InventoryReports({ items, settings }) {
         status: getItemStatus(i),
       }))
       .sort((a,b) => a.diff - b.diff)
-    setReportData({ type: 'lowstock', rows })
-  }, [items, lang, sports])
+    setReportData({ type: 'lowstock', rows, period: t('Current inventory snapshot', 'لقطة المخزون الحالية') })
+  }, [items, lang, sports, t])
 
   const generateSummaryReport = useCallback(async () => {
     if (!sumStart || !sumEnd) return
@@ -258,7 +259,7 @@ export default function InventoryReports({ items, settings }) {
         if (mv.type === 'stock_out') byItem[mv.itemId].stockOut += mv.quantity || 0
       })
       const rows = Object.values(byItem).sort((a,b) => (b.stockIn+b.stockOut) - (a.stockIn+a.stockOut))
-      setReportData({ type: 'summary', rows, start: sumStart, end: sumEnd })
+      setReportData({ type: 'summary', rows, start: sumStart, end: sumEnd, period: `${sumStart} – ${sumEnd}` })
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
   }, [sumStart, sumEnd])
@@ -326,64 +327,30 @@ export default function InventoryReports({ items, settings }) {
     setStockLoading(true)
     try {
       const data = await fetchStockData()
-      const rows = []
-      data.forEach(({ item, movements }) => {
-        if (!movements.length) {
-          rows.push({ 'الصنف': item.nameAr||'', 'SKU': item.sku||'', 'المخزون الحالي': item.currentStock??0, 'التاريخ': '', 'النوع': '', 'الكمية': '', 'قبل': '', 'بعد': '', 'بواسطة': '', 'ملاحظات': 'لا توجد حركات' })
-        } else {
-          movements.forEach(m => {
-            const d = m.createdAt?.toDate ? m.createdAt.toDate() : null
-            rows.push({
-              'الصنف': item.nameAr||'', 'SKU': item.sku||'', 'المخزون الحالي': item.currentStock??0,
-              'التاريخ': d ? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` : '',
-              'النوع': m.type === 'stock_in' ? 'وارد' : 'صادر',
-              'الكمية': m.quantity||0, 'قبل': m.stockBefore??'', 'بعد': m.stockAfter??'',
-              'بواسطة': m.issuedTo?.name||m.createdByName||'', 'ملاحظات': m.receiptId||m.notes||'',
-            })
-          })
-        }
-      })
-      const ws = XLSX.utils.json_to_sheet(rows)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Stock Report')
-      XLSX.writeFile(wb, `stock-report-${new Date().toISOString().split('T')[0]}.xlsx`)
+      await exportInventoryAnalyticsExcel({ reportData: { type: 'stock', items: data, period: srStart || srEnd ? `${srStart || '…'} – ${srEnd || '…'}` : t('All available history', 'كل السجل المتاح'), formatDate: fmtDate }, locale: lang === 'ar' ? 'ar-AE' : 'en-AE' })
+    } finally { setStockLoading(false) }
+  }
+
+  const handleExportStockPdf = async () => {
+    if (!stockSelectedItems.length) return
+    setStockLoading(true)
+    try {
+      const data = await fetchStockData()
+      await exportInventoryAnalyticsPdf({ reportData: { type: 'stock', items: data, period: srStart || srEnd ? `${srStart || '…'} – ${srEnd || '…'}` : t('All available history', 'كل السجل المتاح'), formatDate: fmtDate }, locale: lang === 'ar' ? 'ar-AE' : 'en-AE' })
     } finally { setStockLoading(false) }
   }
 
   // ── Excel export for existing reports ─────────────────────────────────────
-  const exportExcel = () => {
+  const runReportExport = async (format) => {
     if (!reportData) return
-    let rows = []
-    if (reportData.type === 'monthly') {
-      rows = reportData.rows.map(r => ({
-        [t('Sport','الرياضة')]: r.sport,
-        [t('Issuance Orders','عدد أوامر الصرف')]: r.orders,
-        [t('Total Qty','إجمالي القطع')]: r.totalQty,
-        [t('Top Items','أبرز الأصناف')]: r.topItems,
-      }))
-    } else if (reportData.type === 'lowstock') {
-      rows = reportData.rows.map(r => ({
-        [t('Item (AR)','الصنف عربي')]: r.nameAr,
-        [t('Item (EN)','الصنف إنجليزي')]: r.nameEn,
-        [t('Sport','الرياضة')]: r.sport,
-        [t('Current Stock','المخزون الحالي')]: r.currentStock,
-        [t('Min Threshold','الحد الأدنى')]: r.minThreshold,
-        [t('Difference','الفرق')]: r.diff,
-      }))
-    } else if (reportData.type === 'summary') {
-      rows = reportData.rows.map(r => ({
-        [t('Item (AR)','الصنف عربي')]: r.nameAr,
-        [t('Item (EN)','الصنف إنجليزي')]: r.nameEn,
-        SKU: r.sku,
-        [t('Stock In','وارد')]: r.stockIn,
-        [t('Stock Out','صادر')]: r.stockOut,
-        [t('Net','صافي')]: r.stockIn - r.stockOut,
-      }))
+    setExporting(format)
+    try {
+      const options = { reportData, locale: lang === 'ar' ? 'ar-AE' : 'en-AE' }
+      if (format === 'pdf') await exportInventoryAnalyticsPdf(options)
+      else await exportInventoryAnalyticsExcel(options)
+    } finally {
+      setExporting('')
     }
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Report')
-    XLSX.writeFile(wb, `inventory-report-${reportData.type}-${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   const reportTabs = [
@@ -532,6 +499,9 @@ export default function InventoryReports({ items, settings }) {
               <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={handleExportStockExcel} disabled={stockLoading || !stockSelectedItems.length}>
                 <Download size={14} /> {t('Export Excel','تصدير Excel')}
               </button>
+              <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={handleExportStockPdf} disabled={stockLoading || !stockSelectedItems.length}>
+                <FileText size={14} /> PDF
+              </button>
               <button className="inv-btn inv-btn-primary" onClick={handlePrintStockReport} disabled={stockLoading || !stockSelectedItems.length}>
                 {stockLoading ? <RefreshCw size={14} className="inv-spin" /> : <FileText size={14} />}
                 {stockLoading ? t('Preparing…','جارٍ التجهيز…') : t('Print Report','طباعة التقرير')}
@@ -543,9 +513,12 @@ export default function InventoryReports({ items, settings }) {
         {/* ── Results for existing reports ── */}
         {reportData && (
           <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}>
-            <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:12 }}>
-              <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={exportExcel}>
-                <Download size={14} /> {t('Export Excel','تصدير Excel')}
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginBottom:12 }}>
+              <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={() => runReportExport('pdf')} disabled={!!exporting}>
+                <FileText size={14} /> {exporting === 'pdf' ? t('Preparing…','جارٍ الإعداد…') : 'PDF'}
+              </button>
+              <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={() => runReportExport('excel')} disabled={!!exporting}>
+                <Download size={14} /> {exporting === 'excel' ? t('Preparing…','جارٍ الإعداد…') : t('Excel','Excel')}
               </button>
             </div>
 

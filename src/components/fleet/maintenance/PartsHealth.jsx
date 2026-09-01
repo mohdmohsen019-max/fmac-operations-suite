@@ -17,9 +17,10 @@ import { newCatalogBatch, DEFAULT_PARTS } from './maintenanceSuite'
 const todayISO = () => new Date().toISOString().split('T')[0]
 
 const STATUS_LABEL = {
-  ok:        { en: 'OK',                ar: 'سليم' },
-  attention: { en: 'Nearing end of life', ar: 'قد يقترب من نهاية عمره' },
-  critical:  { en: 'Service recommended soon', ar: 'يُنصح بالصيانة قريباً' },
+  healthy:   { en: 'Healthy', ar: 'سليم' },
+  'due-soon': { en: 'Due soon', ar: 'مستحق قريباً' },
+  due:       { en: 'Due', ar: 'مستحق' },
+  overdue:   { en: 'Overdue', ar: 'متأخر' },
   none:      { en: 'No install record',  ar: 'لا يوجد سجل تركيب' },
 }
 
@@ -122,6 +123,10 @@ function PartEditModal({ part, catalog, catalogIsSeed, onClose }) {
   const [nameEn, setNameEn] = useState(part?.nameEn || '')
   const [nameAr, setNameAr] = useState(part?.nameAr || '')
   const [lifespan, setLifespan] = useState(String(part?.lifespanKm ?? ''))
+  const [basis, setBasis] = useState(part?.lifecycleBasis === 'time' ? 'time' : 'km')
+  const [lifespanDays, setLifespanDays] = useState(String(part?.lifespanDays ?? '365'))
+  const [warningPct, setWarningPct] = useState(String(part?.warningThresholdPct ?? '75'))
+  const [duePct, setDuePct] = useState(String(part?.dueThresholdPct ?? '90'))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -131,8 +136,15 @@ function PartEditModal({ part, catalog, catalogIsSeed, onClose }) {
       setError(t('Enter a part name.', 'أدخل اسم القطعة.'))
       return
     }
-    if (Number.isNaN(life) || life <= 0) {
+    const days = parseFloat(lifespanDays)
+    const warning = parseFloat(warningPct)
+    const due = parseFloat(duePct)
+    if ((basis === 'km' && (Number.isNaN(life) || life <= 0)) || (basis === 'time' && (Number.isNaN(days) || days <= 0))) {
       setError(t('Enter a valid lifespan in km.', 'أدخل عمراً افتراضياً صحيحاً بالكيلومترات.'))
+      return
+    }
+    if (!(warning >= 0 && warning < due && due <= 100)) {
+      setError(t('Thresholds must satisfy 0 ≤ warning < due ≤ 100.', 'يجب أن تكون عتبة التحذير أقل من عتبة الاستحقاق وحتى 100.'))
       return
     }
     setSaving(true)
@@ -142,6 +154,10 @@ function PartEditModal({ part, catalog, catalogIsSeed, onClose }) {
         nameEn: nameEn.trim() || nameAr.trim(),
         nameAr: nameAr.trim() || nameEn.trim(),
         lifespanKm: life,
+        lifespanDays: days,
+        lifecycleBasis: basis,
+        warningThresholdPct: warning,
+        dueThresholdPct: due,
       }
       if (part) {
         batch.set(doc(db, 'fleet_part_catalog', part.id), data, { merge: true })
@@ -176,9 +192,19 @@ function PartEditModal({ part, catalog, catalogIsSeed, onClose }) {
             <input type="text" dir="rtl" value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
           </label>
           <label className="fms-field">
-            <span>{t('Expected lifespan (km)', 'العمر الافتراضي (كم)')}</span>
-            <input type="number" value={lifespan} onChange={(e) => setLifespan(e.target.value)} />
+            <span>{t('Lifecycle basis', 'أساس دورة الحياة')}</span>
+            <CustomSelect value={basis} onChange={setBasis} options={[
+              { value: 'km', label: t('Distance (km)', 'المسافة (كم)') },
+              { value: 'time', label: t('Time (days)', 'الوقت (أيام)') },
+            ]} />
           </label>
+          {basis === 'km' ? (
+            <label className="fms-field"><span>{t('Expected lifespan (km)', 'العمر الافتراضي (كم)')}</span><input type="number" value={lifespan} onChange={(e) => setLifespan(e.target.value)} /></label>
+          ) : (
+            <label className="fms-field"><span>{t('Expected lifespan (days)', 'العمر الافتراضي (أيام)')}</span><input type="number" value={lifespanDays} onChange={(e) => setLifespanDays(e.target.value)} /></label>
+          )}
+          <label className="fms-field"><span>{t('Due-soon warning (%)', 'تحذير الاستحقاق القريب (%)')}</span><input type="number" min="0" max="99" value={warningPct} onChange={(e) => setWarningPct(e.target.value)} /></label>
+          <label className="fms-field"><span>{t('Due threshold (%)', 'عتبة الاستحقاق (%)')}</span><input type="number" min="1" max="100" value={duePct} onChange={(e) => setDuePct(e.target.value)} /></label>
           <div className="fms-modal-actions">
             <button type="button" className="fms-btn" onClick={onClose}>{t('Cancel', 'إلغاء')}</button>
             <button type="button" className="fms-btn fms-btn--primary" onClick={save} disabled={saving}>
@@ -212,7 +238,7 @@ export default function PartsHealth({ suite, canEdit, displayName }) {
   const warningRows = useMemo(() => {
     const rows = []
     partsHealth.forEach(({ vehicle, parts }) => parts.forEach((ph) => {
-      if (ph.status === 'critical' || ph.status === 'attention') rows.push({ vehicle, ...ph })
+      if (ph.status === 'overdue' || ph.status === 'due' || ph.status === 'due-soon') rows.push({ vehicle, ...ph })
     }))
     return rows.sort((a, b) => b.pct - a.pct)
   }, [partsHealth])
@@ -272,7 +298,7 @@ export default function PartsHealth({ suite, canEdit, displayName }) {
         <div className="fms-panel-head">
           <div>
             <h3>{t('Predicted part warnings', 'تحذيرات القطع المتوقعة')}</h3>
-            <p>{t('Every part at 75%+ of its expected lifespan, fleet-wide', 'كل قطعة بلغت 75%+ من عمرها المتوقع على مستوى الأسطول')}</p>
+            <p>{t('Warnings use each component’s editable lifecycle basis and thresholds.', 'تستخدم التحذيرات أساس دورة الحياة والعتبات القابلة للتعديل لكل مكوّن.')}</p>
           </div>
         </div>
         {warningRows.length === 0 ? (
@@ -284,7 +310,7 @@ export default function PartsHealth({ suite, canEdit, displayName }) {
                 <tr>
                   <th>{t('Vehicle', 'المركبة')}</th>
                   <th>{t('Part', 'القطعة')}</th>
-                  <th>{t('Used / Lifespan (km)', 'المستهلك / العمر (كم)')}</th>
+                  <th>{t('Used / Lifespan', 'المستهلك / العمر')}</th>
                   <th>{t('Wear', 'الاستهلاك')}</th>
                   <th>{t('Status', 'الحالة')}</th>
                 </tr>
@@ -295,7 +321,7 @@ export default function PartsHealth({ suite, canEdit, displayName }) {
                     <td style={{ fontWeight: 700 }}>{displayName(row.vehicle.reg, locale)}</td>
                     <td>{t(row.part.nameEn, row.part.nameAr)}</td>
                     <td className="fms-mono">
-                      {row.usedKm.toLocaleString(locale)} / {parseFloat(row.part.lifespanKm).toLocaleString(locale)}
+                      {(row.basis === 'time' ? row.usedDays : row.usedKm).toLocaleString(locale)} / {row.lifespan.toLocaleString(locale)} {row.basis === 'time' ? t('days', 'يوم') : t('km', 'كم')}
                     </td>
                     <td style={{ minWidth: 140 }}>
                       <div className="fms-bar-cell">
@@ -337,7 +363,7 @@ export default function PartsHealth({ suite, canEdit, displayName }) {
                 <tr>
                   <th>{t('Part', 'القطعة')}</th>
                   <th>{t('Installed at (km)', 'رُكِّبت عند (كم)')}</th>
-                  <th>{t('Used (km)', 'المستهلك (كم)')}</th>
+                  <th>{t('Lifecycle used', 'دورة الحياة المستهلكة')}</th>
                   <th>{t('Wear', 'الاستهلاك')}</th>
                   <th>{t('Status', 'الحالة')}</th>
                   <th></th>
@@ -352,7 +378,7 @@ export default function PartsHealth({ suite, canEdit, displayName }) {
                         ? <>{parseFloat(ph.install.installedAtKm).toLocaleString(locale)}<span className="fms-hint" style={{ marginInlineStart: 6 }}>{ph.install.installedDate}</span></>
                         : <span className="fms-muted">—</span>}
                     </td>
-                    <td className="fms-mono">{ph.install ? ph.usedKm.toLocaleString(locale) : <span className="fms-muted">—</span>}</td>
+                    <td className="fms-mono">{ph.install ? <>{(ph.basis === 'time' ? ph.usedDays : ph.usedKm).toLocaleString(locale)} {ph.basis === 'time' ? t('days', 'يوم') : t('km', 'كم')}</> : <span className="fms-muted">—</span>}</td>
                     <td style={{ minWidth: 140 }}>
                       {ph.install ? (
                         <div className="fms-bar-cell">
@@ -405,7 +431,7 @@ export default function PartsHealth({ suite, canEdit, displayName }) {
                   <tr>
                     <th>{t('Part (EN)', 'القطعة (EN)')}</th>
                     <th>{t('Part (AR)', 'القطعة (AR)')}</th>
-                    <th>{t('Lifespan (km)', 'العمر (كم)')}</th>
+                    <th>{t('Basis / Lifespan', 'الأساس / العمر')}</th>
                     <th>{t('Active', 'نشطة')}</th>
                     <th></th>
                   </tr>
@@ -415,7 +441,7 @@ export default function PartsHealth({ suite, canEdit, displayName }) {
                     <tr key={p.id} style={p.active === false ? { opacity: 0.45 } : undefined}>
                       <td>{p.nameEn}</td>
                       <td dir="rtl">{p.nameAr}</td>
-                      <td className="fms-mono">{parseFloat(p.lifespanKm).toLocaleString(locale)}</td>
+                      <td className="fms-mono">{p.lifecycleBasis === 'time' ? `${Number(p.lifespanDays || 0).toLocaleString(locale)} ${t('days', 'يوم')}` : `${Number(p.lifespanKm || 0).toLocaleString(locale)} ${t('km', 'كم')}`}<div className="fms-hint">{Number(p.warningThresholdPct || 75)}% / {Number(p.dueThresholdPct || 90)}%</div></td>
                       <td>
                         <button
                           type="button" className="fms-icon-btn"

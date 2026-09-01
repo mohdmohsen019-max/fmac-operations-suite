@@ -1,7 +1,11 @@
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
-import { BUS_REGS } from './fleetMeta';
+import { auth } from '../firebase';
+import { isKnownBusRegistration } from './fleetMapping';
 
-const BASE_URL = import.meta.env.VITE_CARTRACK_API_BASE_URL || 'https://fleetapi-me.cartrack.com/rest';
+// Keep the deployed Firebase proxy opt-in until it is configured in production.
+// Existing installations continue to use the Cartrack REST endpoint directly.
+const PROXY_URL = import.meta.env.VITE_CARTRACK_PROXY_URL;
+const BASE_URL = PROXY_URL || import.meta.env.VITE_CARTRACK_API_BASE_URL || 'https://fleetapi-me.cartrack.com/rest';
 const API_KEY = import.meta.env.VITE_CARTRACK_API_KEY;
 
 /* -- Fleet scoping -------------------------------------------------
@@ -12,25 +16,40 @@ const API_KEY = import.meta.env.VITE_CARTRACK_API_KEY;
      'others' -> club vehicles that are not part of the bus fleet
      'all'    -> everything registered on Cartrack
    Which class a registration belongs to is decided by a pluggable
-   classifier. The default uses the BUS_REGS seed; FleetScopeContext
+   classifier. The default recognizes only the confirmed bus registry;
+   FleetScopeContext
    swaps in a Firestore-backed classifier so reclassifying a vehicle in
    the Ecosystem tab immediately re-scopes every sub-module.            */
-let classifyReg = (reg) => (BUS_REGS.includes(String(reg || '').toUpperCase().replace(/\s/g, '')) ? 'bus' : 'other');
+let classifyReg = (reg) => (isKnownBusRegistration(reg) ? 'bus' : 'other');
 
 export function setVehicleClassifier(fn) {
   if (typeof fn === 'function') classifyReg = fn;
 }
 
 export function regMatchesScope(reg, scope = 'buses') {
-  if (scope === 'all') return true;
   const cls = classifyReg(reg);
+  // Vehicles explicitly marked as external stay outside the club Fleet module,
+  // even though the same Cartrack account may still expose their telemetry.
+  if (cls === 'external') return false;
+  if (scope === 'all') return true;
   return scope === 'others' ? cls === 'other' : cls === 'bus';
 }
 
 // Helper to get headers
-const getHeaders = () => {
+const getHeaders = async () => {
+  if (!PROXY_URL) {
+    if (!API_KEY) throw new Error('VITE_CARTRACK_API_KEY is not configured');
+    return {
+      'Authorization': `Basic ${API_KEY}`,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    };
+  }
+
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error('Authentication is required for the Cartrack proxy');
   return {
-    'Authorization': `Basic ${API_KEY}`,
+    'Authorization': `Bearer ${token}`,
     'Accept': 'application/json',
     'Content-Type': 'application/json'
   };
@@ -46,8 +65,8 @@ export const cartrackService = {
   async getVehicles(scope = 'buses') {
     try {
       const [vehiclesRes, statusRes] = await Promise.all([
-        fetch(`${BASE_URL}/vehicles?limit=250`, { headers: getHeaders() }),
-        fetch(`${BASE_URL}/vehicles/status?limit=250`, { headers: getHeaders() })
+        fetch(`${BASE_URL}/vehicles?limit=250`, { headers: await getHeaders() }),
+        fetch(`${BASE_URL}/vehicles/status?limit=250`, { headers: await getHeaders() })
       ]);
 
       if (!vehiclesRes.ok || !statusRes.ok) {
@@ -63,9 +82,10 @@ export const cartrackService = {
       const merged = vehicles
         .filter(v => regMatchesScope(v.registration, scope))
         .map(v => {
-          const status = statuses.find(s => s.registration === v.registration);
+          const status = statuses.find(s => String(s.registration).replace(/\s/g, '') === String(v.registration).replace(/\s/g, ''));
           return {
             ...v,
+            cartrackId: v.vehicle_id ?? v.id ?? v.asset_id ?? null,
             vehicleClass: classifyReg(v.registration),
             odometer: status ? status.odometer : 0,
             ignition: status ? status.ignition : false,
@@ -105,7 +125,7 @@ export const cartrackService = {
           const eStr = format(currentEnd, 'yyyy-MM-dd HH:mm:ss');
           
           const url = `${BASE_URL}/trips?start_timestamp=${encodeURIComponent(sStr)}&end_timestamp=${encodeURIComponent(eStr)}&limit=1000`;
-          const response = await fetch(url, { headers: getHeaders() });
+          const response = await fetch(url, { headers: await getHeaders() });
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
@@ -119,7 +139,7 @@ export const cartrackService = {
 
       // Standard single fetch for short ranges
       const url = `${BASE_URL}/trips?start_timestamp=${encodeURIComponent(startDate)}&end_timestamp=${encodeURIComponent(endDate)}&limit=1000`;
-      const response = await fetch(url, { headers: getHeaders() });
+      const response = await fetch(url, { headers: await getHeaders() });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
       return result.data || [];
@@ -130,12 +150,45 @@ export const cartrackService = {
   },
 
   /**
+   * Fetch the raw Cartrack telemetry events for one vehicle. These records are
+   * the audit trail behind trip-level safety totals: exact timestamp, address,
+   * coordinates, event type, speed and the road-speed limit where available.
+   */
+  async getVehicleEvents(registration, startDate, endDate) {
+    try {
+      const encodedRegistration = encodeURIComponent(String(registration || '').replace(/\s/g, ''));
+      if (!encodedRegistration) return [];
+
+      const limit = 1000;
+      const firstUrl = `${BASE_URL}/vehicles/${encodedRegistration}/events?start_timestamp=${encodeURIComponent(startDate)}&end_timestamp=${encodeURIComponent(endDate)}&limit=${limit}&page=1`;
+      const firstResponse = await fetch(firstUrl, { headers: await getHeaders() });
+      if (!firstResponse.ok) throw new Error(`HTTP error! status: ${firstResponse.status}`);
+      const first = await firstResponse.json();
+      const events = [...(first.data || [])];
+      const lastPage = Math.min(Number(first.meta?.last_page) || 1, 30);
+
+      for (let page = 2; page <= lastPage; page += 1) {
+        const url = `${BASE_URL}/vehicles/${encodedRegistration}/events?start_timestamp=${encodeURIComponent(startDate)}&end_timestamp=${encodeURIComponent(endDate)}&limit=${limit}&page=${page}`;
+        const response = await fetch(url, { headers: await getHeaders() });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const result = await response.json();
+        events.push(...(result.data || []));
+      }
+
+      return events;
+    } catch (error) {
+      console.error(`Cartrack API: Failed to fetch events for ${registration}`, error);
+      throw error;
+    }
+  },
+
+  /**
    * Fetch recent alerts/notifications
    */
   async getAlerts() {
     if (skipAlerts) return [];
     try {
-      const response = await fetch(`${BASE_URL}/alerts?limit=100`, { headers: getHeaders() });
+      const response = await fetch(`${BASE_URL}/alerts?limit=100`, { headers: await getHeaders() });
       if (response.status === 422 || response.status === 404 || response.status === 403) {
         skipAlerts = true;
         return [];
@@ -211,7 +264,7 @@ export const cartrackService = {
    */
   async getMaintenance() {
     try {
-      const response = await fetch(`${BASE_URL}/mifleet/maintenance`, { headers: getHeaders() });
+      const response = await fetch(`${BASE_URL}/mifleet/maintenance`, { headers: await getHeaders() });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
       return result.data || [];
@@ -300,7 +353,7 @@ export const cartrackService = {
         `${VISION_BASE}/vision/livestream/${registration}`,
         {
           method: 'POST',
-          headers: getHeaders(),
+          headers: await getHeaders(),
           body: JSON.stringify({ camera: [1, 2, 3, 4, 5, 6, 7, 8] })
         }
       );
@@ -326,7 +379,7 @@ export const cartrackService = {
    */
   async getLiveStatus(scope = 'buses') {
     try {
-      const response = await fetch(`${BASE_URL}/vehicles/status?limit=250&odometer_in_km=true`, { headers: getHeaders() });
+      const response = await fetch(`${BASE_URL}/vehicles/status?limit=250&odometer_in_km=true`, { headers: await getHeaders() });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
 

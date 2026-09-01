@@ -20,6 +20,12 @@ export function buildSubject(type, payload = {}) {
       return `Low Stock Alert — ${payload.nameEn || payload.nameAr || ''}`.trim();
     case 'monthly_report_reminder':
       return `📋 Monthly Report Reminder — ${payload.monthLabel || ''}`.trim();
+    case 'fleet_driver_changed': return `Fleet Driver Changed — ${payload.registration || ''}`.trim();
+    case 'fleet_external_transport': return `External Transportation Logged — ${payload.registration || ''}`.trim();
+    case 'fleet_overtime_logged': return `Driver Overtime Logged — ${payload.personName || ''}`.trim();
+    case 'fleet_fine_logged': return `Traffic Fine Logged — ${payload.registration || payload.driverName || ''}`.trim();
+    case 'fleet_registration_expiry': return `Vehicle Renewal Attention — ${payload.registration || ''}`.trim();
+    case 'fleet_maintenance_completed': return `Preventive Maintenance Completed — ${payload.registration || ''}`.trim();
     default:
       return 'FMAC Operations Notification';
   }

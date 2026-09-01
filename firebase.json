@@ -3,6 +3,7 @@
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
+      { "source": "/api/cartrack/**", "function": "cartrackProxy" },
       { "source": "/api/send-notification", "function": "sendNotification" },
       { "source": "/api/track-ticket", "function": "trackTicket" },
       { "source": "/api/rate-intake", "function": "rateIntake" },

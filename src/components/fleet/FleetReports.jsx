@@ -3,7 +3,7 @@ import {
   FileText, Download, TrendingUp, DollarSign,
   Calendar, Loader2, AlertTriangle, RefreshCw,
   ChevronDown, BarChart2, Truck, Shield, Award,
-  Gauge, Clock, Users, Bus, Car
+  Gauge, Clock, Users, Bus, Car, Calculator
 } from 'lucide-react';
 import {
   format, subDays, startOfMonth, getWeek, getYear,
@@ -20,10 +20,15 @@ import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { cartrackService } from '../../services/cartrackService';
 import { FLEET_MAPPING } from '../../services/fleetMapping';
+import { canonicalFleetRegistration, deduplicateCanonicalTrips } from '../../services/fleetIdentity';
 import { pdfService } from '../../services/pdfService';
 import { useFleetScope } from './FleetScopeContext';
+import { useFleetSettings } from './FleetSettingsContext';
+import { calculateTripMetrics, SCORE_DEFAULTS } from './scoreCalculation';
 import { useLanguage } from '../../contexts/LanguageContext';
 import CustomSelect from '../CustomSelect';
+import FleetPerformanceReport from './FleetPerformanceReport';
+import FleetOperatingCost from './FleetOperatingCost';
 import './FleetModule.css';
 import './FleetScopeViews.css';
 
@@ -163,9 +168,10 @@ function KpiCard({ icon, label, value, sub, color }) {
 }
 
 // ── MAIN COMPONENT ─────────────────────────────────────────────────────────
-export default function FleetReports() {
+export default function FleetReports({ canEdit = false }) {
   const { t, locale } = useLanguage();
-  const { scope, inScope, classOf: vehicleClassOf, displayName, metaOf, metaMap } = useFleetScope();
+  const { settings: fleetSettings } = useFleetSettings();
+  const { scope, inScope, classOf: vehicleClassOf, displayName, metaOf, metaMap, aliasMap } = useFleetScope();
   const [activeReport, setActiveReport] = useState('odometer');
 
   const lang     = locale === 'ar-SA' ? 'ar' : 'en';
@@ -285,6 +291,7 @@ export default function FleetReports() {
   useEffect(() => {
     if (prevScopeRef.current === scope) return;
     prevScopeRef.current = scope;
+    if (scope !== 'buses' && ['performance', 'operating-cost'].includes(activeReport)) setActiveReport('odometer');
     // Selected vehicle may not exist in the new scope — reset the filters.
     setOdomVehicle('all');
     setRiskVehicle('all');
@@ -357,12 +364,13 @@ export default function FleetReports() {
     try {
       const trips = await cartrackService.getTrips(toApiTs(s), toApiTs(e, true));
       if (!trips) throw new Error('No data returned');
+      const canonicalTrips = deduplicateCanonicalTrips(trips, aliasMap);
 
       const groups = {};
-      trips
+      canonicalTrips
         .filter(trip => inScope(trip.registration))
         .forEach(t => {
-          if (veh !== 'all' && t.registration !== veh) return;
+          if (veh !== 'all' && t.registration !== canonicalFleetRegistration(veh, aliasMap)) return;
           if (!t.start_timestamp) return;
 
           const meta = metaOf(t.registration);
@@ -407,10 +415,7 @@ export default function FleetReports() {
 
       const result = Object.values(groups)
         .map(g => {
-           let dist = g.distance;
-           if (g.startOdo != null && g.endOdo != null && g.endOdo >= g.startOdo) {
-             dist = (g.endOdo - g.startOdo) / 1000;
-           }
+           const dist = g.distance;
            return { 
              ...g, 
              distance: Math.round(dist * 10) / 10,
@@ -444,12 +449,13 @@ export default function FleetReports() {
     try {
       const trips = await cartrackService.getTrips(toApiTs(s), toApiTs(e, true));
       if (!trips) throw new Error('No data returned');
+      const canonicalTrips = deduplicateCanonicalTrips(trips, aliasMap);
 
       const agg = {};
-      trips
+      canonicalTrips
         .filter(trip => inScope(trip.registration))
         .forEach(t => {
-          if (veh !== 'all' && t.registration !== veh) return;
+          if (veh !== 'all' && t.registration !== canonicalFleetRegistration(veh, aliasMap)) return;
           const meta = metaOf(t.registration);
           if (!agg[t.registration]) {
             agg[t.registration] = {
@@ -492,12 +498,13 @@ export default function FleetReports() {
     try {
       const trips = await cartrackService.getTrips(toApiTs(s), toApiTs(e, true));
       if (!trips) throw new Error('No data returned');
+      const canonicalTrips = deduplicateCanonicalTrips(trips, aliasMap);
 
       const agg = {};
-      trips
+      canonicalTrips
         .filter(trip => inScope(trip.registration))
         .forEach(t => {
-          if (veh !== 'all' && t.registration !== veh) return;
+          if (veh !== 'all' && t.registration !== canonicalFleetRegistration(veh, aliasMap)) return;
           const meta = metaOf(t.registration);
           if (!agg[t.registration]) {
             agg[t.registration] = {
@@ -506,7 +513,7 @@ export default function FleetReports() {
               driverName: meta.driverName,
               ...classifyRow(t.registration),
               trips: 0, totalKm: 0, speedSum: 0,
-              maxSpeed: 0, speeding: 0, braking: 0, cornering: 0, accel: 0, idleTime: 0,
+              maxSpeed: 0, speeding: 0, braking: 0, cornering: 0, accel: 0, idleTime: 0, rawTrips: [],
             };
           }
           const s2 = agg[t.registration];
@@ -519,12 +526,13 @@ export default function FleetReports() {
           s2.cornering += (t.harsh_cornering_events    || 0);
           s2.accel     += (t.harsh_acceleration_events || 0);
           s2.idleTime  += (Number(t.idle_time) || 0);
+          s2.rawTrips.push(t);
         });
 
       const result = Object.values(agg)
         .map(s2 => {
           const avgSpeed = s2.trips > 0 ? Math.round(s2.speedSum / s2.trips) : 0;
-          const score    = calcScore(s2.trips, s2.speeding, s2.braking, s2.cornering, s2.accel, s2.idleTime);
+          const score = calculateTripMetrics(s2.rawTrips, { ...SCORE_DEFAULTS, ...fleetSettings }).score;
           return {
             ...s2,
             totalKm:  Math.round(s2.totalKm * 10) / 10,
@@ -1290,6 +1298,12 @@ export default function FleetReports() {
   // MAIN RENDER
   // ══════════════════════════════════════════════════════════════════════════
   const REPORT_TABS = [
+    ...(scope === 'buses'
+      ? [
+          { id: 'performance', label: t('Fleet Performance', 'أداء الأسطول'), icon: <TrendingUp size={14} /> },
+          { id: 'operating-cost', label: t('Operating Cost', 'تكلفة التشغيل'), icon: <Calculator size={14} /> },
+        ]
+      : []),
     { id: 'odometer',    label: t('Odometer', 'عداد المسافات'),        icon: <Gauge   size={14} /> },
     { id: 'risk',        label: t('Risk Management', 'إدارة المخاطر'), icon: <Shield  size={14} /> },
     { id: 'scorecard',   label: t('Driver Scorecard', 'سجل أداء السائق'),icon: <Award   size={14} /> },
@@ -1313,6 +1327,8 @@ export default function FleetReports() {
       </div>
 
       {/* Active report content */}
+      {activeReport === 'performance' && <FleetPerformanceReport canEdit={canEdit} />}
+      {activeReport === 'operating-cost' && <FleetOperatingCost />}
       {activeReport === 'odometer'    && renderOdometer()}
       {activeReport === 'risk'        && renderRisk()}
       {activeReport === 'scorecard'   && renderScorecard()}

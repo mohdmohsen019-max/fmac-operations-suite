@@ -20,6 +20,19 @@ export function usePermissions() {
     return false
   }
 
+  // A submodule can be granted independently while preserving every legacy
+  // account that only has a module-level permission. Example:
+  // fleet: 'view' + fleetRidership: 'edit' = read-only Fleet except Ridership.
+  const canSubmodule = (module, submoduleKey, action = 'view') => {
+    if (!userProfile || !isApproved) return false
+    if (user?.email === MASTER_ADMIN_EMAIL || userProfile.role === 'hod') return true
+    const explicit = userProfile.permissions?.[submoduleKey]
+    const effective = explicit || userProfile.permissions?.[module]
+    if (action === 'view') return effective === 'edit' || effective === 'view'
+    if (action === 'edit') return effective === 'edit'
+    return false
+  }
+
   const canSubmitReport = (sectionKey) => {
     if (!userProfile || !isApproved) return false
     if (user?.email === MASTER_ADMIN_EMAIL) return true
@@ -31,5 +44,5 @@ export function usePermissions() {
   const isHOD = userProfile?.role === 'hod'
   const canManageUsers = isMasterAdmin || isHOD
 
-  return { can, canSubmitReport, userProfile, user, isMasterAdmin, isHOD, canManageUsers }
+  return { can, canSubmodule, canSubmitReport, userProfile, user, isMasterAdmin, isHOD, canManageUsers }
 }

@@ -12,21 +12,20 @@ export default function FleetDriverHistory() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchTrips();
+    let active = true;
+    (async () => {
+      try {
+        const q = query(collection(db, 'trip_logs'), orderBy('createdAt', 'desc'));
+        const snap = await getDocs(q);
+        if (active) setTrips(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error('Error fetching trips:', err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
   }, []);
-
-  const fetchTrips = async () => {
-    setLoading(true);
-    try {
-      const q = query(collection(db, 'trip_logs'), orderBy('createdAt', 'desc'));
-      const snap = await getDocs(q);
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTrips(data);
-    } catch (err) {
-      console.error('Error fetching trips:', err);
-    }
-    setLoading(false);
-  };
 
   const filteredTrips = trips.filter(trip =>
     trip.plateNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||

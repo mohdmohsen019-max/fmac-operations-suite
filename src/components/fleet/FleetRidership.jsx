@@ -14,23 +14,25 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Users, ClipboardList, BarChart3, CalendarCog, Plus, Pencil, Trash2, X,
   Check, Download, FileText, TrendingUp, TrendingDown, Minus, Crown, Moon,
-  Gauge, Loader2,
+  Gauge, Loader2, Bus,
 } from 'lucide-react';
 import {
   collection, onSnapshot, getDocs, query, where, doc, setDoc, addDoc,
   updateDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { db, auth } from '../../firebase';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useAuth } from '../../contexts/AuthContext';
 import CustomSelect from '../CustomSelect';
-import { CairoRegularBase64, CairoBoldBase64 } from '../../utils/cairoFont';
-import { reshapeArabic } from '../../utils/arabicReshaper';
+import { useFleetScope } from './FleetScopeContext';
+import { buildBusRows, ensureRidershipSeed } from './ridershipSeed';
+import { exportRidershipExcel, exportRidershipPdf } from './ridershipReport';
+import { buildRidershipStats } from './ridershipAnalytics';
+import { recordActivity } from '../../services/activityLog';
 import './FleetModule.css';
 import './FleetRidership.css';
+import './FleetScopeViews.css';
 
 /* ── Constants ─────────────────────────────────────────────────── */
 
@@ -73,49 +75,6 @@ function periodRange(period) {
   return { start, end, prevStart, prevEnd };
 }
 
-/** Aggregate a set of count docs into per-class + overall stats. */
-function buildStats(entries, classes) {
-  const byClass = new Map();
-  let totalRiders = 0;
-  for (const e of entries) {
-    const riders = Number(e.riders) || 0;
-    totalRiders += riders;
-    if (!byClass.has(e.classId)) byClass.set(e.classId, { sessions: 0, riders: 0 });
-    const b = byClass.get(e.classId);
-    b.sessions += 1;
-    b.riders += riders;
-  }
-  const perClass = [...byClass.entries()].map(([classId, b]) => {
-    const cls = classes.find(c => c.id === classId) || null;
-    const capacity = cls && Number(cls.capacity) > 0 ? Number(cls.capacity) : null;
-    return {
-      classId,
-      cls,
-      sessions: b.sessions,
-      riders: b.riders,
-      avg: b.sessions > 0 ? b.riders / b.sessions : 0,
-      capacity,
-      utilization: capacity ? (b.riders / (capacity * b.sessions)) * 100 : null,
-    };
-  }).sort((a, b) => b.avg - a.avg);
-
-  // Overall utilization across sessions of capacity-bearing classes only
-  let capRiders = 0, capSeats = 0;
-  for (const p of perClass) {
-    if (p.capacity) { capRiders += p.riders; capSeats += p.capacity * p.sessions; }
-  }
-
-  return {
-    perClass,
-    totalRiders,
-    sessions: entries.length,
-    avgPerSession: entries.length > 0 ? totalRiders / entries.length : 0,
-    busiest: perClass[0] || null,
-    quietest: perClass.length > 0 ? perClass[perClass.length - 1] : null,
-    utilization: capSeats > 0 ? (capRiders / capSeats) * 100 : null,
-  };
-}
-
 async function fetchCounts(start, end) {
   const snap = await getDocs(query(
     collection(db, 'fleet_ridership_counts'),
@@ -131,9 +90,23 @@ async function fetchCounts(start, end) {
 
 export default function FleetRidership({ canEdit }) {
   const { t } = useLanguage();
+  const { metaOf } = useFleetScope();
   const [tab, setTab] = useState('entry');
   const [classes, setClasses] = useState([]);
   const [classesReady, setClassesReady] = useState(false);
+  const [importState, setImportState] = useState(canEdit ? 'importing' : 'idle');
+
+  useEffect(() => {
+    if (!canEdit) return undefined;
+    let active = true;
+    ensureRidershipSeed(db, auth.currentUser?.email || '')
+      .then((imported) => { if (active) setImportState(imported ? 'imported' : 'ready'); })
+      .catch((err) => {
+        console.error('Ridership seed import error:', err);
+        if (active) setImportState('error');
+      });
+    return () => { active = false; };
+  }, [canEdit]);
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -162,6 +135,10 @@ export default function FleetRidership({ canEdit }) {
 
   return (
     <div className="frd-view">
+      <div className="fsv-scope-note"><Bus size={14} /><span>{t('Bus Service only — other club vehicles are intentionally excluded.', 'خدمة الحافلات فقط — المركبات الأخرى للنادي مستبعدة عمداً.')}</span></div>
+      {importState === 'importing' && <div className="frd-import-note"><Loader2 size={14} className="frd-spin" /> {t('Importing the official Fujairah bus tables…', 'جارٍ استيراد جداول حافلات الفجيرة الرسمية…')}</div>}
+      {importState === 'imported' && <div className="frd-import-note frd-import-ok"><Check size={14} /> {t('22 dated Fujairah tables imported.', 'تم استيراد 22 جدولاً مؤرخاً لفرع الفجيرة.')}</div>}
+      {importState === 'error' && <div className="frd-import-note frd-import-error">{t('The historical import could not be completed. Reload while signed in with edit access.', 'تعذر إكمال استيراد السجل. أعد التحميل بحساب يملك صلاحية التعديل.')}</div>}
       <div className="frd-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'entry'} className={`frd-tab${tab === 'entry' ? ' active' : ''}`} onClick={() => setTab('entry')}>
           <ClipboardList size={14} /> {t('Daily Entry', 'التسجيل اليومي')}
@@ -174,7 +151,7 @@ export default function FleetRidership({ canEdit }) {
         </button>
       </div>
 
-      {tab === 'entry' && <EntryTab classes={classes} canEdit={canEdit} />}
+      {tab === 'entry' && <EntryTab classes={classes} canEdit={canEdit} metaOf={metaOf} />}
       {tab === 'insights' && <InsightsTab classes={classes} />}
       {tab === 'classes' && <ClassesTab classes={classes} canEdit={canEdit} />}
     </div>
@@ -185,16 +162,19 @@ export default function FleetRidership({ canEdit }) {
    TAB 1 — Daily entry
    ══════════════════════════════════════════════════════════════════ */
 
-function EntryTab({ classes, canEdit }) {
+function EntryTab({ classes, canEdit, metaOf }) {
   const { t, locale, lang } = useLanguage();
+  const { user, userProfile } = useAuth();
   const [date, setDate] = useState(todayStr());
-  const [drafts, setDrafts] = useState({});   // classId → { riders, notes }
-  const [saved, setSaved] = useState({});     // classId → true (persisted for this date)
+  const [drafts, setDrafts] = useState({});
+  const [busNotes, setBusNotes] = useState({});
+  const [saved, setSaved] = useState({});
+  const [dirtyRows, setDirtyRows] = useState({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [flashId, setFlashId] = useState(null);
 
-  const activeClasses = useMemo(() => classes.filter(c => c.active !== false), [classes]);
+  const branchTables = useMemo(() => buildBusRows(classes, metaOf), [classes, metaOf]);
   const weekday = useMemo(() => new Date(`${date}T00:00:00`).getDay(), [date]);
 
   const loadDay = useCallback(async (d) => {
@@ -203,16 +183,23 @@ function EntryTab({ classes, canEdit }) {
       const entries = await fetchCounts(d, d);
       const nextDrafts = {};
       const nextSaved = {};
+      const nextNotes = {};
       for (const e of entries) {
-        nextDrafts[e.classId] = { riders: String(e.riders ?? ''), notes: e.notes || '' };
+        nextDrafts[e.classId] = String(e.riders ?? '');
         nextSaved[e.classId] = true;
+        const registration = e.classSnapshot?.registration;
+        if (registration && e.notes && !nextNotes[registration]) nextNotes[registration] = e.notes;
       }
       setDrafts(nextDrafts);
       setSaved(nextSaved);
+      setBusNotes(nextNotes);
+      setDirtyRows({});
     } catch (err) {
       console.error('Ridership counts fetch error:', err);
       setDrafts({});
       setSaved({});
+      setBusNotes({});
+      setDirtyRows({});
     } finally {
       setLoading(false);
     }
@@ -220,45 +207,98 @@ function EntryTab({ classes, canEdit }) {
 
   useEffect(() => { loadDay(date); }, [date, loadDay]);
 
-  const setDraft = (classId, patch) => {
-    setDrafts(prev => ({ ...prev, [classId]: { riders: '', notes: '', ...prev[classId], ...patch } }));
+  const setDraft = (registration, classId, value) => {
+    setDrafts(prev => ({ ...prev, [classId]: value }));
     setSaved(prev => ({ ...prev, [classId]: false }));
+    setDirtyRows(prev => ({ ...prev, [registration]: true }));
   };
 
-  const saveCount = async (cls) => {
-    const d = drafts[cls.id] || {};
-    const riders = parseInt(d.riders, 10);
-    if (isNaN(riders) || riders < 0) return;
-    setSavingId(cls.id);
+  const setNote = (registration, value) => {
+    setBusNotes(prev => ({ ...prev, [registration]: value }));
+    setDirtyRows(prev => ({ ...prev, [registration]: true }));
+  };
+
+  const saveBus = async (branch, bus) => {
+    const actor = {
+      uid: user?.uid || auth.currentUser?.uid || '',
+      email: user?.email || auth.currentUser?.email || '',
+      name: userProfile?.displayName || user?.displayName || user?.email || auth.currentUser?.email || '',
+    };
+    const numericSessions = bus.sessions.filter((session) => {
+      const riders = Number(drafts[session.id]);
+      return drafts[session.id] !== '' && Number.isInteger(riders) && riders >= 0;
+    });
+    if (numericSessions.length === 0) return;
+    setSavingId(bus.registration);
     try {
-      // Idempotent per class+date: corrections simply overwrite the same doc.
-      await setDoc(doc(db, 'fleet_ridership_counts', `${cls.id}_${date}`), {
-        classId: cls.id,
-        date,
-        riders,
-        notes: (d.notes || '').trim(),
-        recordedBy: auth.currentUser?.email || '',
-        createdAt: serverTimestamp(),
+      await Promise.all(bus.sessions.map(async (session) => {
+        const raw = drafts[session.id];
+        const riders = Number(raw);
+        const countRef = doc(db, 'fleet_ridership_counts', `${session.id}_${date}`);
+        if (raw === '' || !Number.isInteger(riders) || riders < 0) {
+          if (saved[session.id]) await deleteDoc(countRef);
+          return;
+        }
+        await setDoc(countRef, {
+          classId: session.id,
+          date,
+          riders,
+          notes: (busNotes[bus.registration] || '').trim(),
+          classSnapshot: {
+            nameEn: `Bus ${bus.busNumber}`,
+            nameAr: `الحافلة ${bus.busNumber}`,
+            registration: bus.registration,
+            busNumber: bus.busNumber,
+            driverEn: bus.driverEn || '',
+            driverAr: bus.driverAr || '',
+            areaAr: bus.areaAr || '',
+            branch: branch.nameEn,
+            branchId: branch.id,
+            sessionIndex: session.sessionIndex,
+            time: session.time || '',
+            capacity: Number(session.capacity) || null,
+          },
+          recordedBy: actor.email,
+          recordedByUid: actor.uid,
+          recordedByEmail: actor.email,
+          recordedByName: actor.name,
+          updatedAt: serverTimestamp(),
+        });
+      }));
+      setSaved(prev => {
+        const next = { ...prev };
+        bus.sessions.forEach((session) => { next[session.id] = drafts[session.id] !== ''; });
+        return next;
       });
-      setSaved(prev => ({ ...prev, [cls.id]: true }));
-      setFlashId(cls.id);
-      setTimeout(() => setFlashId(f => (f === cls.id ? null : f)), 1600);
+      setDirtyRows(prev => ({ ...prev, [bus.registration]: false }));
+      await recordActivity({
+        module: 'fleet', submodule: 'ridership', action: 'ridership_saved',
+        titleEn: `Ridership saved · ${bus.registration}`,
+        titleAr: `تم حفظ الركاب · ${bus.registration}`,
+        detailEn: `${date} · ${numericSessions.reduce((sum, session) => sum + Number(drafts[session.id] || 0), 0)} riders across ${numericSessions.length} sessions`,
+        detailAr: `${date} · ${numericSessions.reduce((sum, session) => sum + Number(drafts[session.id] || 0), 0)} راكب عبر ${numericSessions.length} حصص`,
+        recordId: `${bus.registration}_${date}`, path: '/fleet/ridership',
+        actor,
+      });
+      setFlashId(bus.registration);
+      setTimeout(() => setFlashId(f => (f === bus.registration ? null : f)), 1600);
     } catch (err) {
-      console.error('Ridership count save error:', err);
+      console.error('Ridership bus-row save error:', err);
     } finally {
       setSavingId(null);
     }
   };
 
-  const scheduledCount = activeClasses.filter(c => Array.isArray(c.days) && c.days.includes(weekday)).length;
-  const recordedCount = Object.values(saved).filter(Boolean).length;
+  const allBuses = branchTables.flatMap(branch => branch.buses);
+  const scheduledCount = allBuses.length;
+  const recordedCount = allBuses.filter(bus => bus.sessions.some(session => saved[session.id])).length;
 
   return (
     <div>
       <div className="glass-panel frd-entry-head">
         <div className="section-header" style={{ marginBottom: 0 }}>
           <h2>{t('Record Bus Riders', 'تسجيل ركاب الحافلة')}</h2>
-          <p>{t('How many players rode the bus for each class on this date', 'كم لاعباً ركب الحافلة لكل حصة في هذا التاريخ')}</p>
+          <p>{t('One row per bus, with each trip recorded separately', 'صف مستقل لكل حافلة مع تسجيل كل حصة بشكل منفصل')}</p>
         </div>
         <div className="frd-entry-controls">
           <div className="frd-field">
@@ -276,77 +316,102 @@ function EntryTab({ classes, canEdit }) {
 
       {loading ? (
         <div className="view-loading"><div className="app-loader"><span /><span /><span /><span /><span /></div></div>
-      ) : activeClasses.length === 0 ? (
-        <div className="glass-panel frd-empty">
-          <Users size={34} strokeWidth={1.2} />
-          <p>{t('No active classes yet. Add classes in the Class Schedule tab.', 'لا توجد حصص نشطة بعد. أضف الحصص من تبويب جدول الحصص.')}</p>
-        </div>
       ) : (
-        <div className="frd-entry-list">
-          {activeClasses.map(cls => {
-            const isScheduled = Array.isArray(cls.days) && cls.days.includes(weekday);
-            const d = drafts[cls.id] || { riders: '', notes: '' };
-            const isSaved = !!saved[cls.id];
-            const riders = parseInt(d.riders, 10);
-            const validRiders = !isNaN(riders) && riders >= 0;
-            const capacity = Number(cls.capacity) > 0 ? Number(cls.capacity) : null;
-            return (
-              <div key={cls.id} className={`glass-panel frd-entry-row${isScheduled ? ' frd-scheduled' : ''}${flashId === cls.id ? ' frd-flash' : ''}`}>
-                <div className="frd-entry-info">
-                  <div className="frd-entry-name">
-                    {clsName(cls, lang)}
-                    {isScheduled && <span className="frd-chip frd-chip-accent">{t('Scheduled today', 'مجدولة اليوم')}</span>}
-                    {isSaved && <span className="frd-chip frd-chip-safe"><Check size={11} /> {t('Recorded', 'مسجلة')}</span>}
-                  </div>
-                  <div className="frd-entry-meta">
-                    {cls.sport && <span>{cls.sport}</span>}
-                    {cls.branch && <span>{cls.branch}</span>}
-                    {cls.time && <span dir="ltr">{cls.time}</span>}
-                    {capacity && <span>{t(`Capacity ${capacity}`, `السعة ${capacity}`)}</span>}
-                  </div>
+        <div className="frd-branch-stack">
+          {branchTables.map(branch => (
+            <section key={branch.id} className="glass-panel frd-branch-card">
+              <div className="frd-branch-head">
+                <div>
+                  <span className="frd-branch-kicker">{t('Branch table', 'جدول الفرع')}</span>
+                  <h3>{t(branch.nameEn, branch.nameAr)}</h3>
                 </div>
-                <div className="frd-entry-inputs">
-                  <div className="frd-field frd-field-riders">
-                    <label>{t('Riders', 'الركاب')}</label>
-                    <input
-                      type="number" min="0" step="1" inputMode="numeric"
-                      value={d.riders}
-                      disabled={!canEdit}
-                      onChange={e => setDraft(cls.id, { riders: e.target.value })}
-                      placeholder="0"
-                    />
-                  </div>
-                  <div className="frd-field frd-field-notes">
-                    <label>{t('Notes', 'ملاحظات')}</label>
-                    <input
-                      type="text"
-                      value={d.notes}
-                      disabled={!canEdit}
-                      onChange={e => setDraft(cls.id, { notes: e.target.value })}
-                      placeholder={t('Optional', 'اختياري')}
-                    />
-                  </div>
-                  {capacity && validRiders && (
-                    <span className={`frd-util${riders > capacity ? ' frd-util-over' : ''}`} dir="ltr">
-                      {Math.round((riders / capacity) * 100).toLocaleString(locale)}%
-                    </span>
-                  )}
-                  {canEdit && (
-                    <button
-                      className="frd-btn frd-btn-primary"
-                      disabled={!validRiders || savingId === cls.id || isSaved}
-                      onClick={() => saveCount(cls)}
-                    >
-                      {savingId === cls.id
-                        ? <Loader2 size={14} className="frd-spin" />
-                        : isSaved ? <Check size={14} /> : null}
-                      {isSaved ? t('Saved', 'محفوظ') : t('Save', 'حفظ')}
-                    </button>
-                  )}
-                </div>
+                <span className="frd-branch-count"><Bus size={14} /> {branch.buses.length.toLocaleString(locale)} {t('buses', 'حافلات')}</span>
               </div>
-            );
-          })}
+              <div className="frd-bus-table-wrap">
+                <table className="frd-bus-table">
+                  <thead>
+                    <tr>
+                      <th>{t('Bus', 'الحافلة')}</th>
+                      <th>{t('Driver & route', 'السائق والمنطقة')}</th>
+                      {[1, 2, 3, 4].map(i => <th key={i}>{t(`Session ${i}`, `الحصة ${i}`)}</th>)}
+                      <th>{t('Total', 'الإجمالي')}</th>
+                      <th>{t('Notes', 'ملاحظات')}</th>
+                      {canEdit && <th aria-label={t('Actions', 'الإجراءات')} />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {branch.buses.map(bus => {
+                      const sessionSlots = [1, 2, 3, 4].map(index =>
+                        bus.sessions.find(session => session.sessionIndex === index) || null
+                      );
+                      const values = sessionSlots.map(session => session ? (drafts[session.id] ?? '') : '');
+                      const total = values.reduce((sum, value) => sum + (value === '' ? 0 : Number(value) || 0), 0);
+                      const hasValue = values.some(value => value !== '' && Number.isInteger(Number(value)) && Number(value) >= 0);
+                      const isRecorded = bus.sessions.some(session => saved[session.id]);
+                      const isDirty = !!dirtyRows[bus.registration];
+                      return (
+                        <tr key={bus.registration} className={flashId === bus.registration ? 'frd-flash' : ''}>
+                          <td>
+                            <div className="frd-bus-identity">
+                              <span className="frd-bus-number">{bus.busNumber}</span>
+                              <span className="frd-bus-reg" dir="ltr">{bus.registration}</span>
+                              {isRecorded && !isDirty && <Check size={13} className="frd-recorded-check" />}
+                            </div>
+                          </td>
+                          <td>
+                            <strong>{lang === 'ar' ? (bus.driverAr || bus.driverEn) : (bus.driverEn || bus.driverAr)}</strong>
+                            {bus.areaAr && <span className="frd-route" dir="rtl">{bus.areaAr}</span>}
+                          </td>
+                          {sessionSlots.map((session, index) => session ? (
+                            <td key={session.id} className="frd-session-cell">
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                inputMode="numeric"
+                                aria-label={`${bus.registration} ${t(`session ${index + 1}`, `الحصة ${index + 1}`)}`}
+                                value={values[index]}
+                                disabled={!canEdit}
+                                onChange={e => setDraft(bus.registration, session.id, e.target.value)}
+                                placeholder="—"
+                              />
+                            </td>
+                          ) : (
+                            <td key={`not-applicable-${index + 1}`} className="frd-session-cell frd-session-na" aria-label={t('Not applicable', 'غير مطبق')}>—</td>
+                          ))}
+                          <td><span className="frd-row-total">{total.toLocaleString(locale)}</span></td>
+                          <td>
+                            <input
+                              className="frd-table-note"
+                              type="text"
+                              value={busNotes[bus.registration] || ''}
+                              disabled={!canEdit}
+                              onChange={e => setNote(bus.registration, e.target.value)}
+                              placeholder={t('Optional', 'اختياري')}
+                            />
+                          </td>
+                          {canEdit && (
+                            <td>
+                              <button
+                                className="frd-btn frd-btn-primary frd-row-save"
+                                disabled={!hasValue || savingId === bus.registration || (!isDirty && isRecorded)}
+                                onClick={() => saveBus(branch, bus)}
+                              >
+                                {savingId === bus.registration
+                                  ? <Loader2 size={14} className="frd-spin" />
+                                  : isRecorded && !isDirty ? <Check size={14} /> : null}
+                                {isRecorded && !isDirty ? t('Saved', 'محفوظ') : t('Save', 'حفظ')}
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </div>
@@ -363,6 +428,7 @@ function InsightsTab({ classes }) {
   const [entries, setEntries] = useState([]);
   const [prevEntries, setPrevEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState('');
 
   const monthFmt = useMemo(() => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }), [locale]);
 
@@ -400,8 +466,8 @@ function InsightsTab({ classes }) {
     return () => { alive = false; };
   }, [period]);
 
-  const stats = useMemo(() => buildStats(entries, classes), [entries, classes]);
-  const prevStats = useMemo(() => buildStats(prevEntries, classes), [prevEntries, classes]);
+  const stats = useMemo(() => buildRidershipStats(entries, classes), [entries, classes]);
+  const prevStats = useMemo(() => buildRidershipStats(prevEntries, classes), [prevEntries, classes]);
 
   const trendPct = prevStats.totalRiders > 0
     ? ((stats.totalRiders - prevStats.totalRiders) / prevStats.totalRiders) * 100
@@ -415,205 +481,18 @@ function InsightsTab({ classes }) {
     [lang, t]
   );
 
-  /* ── Excel export: sheet 1 per-class summary, sheet 2 raw entries ── */
-  const exportExcel = () => {
-    if (entries.length === 0) return;
-    const nameAr = (p) => p.cls ? (p.cls.nameAr || p.cls.nameEn || '') : 'حصة محذوفة';
-    const summaryRows = stats.perClass.map(p => ({
-      'الحصة': nameAr(p),
-      'الرياضة': p.cls?.sport || '',
-      'الفرع': p.cls?.branch || '',
-      'عدد الجلسات': p.sessions,
-      'إجمالي الركاب': p.riders,
-      'متوسط الركاب': Number(p.avg.toFixed(1)),
-      'السعة': p.capacity ?? '',
-      'نسبة الاستخدام %': p.utilization != null ? Number(p.utilization.toFixed(1)) : '',
-    }));
-    summaryRows.push({
-      'الحصة': 'الإجمالي', 'الرياضة': '', 'الفرع': '',
-      'عدد الجلسات': stats.sessions, 'إجمالي الركاب': stats.totalRiders,
-      'متوسط الركاب': Number(stats.avgPerSession.toFixed(1)), 'السعة': '',
-      'نسبة الاستخدام %': stats.utilization != null ? Number(stats.utilization.toFixed(1)) : '',
-    });
-    const clsById = new Map(classes.map(c => [c.id, c]));
-    const rawRows = entries.map(e => ({
-      'التاريخ': e.date || '',
-      'الحصة': clsById.get(e.classId) ? (clsById.get(e.classId).nameAr || clsById.get(e.classId).nameEn || '') : 'حصة محذوفة',
-      'عدد الركاب': Number(e.riders) || 0,
-      'ملاحظات': e.notes || '',
-      'سُجل بواسطة': e.recordedBy || '',
-    }));
-
-    const wb = XLSX.utils.book_new();
-    const ws1 = XLSX.utils.json_to_sheet(summaryRows);
-    ws1['!cols'] = [{ wch: 26 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 16 }];
-    XLSX.utils.book_append_sheet(wb, ws1, 'ملخص الحصص');
-    const ws2 = XLSX.utils.json_to_sheet(rawRows);
-    ws2['!cols'] = [{ wch: 12 }, { wch: 26 }, { wch: 12 }, { wch: 30 }, { wch: 26 }];
-    XLSX.utils.book_append_sheet(wb, ws2, 'السجل اليومي');
-    XLSX.writeFile(wb, `ridership-${period}-${todayStr()}.xlsx`);
-  };
-
-  /* ── PDF export: A4, white page, ink/hairline/crimson (literal hexes) ── */
-  const exportPdf = () => {
-    if (entries.length === 0) return;
-
-    // Literal palette: ink #141419, hairline #e4e1da, crimson #c70017
-    const INK = [20, 20, 25];
-    const HAIR = [228, 225, 218];
-    const CRIMSON = [199, 0, 23];
-    const MUTED = [117, 114, 107];
-    const ALT = [250, 249, 246];
-
-    const AR_RE = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFEFC]/;
-    // Reshape then flip to visual order so Arabic renders correctly without
-    // jsPDF's global R2L mode (which would also reverse digits).
-    const rtl = (s) => {
-      if (s == null) return '';
-      const str = String(s);
-      if (!AR_RE.test(str)) return str;
-      return reshapeArabic(str)
-        .split(' ')
-        .reverse()
-        .map(tok => AR_RE.test(tok) ? Array.from(tok).reverse().join('') : tok)
-        .join(' ');
-    };
-
-    const docPdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    docPdf.addFileToVFS('Cairo-Regular.ttf', CairoRegularBase64);
-    docPdf.addFont('Cairo-Regular.ttf', 'Cairo', 'normal');
-    docPdf.addFileToVFS('Cairo-Bold.ttf', CairoBoldBase64);
-    docPdf.addFont('Cairo-Bold.ttf', 'Cairo', 'bold');
-    docPdf.setFont('Cairo', 'normal');
-
-    const W = 210;
-    const M = 14;
-    const R = W - M; // right edge for RTL-aligned text
-
-    // Header
-    docPdf.setFillColor(...CRIMSON);
-    docPdf.rect(0, 0, W, 3, 'F');
-    docPdf.setFont('Cairo', 'bold');
-    docPdf.setFontSize(19);
-    docPdf.setTextColor(...INK);
-    docPdf.text(rtl('تقرير ركاب الحافلات'), R, 18, { align: 'right' });
-    docPdf.setFont('Cairo', 'normal');
-    docPdf.setFontSize(10);
-    docPdf.setTextColor(...MUTED);
-    docPdf.text(rtl(`الفترة: ${periodLabel}`), R, 26, { align: 'right' });
-    docPdf.setFontSize(8);
-    docPdf.text(rtl(`تاريخ الإصدار: ${todayStr()}`), M, 26, { align: 'left' });
-    docPdf.setDrawColor(...HAIR);
-    docPdf.setLineWidth(0.3);
-    docPdf.line(M, 31, R, 31);
-
-    // Summary cards row
-    const cards = [
-      { label: 'إجمالي الركاب', value: String(stats.totalRiders) },
-      { label: 'الجلسات المسجلة', value: String(stats.sessions) },
-      { label: 'متوسط الركاب / جلسة', value: stats.avgPerSession.toFixed(1) },
-      {
-        label: 'نسبة الاستخدام',
-        value: stats.utilization != null ? `${stats.utilization.toFixed(0)}%` : '—',
-      },
-    ];
-    const gap = 5;
-    const cardW = (W - 2 * M - 3 * gap) / 4;
-    const cardY = 36;
-    const cardH = 22;
-    cards.forEach((c, i) => {
-      // Rightmost card first (RTL reading order)
-      const x = R - cardW - i * (cardW + gap);
-      docPdf.setDrawColor(...HAIR);
-      docPdf.setLineWidth(0.35);
-      docPdf.roundedRect(x, cardY, cardW, cardH, 2, 2, 'S');
-      docPdf.setFillColor(...CRIMSON);
-      docPdf.rect(x + cardW - 7, cardY + 3.2, 4, 1.1, 'F');
-      docPdf.setFont('Cairo', 'bold');
-      docPdf.setFontSize(13);
-      docPdf.setTextColor(...INK);
-      docPdf.text(rtl(c.value), x + cardW / 2, cardY + 12.5, { align: 'center' });
-      docPdf.setFont('Cairo', 'normal');
-      docPdf.setFontSize(7);
-      docPdf.setTextColor(...MUTED);
-      docPdf.text(rtl(c.label), x + cardW / 2, cardY + 18.5, { align: 'center' });
-    });
-
-    const sectionTitle = (title, y) => {
-      docPdf.setFont('Cairo', 'bold');
-      docPdf.setFontSize(11);
-      docPdf.setTextColor(...INK);
-      docPdf.text(rtl(title), R, y, { align: 'right' });
-      docPdf.setFillColor(...CRIMSON);
-      docPdf.rect(R - 12, y + 1.6, 12, 0.8, 'F');
-    };
-
-    const tableTheme = {
-      styles: {
-        font: 'Cairo', fontStyle: 'normal', fontSize: 8, cellPadding: 2.2,
-        textColor: INK, lineColor: HAIR, lineWidth: 0.15, halign: 'center',
-      },
-      headStyles: { font: 'Cairo', fontStyle: 'bold', fillColor: INK, textColor: [255, 255, 255], halign: 'center' },
-      alternateRowStyles: { fillColor: ALT },
-      margin: { left: M, right: M },
-      didDrawPage: () => {
-        const page = docPdf.internal.getNumberOfPages();
-        docPdf.setDrawColor(...HAIR);
-        docPdf.setLineWidth(0.3);
-        docPdf.line(M, 288, R, 288);
-        docPdf.setFont('Cairo', 'normal');
-        docPdf.setFontSize(7.5);
-        docPdf.setTextColor(...MUTED);
-        docPdf.text(rtl(`صفحة ${page}`), W / 2, 293, { align: 'center' });
-        docPdf.setTextColor(...CRIMSON);
-        docPdf.text(rtl('نادي الفجيرة للفنون القتالية — قسم النقل'), R, 293, { align: 'right' });
-      },
-    };
-
-    // Table 1 — per-class summary (columns laid out right-to-left)
-    sectionTitle('ملخص الحصص', 68);
-    const nameArOf = (p) => p.cls ? (p.cls.nameAr || p.cls.nameEn || '') : 'حصة محذوفة';
-    autoTable(docPdf, {
-      ...tableTheme,
-      startY: 72,
-      head: [[
-        rtl('نسبة الاستخدام'), rtl('السعة'), rtl('متوسط الركاب'),
-        rtl('إجمالي الركاب'), rtl('الجلسات'), rtl('الفرع'), rtl('الرياضة'), rtl('الحصة'),
-      ]],
-      body: stats.perClass.map(p => ([
-        p.utilization != null ? `${p.utilization.toFixed(0)}%` : '—',
-        p.capacity ?? '—',
-        p.avg.toFixed(1),
-        p.riders,
-        p.sessions,
-        rtl(p.cls?.branch || '—'),
-        rtl(p.cls?.sport || '—'),
-        rtl(nameArOf(p)),
-      ])),
-      columnStyles: { 7: { halign: 'right', fontStyle: 'bold' } },
-    });
-
-    // Table 2 — raw daily entries
-    const afterY = (docPdf.lastAutoTable?.finalY || 100) + 12;
-    sectionTitle('السجل اليومي', afterY);
-    const clsById = new Map(classes.map(c => [c.id, c]));
-    autoTable(docPdf, {
-      ...tableTheme,
-      startY: afterY + 4,
-      head: [[rtl('ملاحظات'), rtl('عدد الركاب'), rtl('الحصة'), rtl('التاريخ')]],
-      body: entries.map(e => {
-        const c = clsById.get(e.classId);
-        return [
-          rtl(e.notes || '—'),
-          Number(e.riders) || 0,
-          rtl(c ? (c.nameAr || c.nameEn || '') : 'حصة محذوفة'),
-          e.date || '',
-        ];
-      }),
-      columnStyles: { 0: { halign: 'right' }, 2: { halign: 'right', fontStyle: 'bold' } },
-    });
-
-    docPdf.save(`ridership-report-${period}.pdf`);
+  const runExport = async (type) => {
+    if (!entries.length || exporting) return;
+    setExporting(type);
+    const payload = { periodKey: period, periodLabel, entries, stats, previousStats: prevStats, classes, locale };
+    try {
+      if (type === 'pdf') await exportRidershipPdf(payload);
+      else await exportRidershipExcel(payload);
+    } catch (exportError) {
+      console.error(`Ridership ${type} export failed:`, exportError);
+    } finally {
+      setExporting('');
+    }
   };
 
   if (loading) {
@@ -638,11 +517,11 @@ function InsightsTab({ classes }) {
             <label>{t('Period', 'الفترة')}</label>
             <CustomSelect value={period} onChange={setPeriod} options={periodOptions} ariaLabel={t('Period', 'الفترة')} />
           </div>
-          <button className="frd-btn frd-btn-ghost" onClick={exportExcel} disabled={entries.length === 0}>
-            <Download size={14} /> {t('Excel', 'إكسل')}
+          <button className="frd-btn frd-btn-ghost" onClick={() => runExport('excel')} disabled={entries.length === 0 || Boolean(exporting)}>
+            <Download size={14} /> {exporting === 'excel' ? t('Preparing…', 'جارٍ التجهيز…') : t('Excel', 'إكسل')}
           </button>
-          <button className="frd-btn frd-btn-primary" onClick={exportPdf} disabled={entries.length === 0}>
-            <FileText size={14} /> {t('PDF Report', 'تقرير PDF')}
+          <button className="frd-btn frd-btn-primary" onClick={() => runExport('pdf')} disabled={entries.length === 0 || Boolean(exporting)}>
+            <FileText size={14} /> {exporting === 'pdf' ? t('Preparing…', 'جارٍ التجهيز…') : t('PDF Report', 'تقرير PDF')}
           </button>
         </div>
       </div>
@@ -805,11 +684,21 @@ function ClassesTab({ classes, canEdit }) {
         active: !!d.active,
         sortOrder: parseInt(d.sortOrder, 10) || 0,
       };
+      let recordId = modal.id;
       if (modal.mode === 'add') {
-        await addDoc(collection(db, 'fleet_ridership_classes'), { ...payload, createdAt: serverTimestamp() });
+        const created = await addDoc(collection(db, 'fleet_ridership_classes'), { ...payload, createdAt: serverTimestamp() });
+        recordId = created.id;
       } else {
         await updateDoc(doc(db, 'fleet_ridership_classes', modal.id), payload);
       }
+      await recordActivity({
+        module: 'fleet', submodule: 'ridership', action: modal.mode === 'add' ? 'ridership_class_created' : 'ridership_class_updated',
+        titleEn: `${modal.mode === 'add' ? 'Class created' : 'Class updated'} · ${payload.nameEn || payload.nameAr}`,
+        titleAr: `${modal.mode === 'add' ? 'تم إنشاء الحصة' : 'تم تحديث الحصة'} · ${payload.nameAr || payload.nameEn}`,
+        detailEn: `${payload.branch || 'No branch'} · ${payload.time || 'No fixed time'}`,
+        detailAr: `${payload.branch || 'بدون فرع'} · ${payload.time || 'بدون وقت ثابت'}`,
+        recordId, path: '/fleet/ridership',
+      });
       setModal(null);
     } catch (err) {
       console.error('Class save error:', err);
@@ -823,6 +712,12 @@ function ClassesTab({ classes, canEdit }) {
     setBusyId(cls.id);
     try {
       await updateDoc(doc(db, 'fleet_ridership_classes', cls.id), { active: cls.active === false });
+      await recordActivity({
+        module: 'fleet', submodule: 'ridership', action: 'ridership_class_status_changed',
+        titleEn: `Class ${cls.active === false ? 'activated' : 'deactivated'} · ${cls.nameEn || cls.nameAr}`,
+        titleAr: `تم ${cls.active === false ? 'تفعيل' : 'إيقاف'} الحصة · ${cls.nameAr || cls.nameEn}`,
+        recordId: cls.id, path: '/fleet/ridership',
+      });
     } catch (err) {
       console.error('Class toggle error:', err);
     } finally {
@@ -835,6 +730,12 @@ function ClassesTab({ classes, canEdit }) {
     setBusyId(confirmDelete.id);
     try {
       await deleteDoc(doc(db, 'fleet_ridership_classes', confirmDelete.id));
+      await recordActivity({
+        module: 'fleet', submodule: 'ridership', action: 'ridership_class_deleted',
+        titleEn: `Class deleted · ${confirmDelete.nameEn || confirmDelete.nameAr}`,
+        titleAr: `تم حذف الحصة · ${confirmDelete.nameAr || confirmDelete.nameEn}`,
+        recordId: confirmDelete.id, path: '/fleet/ridership',
+      });
       setConfirmDelete(null);
     } catch (err) {
       console.error('Class delete error:', err);
@@ -972,9 +873,9 @@ function ClassesTab({ classes, canEdit }) {
                     ))}
                   </div>
                 </div>
-                <div className="frd-field">
+                <div className="frd-field frd-span2">
                   <label>{t('Time', 'الوقت')}</label>
-                  <input type="time" value={modal.draft.time} onChange={e => setDraft({ time: e.target.value })} />
+                  <input type="text" value={modal.draft.time} onChange={e => setDraft({ time: e.target.value })} placeholder={t('e.g. 10:00 AM to 12:00 PM', 'مثال: 10:00 صباحاً إلى 12:00 ظهراً')} />
                 </div>
                 <div className="frd-field">
                   <label>{t('Bus capacity (optional)', 'سعة الحافلة (اختياري)')}</label>

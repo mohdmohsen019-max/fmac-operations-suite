@@ -1,398 +1,163 @@
-/**
- * fuelReportExport — exportable monthly fuel analytics reports.
- *
- *   exportFuelExcel(payload) — xlsx workbook, three Arabic sheets:
- *     ملخص الشهر · مقارنة المركبات · الاتجاه الشهري
- *   exportFuelPdf(payload)   — A4 Arabic RTL PDF in the suite's print language:
- *     white page, ink headings, hairline rules, crimson accents only.
- *
- * Payload (built by FuelDashboard):
- *   { month, year, fleet, vehicles, decomposition, insights, trend, currency }
- */
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { CairoRegularBase64, CairoBoldBase64 } from '../../../utils/cairoFont';
+import { downloadManagementWorkbook } from '../../../services/reporting/excelReportBuilder.js'
+import { formatReportNumber, isArabicLocale } from '../../../services/reporting/reportTheme.js'
 
-/* ── Print palette — LITERAL colors only (suite print language) ─────────── */
-const INK = [20, 20, 25];      // #141419 — headings & body
-const MUTED = [122, 122, 130]; // #7a7a82 — secondary text
-const HAIRLINE = [228, 225, 218]; // #e4e1da — rules & table lines
-const CRIMSON = [199, 0, 23];  // #c70017 — small accent marks ONLY
-const PAPER_ALT = [248, 247, 244]; // #f8f7f4 — subtle alternating rows
+const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
 
-const ARABIC_MONTHS = [
-  'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-  'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
-];
-
-const VERDICT_AR = { improving: 'تحسّن', worsening: 'تراجع', stable: 'مستقر' };
-
-const round = (v, d = 2) => (v == null || !Number.isFinite(Number(v)) ? null : Math.round(Number(v) * 10 ** d) / 10 ** d);
-const cell = (v, d = 2) => (round(v, d) == null ? '—' : round(v, d));
-const pctCell = (v) => (v == null ? '—' : `${v > 0 ? '+' : ''}${round(v, 1)}%`);
-
-/* ── Excel ──────────────────────────────────────────────────────────────── */
-
-export function exportFuelExcel({ month, year, fleet, vehicles = [], decomposition, trend = [] }) {
-  const wb = XLSX.utils.book_new();
-  const cur = fleet?.current || {};
-  const prev = fleet?.previous || null;
-  const deltas = fleet?.deltas || {};
-
-  /* Sheet 1 — ملخص الشهر: fleet KPIs + deltas */
-  const monthLabel = `${ARABIC_MONTHS[month - 1]} ${year}`;
-  const metricRow = (label, key, d = 2) => [
-    label,
-    cell(cur[key], d),
-    prev ? cell(prev[key], d) : '—',
-    deltas[key]?.abs == null ? '—' : round(deltas[key].abs, d),
-    pctCell(deltas[key]?.pct),
-  ];
-  const summary = [
-    ['تقرير أداء الوقود الشهري'],
-    ['الشهر', monthLabel],
-    ['تاريخ الإنشاء', new Date().toLocaleDateString('en-GB')],
-    [],
-    ['المؤشر', 'الشهر الحالي', 'الشهر السابق', 'التغير', 'التغير %'],
-    metricRow('إجمالي التكلفة (د.إ)', 'totalCost', 0),
-    metricRow('إجمالي اللترات', 'totalLitres', 0),
-    metricRow('إجمالي المسافة (كم)', 'totalKm', 0),
-    metricRow('التكلفة / كم (د.إ)', 'costPerKm'),
-    metricRow('الاستهلاك (لتر/100كم)', 'litresPer100km', 1),
-    metricRow('سعر اللتر (د.إ)', 'pricePerLitre'),
-  ];
-  if (decomposition && decomposition.priceEffect != null) {
-    summary.push(
-      [],
-      ['تحليل التغير في إجمالي التكلفة'],
-      ['إجمالي التغير (د.إ)', round(decomposition.totalDelta, 0)],
-      ['أثر تغيّر سعر اللتر (د.إ)', round(decomposition.priceEffect, 0)],
-      ['أثر تغيّر الاستهلاك (د.إ)', round(decomposition.volumeEffect, 0)],
-    );
-  }
-  const ws1 = XLSX.utils.aoa_to_sheet(summary);
-  ws1['!cols'] = [{ wch: 28 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 12 }];
-  XLSX.utils.book_append_sheet(wb, ws1, 'ملخص الشهر');
-
-  /* Sheet 2 — مقارنة المركبات: per-vehicle table */
-  const vehRows = [
-    ['المركبة', 'المسافة (كم)', 'اللترات', 'الاستهلاك (لتر/100كم)', 'التكلفة (د.إ)', 'التكلفة/كم (د.إ)', 'التغير % (لتر/100كم)', 'الحكم'],
-    ...vehicles.map((v) => [
-      v.plate,
-      cell(v.km, 0),
-      cell(v.litres, 1),
-      cell(v.litresPer100km, 1),
-      cell(v.cost, 0),
-      cell(v.costPerKm, 2),
-      pctCell(v.deltaL100?.pct),
-      v.verdict ? VERDICT_AR[v.verdict] : '—',
-    ]),
-  ];
-  const ws2 = XLSX.utils.aoa_to_sheet(vehRows);
-  ws2['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 10 }];
-  XLSX.utils.book_append_sheet(wb, ws2, 'مقارنة المركبات');
-
-  /* Sheet 3 — الاتجاه الشهري: per-month history */
-  const trendRows = [
-    ['السنة', 'الشهر', 'إجمالي التكلفة (د.إ)', 'إجمالي اللترات', 'سعر اللتر (د.إ)'],
-    ...trend.map((s) => [
-      s.year,
-      ARABIC_MONTHS[s.month - 1] || s.month,
-      cell(s.totalCost, 0),
-      cell(s.totalLitres, 0),
-      s.pricePerLitre != null && Number(s.pricePerLitre) > 0
-        ? round(s.pricePerLitre, 2)
-        : cell(Number(s.totalLitres) > 0 ? Number(s.totalCost) / Number(s.totalLitres) : null, 2),
-    ]),
-  ];
-  const ws3 = XLSX.utils.aoa_to_sheet(trendRows);
-  ws3['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 14 }];
-  XLSX.utils.book_append_sheet(wb, ws3, 'الاتجاه الشهري');
-
-  XLSX.writeFile(wb, `fuel-analytics-${year}-${String(month).padStart(2, '0')}.xlsx`);
+const finite = (value) => value == null || value === '' ? null : Number.isFinite(Number(value)) ? Number(value) : null
+const rounded = (value, digits = 2) => {
+  const parsed = finite(value)
+  return parsed == null ? null : Math.round(parsed * (10 ** digits)) / (10 ** digits)
 }
 
-/* ── Arabic reshaping (same joined-forms approach as reportExportService) ── */
-const ARABIC_MAP = {
-  'ا': ['ﺍ', 'ﺍ', 'ﺎ', 'ﺎ'], // Alif
-  'ب': ['ﺏ', 'ﺑ', 'ﺒ', 'ﺐ'], // Ba
-  'ت': ['ﺕ', 'ﺗ', 'ﺘ', 'ﺖ'], // Ta
-  'ث': ['ﺙ', 'ﺛ', 'ﺜ', 'ﺚ'], // Tha
-  'ج': ['ﺝ', 'ﺟ', 'ﺠ', 'ﺞ'], // Jeem
-  'ح': ['ﺡ', 'ﺣ', 'ﺤ', 'ﺢ'], // Haa
-  'خ': ['ﺥ', 'ﺧ', 'ﺨ', 'ﺦ'], // Khaa
-  'د': ['ﺩ', 'ﺩ', 'ﺪ', 'ﺪ'], // Dal
-  'ذ': ['ﺫ', 'ﺫ', 'ﺬ', 'ﺬ'], // Thal
-  'ر': ['ﺭ', 'ﺭ', 'ﺮ', 'ﺮ'], // Ra
-  'ز': ['ﺯ', 'ﺯ', 'ﺰ', 'ﺰ'], // Zain
-  'س': ['ﺱ', 'ﺳ', 'ﺴ', 'ﺲ'], // Seen
-  'ش': ['ﺵ', 'ﺷ', 'ﺸ', 'ﺶ'], // Sheen
-  'ص': ['ﺹ', 'ﺻ', 'ﺼ', 'ﺺ'], // Sad
-  'ض': ['ﺽ', 'ﺿ', 'ﻀ', 'ﺾ'], // Dad
-  'ط': ['ﻁ', 'ﻃ', 'ﻄ', 'ﻂ'], // Tah
-  'ظ': ['ﻅ', 'ﻇ', 'ﻈ', 'ﻆ'], // Zah
-  'ع': ['ﻉ', 'ﻋ', 'ﻌ', 'ﻊ'], // Ain
-  'غ': ['ﻍ', 'ﻏ', 'ﻐ', 'ﻎ'], // Ghain
-  'ف': ['ﻑ', 'ﻓ', 'ﻔ', 'ﻒ'], // Fa
-  'ق': ['ﻕ', 'ﻗ', 'ﻘ', 'ﻖ'], // Qaf
-  'ك': ['ﻙ', 'ﻛ', 'ﻜ', 'ﻚ'], // Kaf
-  'ل': ['ﻝ', 'ﻟ', 'ﻠ', 'ﻞ'], // Lam
-  'م': ['ﻡ', 'ﻣ', 'ﻤ', 'ﻢ'], // Meem
-  'ن': ['ﻥ', 'ﻧ', 'ﻨ', 'ﻦ'], // Noon
-  'ه': ['ﻩ', 'ﻫ', 'ﻬ', 'ﻪ'], // Heh
-  'و': ['ﻭ', 'ﻭ', 'ﻮ', 'ﻮ'], // Waw
-  'ي': ['ﻱ', 'ﻳ', 'ﻴ', 'ﻲ'], // Yeh
-  'ئ': ['ﺉ', 'ﺋ', 'ﺌ', 'ﺊ'], // Yeh Hamza
-  'ى': ['ﻯ', 'ﻯ', 'ﻰ', 'ﻰ'], // Alef Maksura
-  'ة': ['ﺓ', 'ﺓ', 'ﺔ', 'ﺔ'], // Teh Marbuta
-  'آ': ['ﺁ', 'ﺁ', 'ﺂ', 'ﺂ'], // Alif Madda
-  'أ': ['ﺃ', 'ﺃ', 'ﺄ', 'ﺄ'], // Alif Hamza Above
-  'إ': ['ﺇ', 'ﺇ', 'ﺈ', 'ﺈ'], // Alif Hamza Below
-  'ؤ': ['ﺅ', 'ﺅ', 'ﺆ', 'ﺆ'], // Waw Hamza
-};
-const NON_JOIN_RIGHT = new Set([
-  'ا', 'د', 'ذ', 'ر', 'ز', 'و', 'آ', 'أ', 'إ', 'ؤ',
-  'ﺍ', 'ﺎ', 'ﺩ', 'ﺪ', 'ﺫ', 'ﺬ', 'ﺭ', 'ﺮ', 'ﺯ', 'ﺰ', 'ﻭ', 'ﻮ',
-]);
+const scopeLabel = (scope) => ({
+  buses: { en: 'Confirmed bus fleet', ar: 'أسطول الحافلات المعتمد' },
+  others: { en: 'Other club vehicles', ar: 'مركبات النادي الأخرى' },
+  all: { en: 'All club vehicles', ar: 'جميع مركبات النادي' },
+})[scope] || { en: 'Selected fleet scope', ar: 'نطاق الأسطول المحدد' }
 
-function reshape(text) {
-  if (!text) return '';
-  const chars = Array.from(String(text));
-  let result = '';
-  for (let i = 0; i < chars.length; i++) {
-    const char = chars[i];
-    const map = ARABIC_MAP[char];
-    if (!map) { result += char; continue; }
-    const prev = chars[i - 1];
-    const next = chars[i + 1];
-    const canJoinPrev = prev && ARABIC_MAP[prev] && !NON_JOIN_RIGHT.has(prev);
-    const canJoinNext = next && ARABIC_MAP[next];
-    if (canJoinPrev && canJoinNext) result += map[2];
-    else if (canJoinPrev) result += map[3];
-    else if (canJoinNext) result += map[1];
-    else result += map[0];
-  }
-  return result;
+const deltaDisplay = (delta, locale, suffix = '%') => {
+  const value = finite(delta)
+  if (value == null) return isArabicLocale(locale) ? 'غير متاح' : 'Unavailable'
+  return `${value > 0 ? '+' : ''}${formatReportNumber(value, locale, { maximumFractionDigits: 1 })}${suffix}`
 }
 
-/* ── PDF ────────────────────────────────────────────────────────────────── */
-
-export function exportFuelPdf({ month, year, fleet, vehicles = [], decomposition, insights = [] }) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', putOnlyUsedFonts: true });
-
-  doc.addFileToVFS('Cairo-Regular.ttf', CairoRegularBase64);
-  doc.addFont('Cairo-Regular.ttf', 'Cairo', 'normal');
-  doc.addFileToVFS('Cairo-Bold.ttf', CairoBoldBase64);
-  doc.addFont('Cairo-Bold.ttf', 'Cairo', 'bold');
-  doc.setFont('Cairo', 'normal');
-  doc.setR2L(true);
-
-  const W = doc.internal.pageSize.getWidth();   // 210
-  const H = doc.internal.pageSize.getHeight();  // 297
-  const M = 18;                                 // page margin
-  const startX = W - M;                         // RTL anchor
-  const contentW = W - M * 2;
-
-  const monthAr = `${ARABIC_MONTHS[month - 1]} ${year}`;
-  const now = new Date();
-  const todayAr = `${now.getDate()} ${ARABIC_MONTHS[now.getMonth()]} ${now.getFullYear()}`;
-
-  const hairline = (y, x1 = M, x2 = W - M, w = 0.3) => {
-    doc.setDrawColor(...HAIRLINE);
-    doc.setLineWidth(w);
-    doc.line(x1, y, x2, y);
-  };
-
-  /* ── Title block ── */
-  let y = 24;
-  // Small crimson mark beside the title — the page's only strong accent.
-  doc.setFillColor(...CRIMSON);
-  doc.rect(startX, y - 6.5, 1.4, 9, 'F');
-  doc.setFont('Cairo', 'bold');
-  doc.setFontSize(22);
-  doc.setTextColor(...INK);
-  doc.text(reshape('تقرير أداء الوقود الشهري'), startX - 4, y, { align: 'right' });
-
-  y += 9;
-  doc.setFont('Cairo', 'normal');
-  doc.setFontSize(12);
-  doc.setTextColor(...MUTED);
-  doc.text(reshape(`أسطول العمليات — ${monthAr}`), startX - 4, y, { align: 'right' });
-
-  // Generated date, bottom-left of title block
-  doc.setFontSize(8.5);
-  doc.text(reshape(`تاريخ الإنشاء: ${todayAr}`), M, y, { align: 'left' });
-
-  y += 6;
-  hairline(y, M, W - M, 0.5);
-  y += 10;
-
-  /* ── KPI summary band ── */
-  const cur = fleet?.current || {};
-  const deltas = fleet?.deltas || {};
-  const hasPrev = !!fleet?.previous;
-  const fmtV = (v, d = 1) => (v == null ? '—' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d }));
-  const kpis = [
-    { label: 'إجمالي التكلفة (د.إ)', value: fmtV(cur.totalCost, 0), pct: deltas.totalCost?.pct, lowerIsBetter: true },
-    { label: 'إجمالي اللترات', value: fmtV(cur.totalLitres, 0), pct: deltas.totalLitres?.pct, lowerIsBetter: true },
-    { label: 'إجمالي المسافة (كم)', value: fmtV(cur.totalKm, 0), pct: deltas.totalKm?.pct, lowerIsBetter: null },
-    { label: 'التكلفة / كم (د.إ)', value: fmtV(cur.costPerKm, 2), pct: deltas.costPerKm?.pct, lowerIsBetter: true },
-    { label: 'الاستهلاك (لتر/100كم)', value: fmtV(cur.litresPer100km, 1), pct: deltas.litresPer100km?.pct, lowerIsBetter: true },
-    { label: 'سعر اللتر (د.إ)', value: fmtV(cur.pricePerLitre, 2), pct: deltas.pricePerLitre?.pct, lowerIsBetter: true },
-  ];
-
-  const cols = 3;
-  const gap = 4;
-  const boxW = (contentW - gap * (cols - 1)) / cols;
-  const boxH = 22;
-  kpis.forEach((kpi, i) => {
-    const col = i % cols;
-    const rowIdx = Math.floor(i / cols);
-    // RTL order: first KPI in the rightmost column.
-    const x = W - M - boxW - col * (boxW + gap);
-    const by = y + rowIdx * (boxH + gap);
-
-    doc.setDrawColor(...HAIRLINE);
-    doc.setLineWidth(0.3);
-    doc.rect(x, by, boxW, boxH, 'S');
-
-    doc.setFont('Cairo', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...MUTED);
-    doc.text(reshape(kpi.label), x + boxW - 4, by + 6.5, { align: 'right' });
-
-    doc.setFont('Cairo', 'bold');
-    doc.setFontSize(14);
-    doc.setTextColor(...INK);
-    doc.text(String(kpi.value), x + boxW - 4, by + 14.5, { align: 'right' });
-
-    if (hasPrev && kpi.pct != null) {
-      const worse = kpi.lowerIsBetter === true && kpi.pct > 0;
-      doc.setFont('Cairo', 'normal');
-      doc.setFontSize(7.5);
-      // Crimson only as a small mark on adverse movement; otherwise muted ink.
-      if (worse) doc.setTextColor(...CRIMSON);
-      else doc.setTextColor(...MUTED);
-      const arrow = kpi.pct > 0 ? '+' : '';
-      doc.text(reshape(`${arrow}${fmtV(kpi.pct, 1)}% مقابل الشهر السابق`), x + boxW - 4, by + 19.5, { align: 'right' });
-    }
-  });
-  y += Math.ceil(kpis.length / cols) * (boxH + gap) + 4;
-
-  /* ── Cost decomposition line ── */
-  if (decomposition && decomposition.priceEffect != null) {
-    const sgn = (v) => `${v > 0 ? '+' : ''}${fmtV(v, 0)}`;
-    doc.setFont('Cairo', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...INK);
-    doc.text(
-      reshape(
-        `تحليل التغير: ${sgn(decomposition.totalDelta)} د.إ إجمالاً — ${sgn(decomposition.priceEffect)} د.إ أثر تغيّر السعر، ${sgn(decomposition.volumeEffect)} د.إ أثر تغيّر الاستهلاك.`,
-      ),
-      startX, y + 2, { align: 'right' },
-    );
-    y += 8;
+export function buildFuelManagementReport({
+  month, year, fleet, vehicles = [], decomposition, insights = [], trend = [],
+  locale = 'en-AE', scope = 'buses', currency = 'AED', preparedBy,
+}) {
+  const arabic = isArabicLocale(locale)
+  const current = fleet?.current || {}
+  const previous = fleet?.previous || null
+  const deltas = fleet?.deltas || {}
+  const monthLabel = `${arabic ? MONTHS_AR[month - 1] : MONTHS_EN[month - 1]} ${year}`
+  const availableDistanceRows = vehicles.filter((vehicle) => finite(vehicle.km) > 0)
+  const totalRows = vehicles.length
+  const distanceCoverage = totalRows ? Math.round((availableDistanceRows.length / totalRows) * 100) : 0
+  const quality = []
+  if (!previous) quality.push({ en: 'A prior-period statement was not available; period-over-period variances are withheld.', ar: 'لم يتوفر بيان للفترة السابقة؛ لذلك لم يتم عرض فروقات المقارنة.' })
+  if (distanceCoverage < 100) quality.push({
+    en: `Distance coverage is ${distanceCoverage}% (${availableDistanceRows.length} of ${totalRows} vehicles). Efficiency indicators exclude vehicles without verified distance.`,
+    ar: `تغطية بيانات المسافة ${distanceCoverage}٪ (${availableDistanceRows.length} من أصل ${totalRows} مركبة). مؤشرات الكفاءة تستبعد المركبات التي لا تتوفر لها مسافة موثقة.`,
+  })
+  const reportInsights = insights.slice(0, 7).map((item) => ({
+    text: { en: item.en || item.ar || String(item), ar: item.ar || item.en || String(item) },
+    status: item.type === 'positive' ? 'good' : item.type === 'warning' ? 'warning' : 'neutral',
+  }))
+  if (decomposition?.priceEffect != null) {
+    reportInsights.unshift({
+      text: {
+        en: `The total fuel bill changed by ${rounded(decomposition.totalDelta, 0)?.toLocaleString('en-AE')} AED: ${rounded(decomposition.priceEffect, 0)?.toLocaleString('en-AE')} AED from price movement and ${rounded(decomposition.volumeEffect, 0)?.toLocaleString('en-AE')} AED from volume movement.`,
+        ar: `تغيرت فاتورة الوقود الإجمالية بمقدار ${rounded(decomposition.totalDelta, 0)?.toLocaleString('ar-AE')} درهم: منها ${rounded(decomposition.priceEffect, 0)?.toLocaleString('ar-AE')} درهم بسبب تغير السعر و${rounded(decomposition.volumeEffect, 0)?.toLocaleString('ar-AE')} درهم بسبب تغير الكمية.`,
+      },
+      status: finite(decomposition.totalDelta) > 0 ? 'warning' : 'good',
+    })
   }
 
-  hairline(y);
-  y += 8;
+  const vehicleRows = vehicles.map((vehicle, index) => ({
+    rank: index + 1,
+    plate: vehicle.plate,
+    distanceKm: rounded(vehicle.km, 0),
+    litres: rounded(vehicle.litres, 1),
+    consumption: finite(vehicle.km) > 0 ? rounded(vehicle.litresPer100km, 1) : null,
+    cost: rounded(vehicle.cost, 2),
+    costPerKm: finite(vehicle.km) > 0 ? rounded(vehicle.costPerKm, 2) : null,
+    change: finite(vehicle.deltaL100?.pct),
+    assessment: vehicle.verdict === 'improving'
+      ? (arabic ? 'تحسن' : 'Improving')
+      : vehicle.verdict === 'worsening' ? (arabic ? 'تراجع' : 'Worsening') : (arabic ? 'مستقر / غير متاح' : 'Stable / unavailable'),
+  }))
+  const trendRows = trend.map((entry) => ({
+    period: `${arabic ? MONTHS_AR[entry.month - 1] : MONTHS_EN[entry.month - 1]} ${entry.year}`,
+    cost: rounded(entry.totalCost, 2),
+    litres: rounded(entry.totalLitres, 1),
+    price: finite(entry.pricePerLitre) > 0
+      ? rounded(entry.pricePerLitre, 3)
+      : finite(entry.totalLitres) > 0 ? rounded(Number(entry.totalCost) / Number(entry.totalLitres), 3) : null,
+  }))
+  const comparisonRows = [
+    ['totalCost', { en: 'Total fuel cost', ar: 'إجمالي تكلفة الوقود' }, current.totalCost, previous?.totalCost, deltas.totalCost?.pct, 'currency'],
+    ['totalLitres', { en: 'Fuel volume', ar: 'كمية الوقود' }, current.totalLitres, previous?.totalLitres, deltas.totalLitres?.pct, 'number'],
+    ['totalKm', { en: 'Verified distance', ar: 'المسافة الموثقة' }, current.totalKm, previous?.totalKm, deltas.totalKm?.pct, 'number'],
+    ['costPerKm', { en: 'Cost per kilometre', ar: 'التكلفة لكل كيلومتر' }, current.costPerKm, previous?.costPerKm, deltas.costPerKm?.pct, 'currency'],
+    ['litresPer100km', { en: 'Consumption', ar: 'الاستهلاك' }, current.litresPer100km, previous?.litresPer100km, deltas.litresPer100km?.pct, 'number'],
+    ['pricePerLitre', { en: 'Price per litre', ar: 'سعر اللتر' }, current.pricePerLitre, previous?.pricePerLitre, deltas.pricePerLitre?.pct, 'currency'],
+  ].map(([key, label, actual, prior, change, format]) => ({ key, metric: arabic ? label.ar : label.en, actual: rounded(actual, 2), previous: rounded(prior, 2), change: finite(change), changeDisplay: deltaDisplay(change, locale), format }))
 
-  /* ── Per-vehicle table ── */
-  doc.setFont('Cairo', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(...INK);
-  doc.setFillColor(...CRIMSON);
-  doc.rect(startX, y - 3.6, 1.1, 5, 'F');
-  doc.text(reshape('مقارنة المركبات'), startX - 3.5, y, { align: 'right' });
-  y += 4;
-
-  // Column order left→right so that "المركبة" lands rightmost (RTL reading).
-  const head = ['الحكم', 'التغير %', 'التكلفة/كم', 'لتر/100كم', 'التكلفة (د.إ)', 'اللترات', 'كم', 'المركبة'].map(reshape);
-  const body = vehicles.map((v) => [
-    reshape(v.verdict ? VERDICT_AR[v.verdict] : '—'),
-    pctCell(v.deltaL100?.pct),
-    cell(v.costPerKm, 2),
-    cell(v.litresPer100km, 1),
-    cell(v.cost, 0),
-    cell(v.litres, 0),
-    cell(v.km, 0),
-    v.plate,
-  ]);
-
-  autoTable(doc, {
-    startY: y,
-    head: [head],
-    body,
-    theme: 'grid',
-    styles: {
-      font: 'Cairo',
-      fontSize: 8.5,
-      halign: 'right',
-      cellPadding: { top: 2.2, right: 3, bottom: 2.2, left: 3 },
-      lineColor: HAIRLINE,
-      lineWidth: 0.3,
-      textColor: INK,
-    },
-    headStyles: {
-      font: 'Cairo',
-      fontStyle: 'bold',
-      fontSize: 8.5,
-      fillColor: [255, 255, 255],
-      textColor: INK,
-      halign: 'right',
-      lineColor: HAIRLINE,
-      lineWidth: 0.3,
-    },
-    alternateRowStyles: { fillColor: PAPER_ALT },
-    columnStyles: { 7: { fontStyle: 'bold' } },
-    tableWidth: contentW,
-    margin: { left: M, right: M, top: 20, bottom: 24 },
-  });
-  y = (doc.lastAutoTable?.finalY ?? y) + 12;
-
-  /* ── Insights ── */
-  const list = insights.slice(0, 6);
-  if (list.length > 0) {
-    if (y + 14 + list.length * 7 > H - 24) { doc.addPage(); y = 24; }
-    doc.setFont('Cairo', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(...INK);
-    doc.setFillColor(...CRIMSON);
-    doc.rect(startX, y - 3.6, 1.1, 5, 'F');
-    doc.text(reshape('أبرز الملاحظات'), startX - 3.5, y, { align: 'right' });
-    y += 8;
-
-    doc.setFont('Cairo', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...INK);
-    list.forEach((ins) => {
-      const lines = doc.splitTextToSize(reshape(ins.ar || ins.en || ''), contentW - 6);
-      lines.forEach((line, li) => {
-        if (y > H - 24) { doc.addPage(); y = 24; }
-        if (li === 0) {
-          doc.setFillColor(...CRIMSON);
-          doc.rect(startX - 1.6, y - 1.9, 1.6, 1.6, 'F');
-        }
-        doc.text(line, startX - 5, y, { align: 'right' });
-        y += 6;
-      });
-      y += 1.5;
-    });
+  return {
+    id: 'fuel-performance',
+    fileName: `FMAC-fuel-${year}-${String(month).padStart(2, '0')}-${scope}`,
+    locale,
+    orientation: 'landscape',
+    title: { en: 'Fuel Performance Report', ar: 'تقرير أداء الوقود' },
+    subtitle: { en: 'Cost, consumption, efficiency and period movement', ar: 'التكلفة والاستهلاك والكفاءة وحركة الفترة' },
+    period: monthLabel,
+    scope: scopeLabel(scope),
+    preparedBy: preparedBy || { en: 'Operations Department', ar: 'إدارة العمليات' },
+    kpis: [
+      { label: { en: 'Total fuel cost', ar: 'إجمالي تكلفة الوقود' }, value: rounded(current.totalCost, 2), excelValue: rounded(current.totalCost, 2), display: { en: `${formatReportNumber(current.totalCost, locale, { maximumFractionDigits: 0 })} ${currency}`, ar: `${formatReportNumber(current.totalCost, locale, { maximumFractionDigits: 0 })} درهم` }, status: finite(deltas.totalCost?.pct) > 0 ? 'warning' : 'good', note: { en: deltaDisplay(deltas.totalCost?.pct, locale), ar: deltaDisplay(deltas.totalCost?.pct, locale) } },
+      { label: { en: 'Fuel volume', ar: 'كمية الوقود' }, value: rounded(current.totalLitres, 1), excelValue: rounded(current.totalLitres, 1), display: { en: `${formatReportNumber(current.totalLitres, locale, { maximumFractionDigits: 0 })} L`, ar: `${formatReportNumber(current.totalLitres, locale, { maximumFractionDigits: 0 })} لتر` }, status: 'neutral', note: { en: deltaDisplay(deltas.totalLitres?.pct, locale), ar: deltaDisplay(deltas.totalLitres?.pct, locale) } },
+      { label: { en: 'Verified distance', ar: 'المسافة الموثقة' }, value: rounded(current.totalKm, 0), excelValue: rounded(current.totalKm, 0), display: { en: finite(current.totalKm) > 0 ? `${formatReportNumber(current.totalKm, locale, { maximumFractionDigits: 0 })} km` : 'Unavailable', ar: finite(current.totalKm) > 0 ? `${formatReportNumber(current.totalKm, locale, { maximumFractionDigits: 0 })} كم` : 'غير متاح' }, status: finite(current.totalKm) > 0 ? 'good' : 'unavailable', note: { en: `${distanceCoverage}% vehicle coverage`, ar: `تغطية المركبات ${distanceCoverage}٪` } },
+      { label: { en: 'Consumption', ar: 'الاستهلاك' }, value: rounded(current.litresPer100km, 1), excelValue: rounded(current.litresPer100km, 1), display: { en: finite(current.litresPer100km) > 0 ? `${formatReportNumber(current.litresPer100km, locale, { maximumFractionDigits: 1 })} L/100 km` : 'Unavailable', ar: finite(current.litresPer100km) > 0 ? `${formatReportNumber(current.litresPer100km, locale, { maximumFractionDigits: 1 })} لتر/100 كم` : 'غير متاح' }, status: finite(deltas.litresPer100km?.pct) > 0 ? 'warning' : 'good', note: { en: deltaDisplay(deltas.litresPer100km?.pct, locale), ar: deltaDisplay(deltas.litresPer100km?.pct, locale) } },
+    ],
+    sections: [
+      { type: 'narrative', title: { en: 'Executive findings', ar: 'أبرز النتائج التنفيذية' }, items: reportInsights.length ? reportInsights : [{ text: { en: 'No material exception was identified in the selected period.', ar: 'لم يتم رصد استثناء جوهري في الفترة المحددة.' }, status: 'neutral' }] },
+      {
+        type: 'table', title: { en: 'Period comparison', ar: 'مقارنة الفترة' }, sheetName: { en: 'Period Comparison', ar: 'مقارنة الفترة' }, rows: comparisonRows,
+        columns: [
+          { key: 'metric', label: { en: 'Metric', ar: 'المؤشر' }, excelWidth: 28 },
+          { key: 'actual', label: { en: 'Current', ar: 'الحالي' }, format: 'number', excelWidth: 17, align: 'right' },
+          { key: 'previous', label: { en: 'Previous', ar: 'السابق' }, format: 'number', excelWidth: 17, align: 'right' },
+          { key: 'changeDisplay', label: { en: 'Change', ar: 'التغير' }, excelWidth: 15, align: 'right' },
+        ],
+      },
+      {
+        type: 'table', title: { en: 'Vehicle efficiency and cost detail', ar: 'تفاصيل كفاءة وتكلفة المركبات' }, sheetName: { en: 'Vehicle Detail', ar: 'تفاصيل المركبات' }, rows: vehicleRows,
+        emptyText: { en: 'No vehicle fuel allocations match the selected filters.', ar: 'لا توجد تخصيصات وقود للمركبات مطابقة للفلاتر المحددة.' },
+        columns: [
+          { key: 'rank', label: { en: '#', ar: '#' }, format: 'number', decimals: 0, excelWidth: 7, align: 'center' },
+          { key: 'plate', label: { en: 'Plate', ar: 'رقم اللوحة' }, excelWidth: 16 },
+          { key: 'distanceKm', label: { en: 'Distance (km)', ar: 'المسافة (كم)' }, format: 'number', decimals: 0, excelWidth: 16, align: 'right' },
+          { key: 'litres', label: { en: 'Litres', ar: 'اللترات' }, format: 'number', excelWidth: 14, align: 'right' },
+          { key: 'consumption', label: { en: 'L/100 km', ar: 'لتر/100 كم' }, format: 'number', excelWidth: 15, align: 'right' },
+          { key: 'cost', label: { en: 'Fuel cost', ar: 'تكلفة الوقود' }, format: 'currency', excelWidth: 17, align: 'right' },
+          { key: 'costPerKm', label: { en: 'Cost/km', ar: 'التكلفة/كم' }, format: 'currency', excelWidth: 15, align: 'right' },
+          { key: 'assessment', label: { en: 'Assessment', ar: 'التقييم' }, excelWidth: 20 },
+        ],
+        conditionalFormats: [{ key: 'cost', rules: [{ type: 'dataBar', color: { argb: 'FF9A7410' }, gradient: true }] }],
+      },
+      {
+        type: 'table', title: { en: 'Monthly fuel trend', ar: 'اتجاه الوقود الشهري' }, sheetName: { en: 'Monthly Trend', ar: 'الاتجاه الشهري' }, rows: trendRows,
+        columns: [
+          { key: 'period', label: { en: 'Period', ar: 'الفترة' }, excelWidth: 18 },
+          { key: 'cost', label: { en: 'Fuel cost', ar: 'تكلفة الوقود' }, format: 'currency', excelWidth: 18, align: 'right' },
+          { key: 'litres', label: { en: 'Litres', ar: 'اللترات' }, format: 'number', excelWidth: 16, align: 'right' },
+          { key: 'price', label: { en: 'Price/litre', ar: 'سعر اللتر' }, format: 'currency', excelWidth: 16, align: 'right' },
+        ],
+      },
+      { type: 'narrative', title: { en: 'Methodology', ar: 'المنهجية' }, items: [{ text: { en: 'Fuel cost and volume come from the selected ADNOC statement. Distance uses canonical, de-duplicated vehicle telemetry. Cost and consumption KPIs are withheld where required inputs are unavailable.', ar: 'تأتي تكلفة وكمية الوقود من بيان أدنوك المحدد. وتستخدم المسافة بيانات المركبات الموحدة بعد إزالة التكرار. يتم حجب مؤشرات التكلفة والاستهلاك عند عدم توفر المدخلات المطلوبة.' }, status: 'neutral' }] },
+    ],
+    dataQuality: quality,
+    sourceNotes: [
+      { en: `Source: ADNOC fuel statement and canonical Cartrack telemetry for ${monthLabel}.`, ar: `المصدر: بيان وقود أدنوك وبيانات كارتراك الموحدة لشهر ${monthLabel}.` },
+      { en: 'The report reflects the fleet scope and period selected at export time.', ar: 'يعكس التقرير نطاق الأسطول والفترة المحددين وقت التصدير.' },
+    ],
+    metadata: [
+      { label: { en: 'Vehicle rows', ar: 'عدد المركبات' }, value: totalRows },
+      { label: { en: 'Distance coverage', ar: 'تغطية المسافة' }, value: `${distanceCoverage}%` },
+      { label: { en: 'Currency', ar: 'العملة' }, value: currency },
+    ],
   }
+}
 
-  /* ── Footer on every page ── */
-  const pages = doc.internal.getNumberOfPages();
-  for (let p = 1; p <= pages; p++) {
-    doc.setPage(p);
-    hairline(H - 16);
-    doc.setFont('Cairo', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...MUTED);
-    doc.text(reshape(`تقرير الوقود — ${monthAr}`), W - M, H - 10, { align: 'right' });
-    doc.text('FMAC Logistics Hub', M, H - 10, { align: 'left' });
-    doc.text(`${p} / ${pages}`, W / 2, H - 10, { align: 'center' });
-  }
+export async function exportFuelExcel(payload) {
+  return downloadManagementWorkbook(buildFuelManagementReport(payload))
+}
 
-  doc.save(`fuel-report-${year}-${String(month).padStart(2, '0')}.pdf`);
+export async function exportFuelPdf(payload) {
+  const [{ downloadManagementPdf }, { REPORT_PDF_ASSETS }] = await Promise.all([
+    import('../../../services/reporting/pdfReportBuilder.js'),
+    import('../../../services/reporting/reportAssets.js'),
+  ])
+  return downloadManagementPdf(buildFuelManagementReport(payload), REPORT_PDF_ASSETS)
 }

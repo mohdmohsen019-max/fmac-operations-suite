@@ -993,6 +993,7 @@ export default function StrategyModule() {
       }))
 
       const wb = XLSX.utils.book_new()
+      if (lang === 'ar') wb.Workbook = { Views: [{ RTL: true }] }
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sKpis), 'KPI Register')
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sReadings.length ? sReadings : [{ Note: 'No readings' }]), 'Readings')
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sEvidence.length ? sEvidence : [{ Note: 'No evidence files' }]), 'Evidence')

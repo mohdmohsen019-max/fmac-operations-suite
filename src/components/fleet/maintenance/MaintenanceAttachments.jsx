@@ -4,7 +4,8 @@
  * in the fleet_maintenance_files collection (records themselves may come from
  * a read-only source, so nothing is written onto the record).
  */
-import React, { useState, useRef } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Paperclip, X, Trash2, FileText, Loader2, Receipt, Camera, ExternalLink,
 } from 'lucide-react'
@@ -33,10 +34,29 @@ export default function MaintenanceAttachments({ record, files = [], isMasterAdm
   const [error, setError] = useState(null)
   const invoiceInputRef = useRef(null)
   const photoInputRef = useRef(null)
+  const closeButtonRef = useRef(null)
 
   const recordKey = recordKeyOf(record)
   const uid = auth.currentUser?.uid || null
   const canDelete = (f) => isMasterAdmin || (uid && f.uploadedBy === uid)
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    closeButtonRef.current?.focus()
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
 
   const handleUpload = async (kind, fileList) => {
     const picked = Array.from(fileList || [])
@@ -119,18 +139,32 @@ export default function MaintenanceAttachments({ record, files = [], isMasterAdm
         {files.length > 0 && <span className="fms-clip-count">{files.length}</span>}
       </button>
 
-      {open && (
+      {open && createPortal(
         <div className="fms-modal-overlay" onClick={() => setOpen(false)}>
-          <div className="fms-modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="fms-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`maintenance-attachments-${recordKey}`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="fms-modal-head">
-              <h3>
+              <h3 id={`maintenance-attachments-${recordKey}`}>
                 <Paperclip size={16} />
                 {t('Attachments', 'المرفقات')}
                 <span className="fms-modal-sub">
                   {record.plateNumber || record.registration} · {record.date}
                 </span>
               </h3>
-              <button type="button" className="fms-icon-btn" onClick={() => setOpen(false)}><X size={16} /></button>
+              <button
+                ref={closeButtonRef}
+                type="button"
+                className="fms-icon-btn"
+                onClick={() => setOpen(false)}
+                aria-label={t('Close attachments', 'إغلاق المرفقات')}
+              >
+                <X size={16} />
+              </button>
             </div>
 
             <div className="fms-modal-body">
@@ -210,7 +244,8 @@ export default function MaintenanceAttachments({ record, files = [], isMasterAdm
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

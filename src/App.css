@@ -52,39 +52,70 @@
 }
 
 .ops-rail-logo-tile {
-  width: 42px;
-  height: 42px;
+  width: 52px;
+  height: 32px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 13px;
+  gap: 2px;
+  border-radius: 6px;
   border: none;
   padding: 0;
   background: transparent;
-  overflow: hidden;
+  overflow: visible;
   cursor: pointer;
   position: relative;
-  /* Hairline edge + soft lift so the square mark reads as a deliberate app
-     icon on the dark rail (light mode) and the light rail (dark mode) alike. */
-  box-shadow:
-    inset 0 0 0 1px rgba(0, 0, 0, 0.06),
-    0 2px 10px rgba(0, 0, 0, 0.28);
-  transition: transform var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+  box-shadow: none;
+  transition: transform var(--dur-fast) ease, opacity var(--dur-fast) ease;
 }
 
 .ops-rail-logo-tile:hover {
   transform: translateY(-1px);
-  box-shadow:
-    inset 0 0 0 1px rgba(0, 0, 0, 0.06),
-    0 4px 14px rgba(0, 0, 0, 0.34);
+  box-shadow: none;
+  opacity: 0.9;
+}
+
+.ops-rail-wordmark-window {
+  position: relative;
+  display: block;
+  width: 52px;
+  height: 22px;
+  overflow: hidden;
+  direction: ltr;
 }
 
 .ops-rail-logo-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  position: absolute;
+  left: 50%;
+  right: auto;
+  top: -8px;
+  width: 52px;
+  height: 52px;
+  max-width: none;
+  object-fit: contain;
+  transform: translateX(-50%);
   display: block;
   pointer-events: none;
+}
+
+.ops-rail-logo-img--light-rail { display: none; }
+[data-theme="dark"] .ops-rail-logo-img--dark-rail { display: none; }
+[data-theme="dark"] .ops-rail-logo-img--light-rail { display: block; }
+
+.ops-rail-logo-rule {
+  width: 18px;
+  height: 1px;
+  border-radius: 999px;
+  background: #ef233c;
+  opacity: 0.82;
+  transition: width var(--dur-fast) ease, opacity var(--dur-fast) ease;
+}
+
+.ops-rail-logo-tile:hover .ops-rail-logo-rule,
+.ops-rail-logo-tile:focus-visible .ops-rail-logo-rule {
+  width: 28px;
+  opacity: 1;
 }
 
 /* Nav icon list — vertically centered group */
@@ -122,7 +153,8 @@
 
 .ops-rail-item.active {
   color: #ffffff;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 /* Active route: 3×20px bar attached to the rail's leading edge */
@@ -145,6 +177,7 @@
   background: rgba(17, 17, 20, 0.06);
 }
 [data-theme="dark"] .ops-rail-item.active { color: #111114; }
+[data-theme="dark"] .ops-rail-item.active { background: rgba(17, 17, 20, 0.08); box-shadow: inset 0 0 0 1px rgba(17, 17, 20, 0.08); }
 [data-theme="dark"] .ops-rail-item.active::before { background: #111114; }
 
 /* Hover tooltip (icon-only rail) */
@@ -168,6 +201,36 @@
   transition: opacity var(--dur-fast) ease, transform var(--dur-fast) ease;
   z-index: 2100;
 }
+
+.ops-rail-label {
+  position: absolute;
+  inset-inline-start: calc(100% + 12px);
+  top: 50%;
+  min-width: 156px;
+  padding: 8px 11px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 9px;
+  background: #191c15;
+  color: #f4f5ee;
+  font-size: 11.5px;
+  font-weight: 650;
+  text-align: start;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(-5px);
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) ease;
+  box-shadow: 0 10px 28px rgba(0,0,0,.22);
+}
+.ops-rail-item:hover .ops-rail-label,
+.ops-rail-item:focus-visible .ops-rail-label {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+.ops-rail-item:has(.ops-rail-label)::after { display: none; }
+[dir="rtl"] .ops-rail-label { transform: translateY(-50%) translateX(5px); }
+[dir="rtl"] .ops-rail-item:hover .ops-rail-label,
+[dir="rtl"] .ops-rail-item:focus-visible .ops-rail-label { transform: translateY(-50%) translateX(0); }
 
 .ops-rail-item:hover::after,
 .ops-rail-logo-tile:hover::after {

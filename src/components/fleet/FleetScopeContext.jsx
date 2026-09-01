@@ -1,7 +1,7 @@
 /**
  * Fleet scope — which vehicles every fleet sub-module is looking at.
  *
- *   'buses'  → the 14-bus school fleet (historical default)
+ *   'buses'  → the bus fleet, including number-only historical records
  *   'others' → club vehicles that are NOT part of the bus fleet
  *   'all'    → everything registered on Cartrack
  *
@@ -17,6 +17,7 @@ import { setVehicleClassifier } from '../../services/cartrackService'
 import {
   subscribeFleetMeta, effectiveMeta, classOf, matchesScope, displayNameOf, normReg,
 } from '../../services/fleetMeta'
+import { buildFleetAliasMap, canonicalFleetRegistration } from '../../services/fleetIdentity'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 const FleetScopeContext = createContext(null)
@@ -37,7 +38,11 @@ export function FleetScopeProvider({ children }) {
       setMetaMap(map)
       setMetaReady(true)
       // Re-point the service classifier at the freshest Firestore state.
-      setVehicleClassifier((reg) => classOf(reg, map))
+      setVehicleClassifier((reg) => {
+        const meta = effectiveMeta(reg, map)
+        if (meta.clubOwned === false) return 'external'
+        return meta.vehicleClass === 'bus' ? 'bus' : 'other'
+      })
     })
     return unsub
   }, [])
@@ -57,12 +62,15 @@ export function FleetScopeProvider({ children }) {
     classOf: (reg) => classOf(reg, metaMap),
     inScope: (reg) => matchesScope(reg, scope, metaMap),
     displayName: (reg, lang) => displayNameOf(reg, metaMap, lang),
+    aliasMap: buildFleetAliasMap(metaMap),
+    canonicalRegistration: (reg) => canonicalFleetRegistration(reg, buildFleetAliasMap(metaMap)),
     normReg,
   }), [scope, setScope, metaMap, metaReady])
 
   return <FleetScopeContext.Provider value={value}>{children}</FleetScopeContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useFleetScope() {
   const ctx = useContext(FleetScopeContext)
   if (!ctx) {

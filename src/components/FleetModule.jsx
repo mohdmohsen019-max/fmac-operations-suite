@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -18,22 +18,27 @@ import FleetSettings from './fleet/FleetSettings';
 import FuelIntelligence from './fleet/fuel/FuelIntelligence';
 import FleetLiveMap from './fleet/FleetLiveMap';
 import FleetRidership from './fleet/FleetRidership';
+import FleetVehicleRegistration from './fleet/FleetVehicleRegistration';
+import FleetOvertime from './fleet/FleetOvertime';
+import FleetDrivers from './fleet/FleetDrivers';
+import FleetExternalTransportation from './fleet/FleetExternalTransportation';
 
 export default function FleetModule() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, lang } = useLanguage();
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  const { can } = usePermissions();
+  const { can, canSubmodule } = usePermissions();
   const canView = can('fleet', 'view');
   const canEdit = can('fleet', 'edit');
+  const canEditRidership = canSubmodule('fleet', 'fleetRidership', 'edit');
 
   // Slug mapping
   const slugToTab = {
     'dashboard': 'dashboard',
     'vehicles': 'vehicles',
+    'vehicle-registration': 'registration',
     'fuel-intelligence': 'fuel',
     'fuel': 'fuel',
     'users': 'users',
@@ -43,12 +48,16 @@ export default function FleetModule() {
     'risk': 'risk',
     'settings': 'settings',
     'livemap': 'livemap',
-    'ridership': 'ridership'
+    'ridership': 'ridership',
+    'overtime': 'overtime',
+    'drivers': 'drivers',
+    'external-transportation': 'externalTransportation'
   };
 
   const tabToSlug = {
     'dashboard': 'dashboard',
     'vehicles': 'vehicles',
+    'registration': 'vehicle-registration',
     'fuel': 'fuel-intelligence',
     'users': 'users',
     'maintenance': 'maintenance',
@@ -56,19 +65,16 @@ export default function FleetModule() {
     'risk': 'safety-behavior',
     'settings': 'settings',
     'livemap': 'livemap',
-    'ridership': 'ridership'
+    'ridership': 'ridership',
+    'overtime': 'overtime',
+    'drivers': 'drivers',
+    'externalTransportation': 'external-transportation'
   };
 
-  // Sync tab with URL
-  useEffect(() => {
-    const segments = location.pathname.split('/').filter(Boolean);
-    if (segments[0] === 'fleet' && segments[1]) {
-      const tab = slugToTab[segments[1]];
-      if (tab && tab !== activeTab) {
-        setActiveTab(tab);
-      }
-    }
-  }, [location.pathname]);
+  const segments = location.pathname.split('/').filter(Boolean);
+  const activeTab = segments[0] === 'fleet' && slugToTab[segments[1]]
+    ? slugToTab[segments[1]]
+    : 'dashboard';
 
   if (!canView) {
     return (
@@ -88,14 +94,21 @@ export default function FleetModule() {
     { id: 'dashboard',   label: t('Overview', 'نظرة عامة'),              editOnly: false },
     { id: 'livemap',     label: t('Live Map', 'خريطة مباشرة'),           editOnly: false },
     { id: 'vehicles',    label: t('Fleet', 'الأسطول'),                    editOnly: false },
+    { id: 'drivers',     label: t('Drivers', 'السائقون'),                  editOnly: false },
+    { id: 'registration', label: t('Vehicle Registration', 'تسجيل المركبات'), editOnly: false },
     { id: 'fuel',        label: t('Fuel Core', 'جوهر الوقود'),           editOnly: false },
     { id: 'maintenance', label: t('Maintenance', 'الصيانة'),              editOnly: false },
     { id: 'risk',        label: t('Safety & Behavior', 'السلامة والسلوك'), editOnly: false },
     { id: 'ridership',   label: t('Ridership', 'ركاب الحافلات'),          editOnly: false },
     { id: 'reports',     label: t('Reports', 'تقارير'),                   editOnly: false },
     { id: 'settings',    label: t('System', 'النظام'),                    editOnly: true  },
+    { id: 'overtime',    label: t('Overtime', 'العمل الإضافي'),                  editOnly: false },
+    { id: 'externalTransportation', label: t('External Transportation', 'النقل الخارجي'), editOnly: false },
   ];
-  const adminTabs = allTabs.filter(tab => !tab.editOnly || canEdit);
+  const tabOrder = ['dashboard', 'livemap', 'vehicles', 'drivers', 'registration', 'fuel', 'maintenance', 'risk', 'ridership', 'externalTransportation', 'overtime', 'reports', 'settings'];
+  const adminTabs = allTabs
+    .filter(tab => !tab.editOnly || canEdit)
+    .sort((a, b) => tabOrder.indexOf(a.id) - tabOrder.indexOf(b.id));
 
   const handleTabChange = (tabId) => {
     if (tabId === activeTab || isTransitioning) return;
@@ -106,7 +119,6 @@ export default function FleetModule() {
 
     setIsTransitioning(true);
     setTimeout(() => {
-      setActiveTab(tabId);
       setIsTransitioning(false);
     }, 300);
   };
@@ -116,13 +128,17 @@ export default function FleetModule() {
     switch (activeTab) {
       case 'dashboard': return <FleetDashboard {...props} />;
       case 'vehicles': return <FleetVehicles {...props} />;
+      case 'drivers': return <FleetDrivers {...props} />;
+      case 'registration': return <FleetVehicleRegistration {...props} />;
       case 'fuel': return <FuelIntelligence {...props} />;
       case 'maintenance': return <FleetMaintenance {...props} />;
       case 'reports': return <FleetReports {...props} />;
       case 'risk': return <FleetRiskManagement {...props} />;
       case 'settings': return <FleetSettings {...props} />;
       case 'livemap': return <FleetLiveMap {...props} />;
-      case 'ridership': return <FleetRidership {...props} />;
+      case 'ridership': return <FleetRidership {...props} canEdit={canEditRidership} />;
+      case 'overtime': return <FleetOvertime {...props} />;
+      case 'externalTransportation': return <FleetExternalTransportation {...props} />;
       default: return <FleetDashboard {...props} />;
     }
   };
@@ -149,7 +165,7 @@ export default function FleetModule() {
             ))}
           </nav>
           {/* Which vehicles every tab below is looking at */}
-          {activeTab !== 'settings' && <FleetScopeSwitch />}
+          {!['settings', 'ridership', 'overtime', 'drivers', 'externalTransportation'].includes(activeTab) && <FleetScopeSwitch />}
         </div>
 
         <main className="main-content">

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Package, PlusCircle, ArrowDownCircle,
-  History, BarChart2, Settings, Plus, RefreshCw, Lock, ClipboardList
+  History, BarChart2, Settings, Plus, RefreshCw, Lock, ClipboardList, ShieldCheck
 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { db, auth } from '../firebase'
@@ -24,6 +24,7 @@ import InventoryHistory    from './inventory/InventoryHistory'
 import InventoryReports    from './inventory/InventoryReports'
 import InventoryReorder    from './inventory/InventoryReorder'
 import InventorySettings   from './inventory/InventorySettings'
+import InventoryApprovals  from './inventory/InventoryApprovals'
 import BarcodePrintModal   from './inventory/BarcodePrintModal'
 import ItemEditModal       from './inventory/ItemEditModal'
 import ScanPopup           from './inventory/ScanPopup'
@@ -32,8 +33,9 @@ import './InventoryModule.css'
 const TABS = [
   { id: 'dashboard', icon: LayoutDashboard, en: 'Dashboard',        ar: 'لوحة التحكم',   adminOnly: false },
   { id: 'stock',     icon: Package,         en: 'Stock',            ar: 'المخزون',       adminOnly: false },
-  { id: 'stockin',   icon: PlusCircle,      en: 'Stock In',         ar: 'إضافة مخزون',   adminOnly: true  },
-  { id: 'issue',     icon: ArrowDownCircle, en: 'Issue Items',      ar: 'صرف مخزون',    adminOnly: true  },
+  { id: 'stockin',   icon: PlusCircle,      en: 'Stock In',         ar: 'إضافة مخزون',   requestOnly: true },
+  { id: 'issue',     icon: ArrowDownCircle, en: 'Issue Items',      ar: 'صرف مخزون',     requestOnly: true },
+  { id: 'approvals', icon: ShieldCheck,     en: 'Approvals',        ar: 'الاعتمادات',    workflowOnly: true },
   { id: 'history',   icon: History,         en: 'Movement History', ar: 'السجلات',       adminOnly: false },
   { id: 'reports',   icon: BarChart2,       en: 'Reports',          ar: 'التقارير',      adminOnly: false },
   { id: 'reorder',   icon: ClipboardList,   en: 'Reorder',          ar: 'إعادة الطلب',   adminOnly: false },
@@ -43,11 +45,11 @@ const TABS = [
 /* URL slug ↔ tab (deep links from the palette / bell / dashboard) */
 const SLUG_TO_TAB = {
   '': 'dashboard', 'dashboard': 'dashboard', 'stock': 'stock',
-  'stock-in': 'stockin', 'issue': 'issue', 'history': 'history',
+  'stock-in': 'stockin', 'issue': 'issue', 'approvals': 'approvals', 'history': 'history',
   'reports': 'reports', 'reorder': 'reorder', 'settings': 'settings',
 }
 const TAB_TO_SLUG = {
-  dashboard: '', stock: 'stock', stockin: 'stock-in', issue: 'issue',
+  dashboard: '', stock: 'stock', stockin: 'stock-in', issue: 'issue', approvals: 'approvals',
   history: 'history', reports: 'reports', reorder: 'reorder', settings: 'settings',
 }
 
@@ -90,11 +92,15 @@ async function seedSettings() {
 
 export default function InventoryModule() {
   const { t, lang } = useLanguage()
-  const { can, isMasterAdmin, isHOD } = usePermissions()
+  const { can, isMasterAdmin, isHOD, userProfile } = usePermissions()
 
   const canView = can('inventory', 'view')
   const canEdit = can('inventory', 'edit')
   const isAdmin = canEdit
+  const isStoreManager = userProfile?.jobTitle === 'Warehouse/Store Manager' || userProfile?.role === 'store_manager'
+  const isSportsSpecialist = userProfile?.jobTitle === 'Sports Activities Specialist'
+  const canRequestInventory = isStoreManager
+  const participatesInWorkflow = canRequestInventory || isSportsSpecialist || isHOD || isMasterAdmin
 
   const navigate = useNavigate()
   const location = useLocation()
@@ -144,13 +150,20 @@ export default function InventoryModule() {
       ? query(collection(db, 'inventory_items'), where('isActive', '==', true), orderBy('createdAt', 'desc'))
       : query(collection(db, 'inventory_items'), where('isActive', '==', true))
 
-    const unsub = onSnapshot(buildQuery(true), snap => {
+    let disposed = false
+    let fallbackUnsub = null
+
+    const orderedUnsub = onSnapshot(buildQuery(true), snap => {
+      if (disposed) return
       setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })))
       setLoadingItems(false)
     }, err => {
+      if (disposed) return
       // Index not ready — fall back to unordered query and sort client-side
       console.warn('Inventory ordered query needs index, falling back:', err.code)
-      const unsub2 = onSnapshot(buildQuery(false), snap => {
+      fallbackUnsub?.()
+      fallbackUnsub = onSnapshot(buildQuery(false), snap => {
+        if (disposed) return
         const sorted = snap.docs
           .map(d => ({ id: d.id, ...d.data() }))
           .sort((a, b) => {
@@ -161,9 +174,12 @@ export default function InventoryModule() {
         setItems(sorted)
         setLoadingItems(false)
       }, err2 => { console.error('Inventory fallback listener:', err2); setLoadingItems(false) })
-      return () => unsub2()
     })
-    return unsub
+    return () => {
+      disposed = true
+      orderedUnsub()
+      fallbackUnsub?.()
+    }
   }, [])
 
   // Load settings from Firestore
@@ -228,7 +244,11 @@ export default function InventoryModule() {
     }, 200)
   }
 
-  const visibleTabs = TABS.filter(tab => !tab.adminOnly || isAdmin)
+  const visibleTabs = TABS.filter((tab) => {
+    if (tab.requestOnly) return canRequestInventory
+    if (tab.workflowOnly) return participatesInWorkflow
+    return !tab.adminOnly || isAdmin
+  })
 
   if (!canView) {
     return (
@@ -273,14 +293,17 @@ export default function InventoryModule() {
           />
         )
       case 'stockin':
-        return <InventoryStockIn {...sharedProps} />
+        return <InventoryStockIn {...sharedProps} canRequest={canRequestInventory} />
       case 'issue':
         return (
           <InventoryIssue
             {...sharedProps}
+            canRequest={canRequestInventory}
             onIssueComplete={() => {}}
           />
         )
+      case 'approvals':
+        return <InventoryApprovals />
       case 'history':
         return <InventoryHistory {...sharedProps} />
       case 'reports':

@@ -111,7 +111,15 @@ export default function ItemEditModal({ item, settings, onClose, onSaved }) {
       onClose()
     } catch (err) {
       console.error(err)
-      setError(err.message)
+      const isFirestoreInternalError = err?.code === 'internal'
+        || /FIRESTORE INTERNAL ASSERTION FAILED/i.test(err?.message || '')
+      setError(isFirestoreInternalError
+        ? t(
+            'The inventory connection was interrupted. Refresh the page and try again; no duplicate item was created.',
+            'انقطع اتصال المخزون. حدّث الصفحة وحاول مرة أخرى؛ لم يتم إنشاء صنف مكرر.'
+          )
+        : (err?.message || t('Unable to save this item.', 'تعذر حفظ هذا الصنف.'))
+      )
     } finally {
       setSaving(false)
     }

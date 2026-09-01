@@ -15,71 +15,9 @@ const C = {
   black:     [  0,   0,   0],
 }
 
-// ── Arabic Reshaping Utility ───────────────────────────────────────
-// Fixes "separated letters" in jsPDF by mapping characters to joined forms.
-const ARABIC_MAP = {
-  '\u0627': ['\uFE8D', '\uFE8D', '\uFE8E', '\uFE8E'], // Alif
-  '\u0628': ['\uFE8F', '\uFE91', '\uFE92', '\uFE90'], // Ba
-  '\u062A': ['\uFE95', '\uFE97', '\uFE98', '\uFE96'], // Ta
-  '\u062B': ['\uFE99', '\uFE9B', '\uFE9C', '\uFE9A'], // Tha
-  '\u062C': ['\uFE9D', '\uFE9F', '\uFEA0', '\uFE9E'], // Jeem
-  '\u062D': ['\uFEA1', '\uFEA3', '\uFEA4', '\uFEA2'], // Haa
-  '\u062E': ['\uFEA5', '\uFEA7', '\uFEA8', '\uFEA6'], // Khaa
-  '\u062F': ['\uFEA9', '\uFEA9', '\uFEAA', '\uFEAA'], // Dal
-  '\u0630': ['\uFEAB', '\uFEAB', '\uFEAC', '\uFEAC'], // Thal
-  '\u0631': ['\uFEAD', '\uFEAD', '\uFEAE', '\uFEAE'], // Ra
-  '\u0632': ['\uFEAF', '\uFEAF', '\uFEB0', '\uFEB0'], // Zain
-  '\u0633': ['\uFEB1', '\uFEB3', '\uFEB4', '\uFEB2'], // Seen
-  '\u0634': ['\uFEB5', '\uFEB7', '\uFEB8', '\uFEB6'], // Sheen
-  '\u0635': ['\uFEB9', '\uFEBB', '\uFEBC', '\uFEBA'], // Sad
-  '\u0636': ['\uFEBD', '\uFEBF', '\uFEC0', '\uFEBE'], // Dad
-  '\u0637': ['\uFEC1', '\uFEC3', '\uFEC4', '\uFEC2'], // Tah
-  '\u0638': ['\uFEC5', '\uFEC7', '\uFEC8', '\uFEC6'], // Zah
-  '\u0639': ['\uFEC9', '\uFECB', '\uFECC', '\uFECA'], // Ain
-  '\u063A': ['\uFECD', '\uFECF', '\uFED0', '\uFECE'], // Ghain
-  '\u0641': ['\uFED1', '\uFED3', '\uFED4', '\uFED2'], // Fa
-  '\u0642': ['\uFED5', '\uFED7', '\uFED8', '\uFED6'], // Qaf
-  '\u0643': ['\uFED9', '\uFEDB', '\uFEDC', '\uFEDA'], // Kaf
-  '\u0644': ['\uFEDD', '\uFEDF', '\uFEE0', '\uFEDE'], // Lam
-  '\u0645': ['\uFEE1', '\uFEE3', '\uFEE4', '\uFEE2'], // Meem
-  '\u0646': ['\uFEE5', '\uFEE7', '\uFEE8', '\uFEE6'], // Noon
-  '\u0647': ['\uFEE9', '\uFEEB', '\uFEEC', '\uFEEA'], // Heh
-  '\u0648': ['\uFEED', '\uFEED', '\uFEEE', '\uFEEE'], // Waw
-  '\u064A': ['\uFEF1', '\uFEF3', '\uFEF4', '\uFEF2'], // Yeh
-  '\u0626': ['\uFE89', '\uFE8B', '\uFE8C', '\uFE8A'], // Yeh Hamza
-  '\u0649': ['\uFEEF', '\uFEEF', '\uFEF0', '\uFEF0'], // Alef Maksura
-  '\u0629': ['\uFE93', '\uFE93', '\uFE94', '\uFE94'], // Teh Marbuta
-  '\u0622': ['\uFE81', '\uFE81', '\uFE82', '\uFE82'], // Alif Madda
-  '\u0623': ['\uFE83', '\uFE83', '\uFE84', '\uFE84'], // Alif Hamza Above
-  '\u0625': ['\uFE87', '\uFE87', '\uFE88', '\uFE88'], // Alif Hamza Below
-  '\u0624': ['\uFE85', '\uFE85', '\uFE86', '\uFE86'], // Waw Hamza
-}
-
-const NON_JOIN_RIGHT = new Set(['\u0627', '\u062F', '\u0630', '\u0631', '\u0632', '\u0648', '\u0622', '\u0623', '\u0625', '\u0624', '\uFE8D', '\uFE8E', '\uFEA9', '\uFEAA', '\uFEAB', '\uFEAC', '\uFEAD', '\uFEAE', '\uFEAF', '\uFEB0', '\uFEED', '\uFEEE'])
-
-function reshape(text) {
-  if (!text) return ''
-  const chars = Array.from(text)
-  let result = ''
-
-  for (let i = 0; i < chars.length; i++) {
-    const char = chars[i]
-    const map  = ARABIC_MAP[char]
-    if (!map) { result += char; continue }
-
-    const prev = chars[i - 1]
-    const next = chars[i + 1]
-
-    const canJoinPrev = prev && ARABIC_MAP[prev] && !NON_JOIN_RIGHT.has(prev)
-    const canJoinNext = next && ARABIC_MAP[next]
-
-    if (canJoinPrev && canJoinNext) result += map[2] // Medial
-    else if (canJoinPrev) result += map[3] // Final
-    else if (canJoinNext) result += map[1] // Initial
-    else result += map[0] // Isolated
-  }
-  return result
-}
+// jsPDF already performs Arabic shaping before drawing text. Keep logical-order
+// Unicode here so dates, numbers and mixed Arabic/Latin labels are not reversed.
+const reshape = text => String(text ?? '')
 
 const ARABIC_MONTHS = [
   'يناير','فبراير','مارس','أبريل','مايو','يونيو',
@@ -121,19 +59,19 @@ const KPI_DEFS = {
     { key: 'totalSpent', label: 'إجمالي التكاليف', unit: 'د.إ' },
     { key: 'taskCount',  label: 'مهام الصيانة',   unit: '' },
   ],
-  complaints: [
-    { key: 'total',  label: 'إجمالي الشكاوى', unit: '' },
-    { key: 'closed', label: 'تم الحل',        unit: '' },
-    { key: 'open',   label: 'قيد الانتظار',   unit: '' },
-  ],
   fuel: [
     { key: 'totalCost',   label: 'إجمالي التكاليف',   unit: 'د.إ' },
     { key: 'totalLiters', label: 'إجمالي اللترات',    unit: 'لتر' },
     { key: 'totalKm',     label: 'المسافة المقطوعة',  unit: 'كم' },
   ],
+  ridership: [{ key: 'totalRiders', label: 'إجمالي الركاب', unit: '' }, { key: 'recordedSessions', label: 'الحصص المسجلة', unit: '' }, { key: 'activeBuses', label: 'الحافلات النشطة', unit: '' }],
+  external_transport: [{ key: 'requestCount', label: 'طلبات النقل', unit: '' }, { key: 'driverCount', label: 'السائقون', unit: '' }, { key: 'vehicleCount', label: 'المركبات', unit: '' }],
+  driver_overtime: [{ key: 'totalHours', label: 'إجمالي الساعات', unit: 'ساعة' }, { key: 'entryCount', label: 'السجلات', unit: '' }, { key: 'driverCount', label: 'السائقون', unit: '' }],
+  traffic_fines: [{ key: 'fineCount', label: 'عدد المخالفات', unit: '' }, { key: 'totalAmount', label: 'قيمة المخالفات', unit: 'د.إ' }, { key: 'vehicleCount', label: 'المركبات', unit: '' }],
+  registration_compliance: [{ key: 'valid', label: 'سارية', unit: '' }, { key: 'expiring', label: 'تحتاج متابعة', unit: '' }, { key: 'expired', label: 'منتهية', unit: '' }],
 }
 
-const AUTO_SECTIONS = new Set(['bus_trips', 'maintenance', 'complaints', 'fuel'])
+const AUTO_SECTIONS = new Set(['bus_trips', 'maintenance', 'fuel', 'ridership', 'external_transport', 'driver_overtime', 'traffic_fines', 'registration_compliance'])
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -192,7 +130,7 @@ function setupFont(doc) {
   doc.addFileToVFS('Cairo-Bold.ttf', CairoBoldBase64)
   doc.addFont('Cairo-Bold.ttf', 'Cairo', 'bold')
   doc.setFont('Cairo', 'normal')
-  doc.setR2L(true)
+  doc.setR2L(false)
 }
 
 // ── Cover Page ─────────────────────────────────────────────────────

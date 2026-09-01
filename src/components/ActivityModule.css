@@ -3,7 +3,7 @@
 ═══════════════════════════════════════════════════════════ */
 
 .act {
-  max-width: 880px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 4px 28px 48px;
 }
@@ -57,6 +57,41 @@
   flex-wrap: wrap;
   margin-bottom: 18px;
 }
+
+.act-querybar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: -6px 0 13px;
+  padding: 9px;
+  border-block: 1px solid var(--theme-border);
+}
+.act-search {
+  flex: 1;
+  min-width: 220px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.act-search svg { position: absolute; inset-inline-start: 11px; color: var(--theme-text-ghost); }
+.act-search input,
+.act-date input {
+  height: 36px;
+  border: 1px solid var(--theme-border);
+  border-radius: 9px;
+  background: var(--theme-surface);
+  color: var(--theme-text-main);
+  font: inherit;
+  font-size: 12px;
+  outline: 0;
+}
+.act-search input { width: 100%; padding-inline: 34px 12px; }
+.act-search input:focus,
+.act-date input:focus { border-color: var(--theme-accent); box-shadow: 0 0 0 3px var(--theme-accent-soft); }
+.act-date { display: flex; align-items: center; gap: 8px; color: var(--theme-text-muted); font-size: 11px; font-weight: 650; }
+.act-date input { width: 145px; padding: 0 10px; }
+.act-clear { padding: 8px 10px; border-radius: 8px; color: var(--theme-text-muted); font-size: 11.5px; font-weight: 650; }
+.act-clear:hover { color: var(--theme-text-main); background: var(--theme-surface-hover); }
 
 .act-chip {
   display: inline-flex;
@@ -116,7 +151,7 @@
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 11px 2px;
+  padding: 12px 9px;
   background: none;
   border: none;
   border-bottom: 1px solid var(--theme-border-light);
@@ -128,6 +163,7 @@
   transition: background 0.12s ease;
 }
 .act-row:hover { background: var(--theme-surface-hover); }
+.act-row:focus-visible { box-shadow: inset 3px 0 0 var(--theme-accent); }
 
 .act-dot {
   width: 7px;
@@ -197,4 +233,7 @@
 @media (max-width: 720px) {
   .act { padding: 4px 16px 40px; }
   .act-time { display: none; }
+  .act-querybar { align-items: stretch; flex-wrap: wrap; }
+  .act-search { flex-basis: 100%; }
+  .act-date { flex: 1; }
 }

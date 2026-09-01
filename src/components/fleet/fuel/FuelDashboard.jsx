@@ -23,10 +23,10 @@ import { usePermissions } from '../../../hooks/usePermissions';
 import CustomSelect from '../../CustomSelect';
 import {
   compareFleet, compareVehicles, decomposeCostDelta, generateInsights,
-  rowsToTotals, previousPeriod,
+  rowsToTotals, previousPeriod, statementTotalsForScope,
 } from './fuelAnalytics';
 import { exportFuelExcel, exportFuelPdf } from './fuelReportExport';
-import './FuelAnalytics.css';
+import './FuelIntelligence.css';
 
 const COLORS = ['#c9a84c', '#8a6d1f', '#111114', '#6b541a', '#e5d3a1'];
 
@@ -36,12 +36,14 @@ function buildStatementRows(statement, vehicleKM = {}) {
   const totalCost = statement.totalCost || 0;
   const totalLitres = statement.totalLitres || 0;
   const allocations = statement.vehicleAllocations || [];
-  const totalKM = Object.values(vehicleKM).reduce((s, v) => s + v, 0);
+  const kmValue = (value) => Number(typeof value === 'object' ? value?.km : value) || 0;
+  const totalKM = Object.values(vehicleKM).reduce((s, v) => s + kmValue(v), 0);
   const masterPlates = allocations.length > 0 ? allocations.map(a => a.plate) : Object.keys(vehicleKM);
 
   return masterPlates.map(plate => {
     const allocation = allocations.find(a => a.plate === plate);
-    const km = vehicleKM[plate] || 0;
+    const telemetry = vehicleKM[plate];
+    const km = kmValue(telemetry);
     const litres = allocation ? allocation.litres : (totalKM > 0 ? (km / totalKM) * totalLitres : 0);
     const cost = allocation ? allocation.cost : (totalKM > 0 ? (km / totalKM) * totalCost : 0);
     const efficiency = km > 0 ? litres / km : 0;
@@ -53,6 +55,9 @@ function buildStatementRows(statement, vehicleKM = {}) {
       cost,
       efficiency: Math.round(efficiency * 100) / 100,
       costPerKM: km > 0 ? cost / km : 0,
+      transactionCount: Number(allocation?.transactionCount) || 0,
+      fuelTypes: Array.isArray(allocation?.fuelTypes) ? allocation.fuelTypes : [],
+      telemetry: telemetry && typeof telemetry === 'object' ? telemetry : null,
       status: efficiency === 0 ? 'N/A' : efficiency < 0.22 ? 'Excellent' : efficiency < 0.35 ? 'Optimal' : 'Caution'
     };
   }).sort((a, b) => b.km - a.km || b.cost - a.cost);
@@ -63,7 +68,7 @@ export default function FuelDashboard({ onSelectVehicle }) {
   const { t, locale, lang } = useLanguage();
   const { can } = usePermissions();
   const canEdit = can('fleet', 'edit');
-  const { inScope, displayName } = useFleetScope();
+  const { scope, inScope, displayName } = useFleetScope();
   const currency = settings.currency;
 
   const [loading, setLoading] = useState(true);
@@ -78,6 +83,7 @@ export default function FuelDashboard({ onSelectVehicle }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortKey, setSortKey] = useState('km');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [expandedPlate, setExpandedPlate] = useState(null);
 
   const [editingPrice, setEditingPrice] = useState(false);
   const [priceDraft, setPriceDraft] = useState('');
@@ -135,11 +141,15 @@ export default function FuelDashboard({ onSelectVehicle }) {
     // Only show the year on the axis when the series actually spans more than
     // one — otherwise it is noise on a single-year chart.
     const multiYear = new Set(ordered.map((s) => s.year)).size > 1;
-    return ordered.map((s) => ({
-      ...s,
-      monthName: multiYear ? `${months[s.month - 1]} ${s.year}` : months[s.month - 1],
-    }));
-  }, [statements, months]);
+    return ordered.map((s) => {
+      const scopedTotals = statementTotalsForScope(s, scope, inScope);
+      return {
+        ...s,
+        ...scopedTotals,
+        monthName: multiYear ? `${months[s.month - 1]} ${s.year}` : months[s.month - 1],
+      };
+    });
+  }, [statements, months, scope, inScope]);
 
   useEffect(() => {
     // 1. Real-time listener for ALL statements (for the trend chart and selector availability)
@@ -207,7 +217,11 @@ export default function FuelDashboard({ onSelectVehicle }) {
     Object.keys(vehicleData).forEach(reg => {
       const data = vehicleData[reg];
       // Distance is (Odometer End - Odometer Start) / 1000 to convert METERS to KM
-      vehicleKM[reg] = (data.maxEnd > data.minStart && data.minStart > 0) ? (data.maxEnd - data.minStart) / 1000 : 0;
+      vehicleKM[reg] = {
+        km: (data.maxEnd > data.minStart && data.minStart > 0) ? (data.maxEnd - data.minStart) / 1000 : 0,
+        firstOdometer: data.minStart,
+        lastOdometer: data.maxEnd,
+      };
     });
 
     // Only cache real fetches — an empty map from a failed call may recover later.
@@ -217,8 +231,6 @@ export default function FuelDashboard({ onSelectVehicle }) {
 
   useEffect(() => {
     // 2. Listener for the SPECIFIC selected statement
-    setLoading(true);
-    setEditingPrice(false);
     const q = query(
       collection(db, 'fuelStatements'),
       where('month', '==', selectedMonth),
@@ -252,9 +264,6 @@ export default function FuelDashboard({ onSelectVehicle }) {
   useEffect(() => {
     // 3. Previous month statement + rows — powers every MoM comparison.
     let cancelled = false;
-    setPrevStatement(null);
-    setPrevRowsRaw(null);
-
     (async () => {
       const { month: pm, year: py } = previousPeriod(selectedMonth, selectedYear);
       try {
@@ -296,6 +305,40 @@ export default function FuelDashboard({ onSelectVehicle }) {
     () => (prevRowsRaw || []).filter(v => inScope(v.plate)),
     [prevRowsRaw, inScope]
   );
+
+  const scopedTransactions = useMemo(
+    () => (activeStatement?.transactions || []).filter((item) => inScope(item.plate)),
+    [activeStatement, inScope]
+  );
+  const scopedFuelTypes = useMemo(() => {
+    const groups = new Map();
+    scopedTransactions.forEach((item) => {
+      const fuelType = item.fuelType || 'Unspecified';
+      const current = groups.get(fuelType) || { fuelType, litres: 0, cost: 0, transactionCount: 0 };
+      current.litres += Number(item.litres) || 0;
+      current.cost += Number(item.amount) || 0;
+      current.transactionCount += 1;
+      groups.set(fuelType, current);
+    });
+    return [...groups.values()].map((item) => ({
+      ...item,
+      averageCostPerLitre: item.litres > 0 ? item.cost / item.litres : null,
+    })).sort((a, b) => b.litres - a.litres);
+  }, [scopedTransactions]);
+  const hasTransactionLedger = activeStatement?.dataModel === 'transaction-ledger';
+  const hasMixedFuel = scopedFuelTypes.length > 1;
+  const scopedControlTotal = useMemo(() => {
+    const allocations = activeStatement?.statementControlAllocations || [];
+    if (allocations.length > 0) {
+      return allocations.filter((item) => inScope(item.plate)).reduce((sum, item) => sum + (Number(item.cost) || 0), 0);
+    }
+    return scope === 'all' ? Number(activeStatement?.statementControlTotal) : null;
+  }, [activeStatement, inScope, scope]);
+  const scopedLedgerTotal = useMemo(
+    () => scopedTransactions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+    [scopedTransactions]
+  );
+  const scopedReconciliationVariance = scopedControlTotal == null ? null : scopedLedgerTotal - scopedControlTotal;
 
   const fleetStats = useMemo(() => {
     if (scopedRows.length === 0) {
@@ -362,8 +405,8 @@ export default function FuelDashboard({ onSelectVehicle }) {
     [scopedRows, scopedPrevRows]
   );
   const costDecomposition = useMemo(
-    () => (currentTotals && prevTotals ? decomposeCostDelta(currentTotals, prevTotals) : null),
-    [currentTotals, prevTotals]
+    () => (currentTotals && prevTotals && !hasMixedFuel ? decomposeCostDelta(currentTotals, prevTotals) : null),
+    [currentTotals, prevTotals, hasMixedFuel]
   );
   const insights = useMemo(
     () => (fleetComparison
@@ -419,14 +462,17 @@ export default function FuelDashboard({ onSelectVehicle }) {
     decomposition: costDecomposition,
     insights,
     trend: trendData,
+    locale,
+    scope,
+    currency,
   });
 
-  const handleExport = (kind) => {
+  const handleExport = async (kind) => {
     setExportOpen(false);
     if (!fleetComparison) return;
     try {
-      if (kind === 'excel') exportFuelExcel(buildExportPayload());
-      else exportFuelPdf(buildExportPayload());
+      if (kind === 'excel') await exportFuelExcel(buildExportPayload());
+      else await exportFuelPdf(buildExportPayload());
     } catch (e) {
       console.error('Export failed:', e);
     }
@@ -438,6 +484,16 @@ export default function FuelDashboard({ onSelectVehicle }) {
   const priceSource = fleetComparison?.current?.priceSource;
   const priceDeltaPct = fleetComparison?.deltas?.pricePerLitre?.pct;
 
+  const changePeriod = (field, value) => {
+    setLoading(true);
+    setEditingPrice(false);
+    setPrevStatement(null);
+    setPrevRowsRaw(null);
+    setExpandedPlate(null);
+    if (field === 'month') setSelectedMonth(value);
+    else setSelectedYear(value);
+  };
+
   if (loading && statements.length === 0) {
     return (
       <div className="fuel-module-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -447,7 +503,7 @@ export default function FuelDashboard({ onSelectVehicle }) {
   }
 
   return (
-    <div className="fuel-view">
+    <div className="fuel-module-container fuel-view">
       <header className="fuel-panel-header" style={{ marginBottom: '32px' }}>
         <div>
           <div className="fuel-kpi-label">{t('Operational Intelligence', 'الذكاء التشغيلي')}</div>
@@ -463,14 +519,14 @@ export default function FuelDashboard({ onSelectVehicle }) {
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <CustomSelect
               value={selectedMonth}
-              onChange={val => setSelectedMonth(parseInt(val))}
+              onChange={val => changePeriod('month', parseInt(val))}
               options={months.map((m, i) => ({ value: i + 1, label: m }))}
               className="fuel-header-dropdown"
               style={{ width: '140px' }}
             />
             <CustomSelect
               value={selectedYear}
-              onChange={val => setSelectedYear(parseInt(val))}
+              onChange={val => changePeriod('year', parseInt(val))}
               options={[2024, 2025, 2026].map(y => ({ value: y, label: y.toString() }))}
               className="fuel-header-dropdown"
               style={{ width: '100px' }}
@@ -535,11 +591,12 @@ export default function FuelDashboard({ onSelectVehicle }) {
           unit={currency}
         />
 
-        {/* PRICE PER LITRE — the month's one manual market input */}
+        {/* A transaction ledger can contain several products. Its value is a
+            weighted average, never a single editable pump price. */}
         <motion.div className="fuel-card fan-price-card" whileHover={{ y: -5 }}>
           <div className="fuel-kpi-label fan-price-head">
-            <span>{t('Price / Litre', 'سعر اللتر')}</span>
-            {canEdit && activeStatement && !editingPrice && (
+            <span>{hasTransactionLedger ? t('Weighted avg / litre', 'المتوسط المرجح / لتر') : t('Price / Litre', 'سعر اللتر')}</span>
+            {canEdit && activeStatement && !hasTransactionLedger && !editingPrice && (
               <button
                 className="fan-icon-btn"
                 title={t('Edit price per litre', 'تعديل سعر اللتر')}
@@ -583,7 +640,11 @@ export default function FuelDashboard({ onSelectVehicle }) {
             </div>
           )}
           {!editingPrice && priceSource === 'implied' && (
-            <div className="fan-price-src">{t('Implied from cost ÷ litres', 'مستنتج من التكلفة ÷ اللترات')}</div>
+            <div className="fan-price-src">
+              {hasMixedFuel
+                ? t(`Weighted across ${scopedFuelTypes.length} fuel products`, `متوسط مرجح عبر ${scopedFuelTypes.length} من منتجات الوقود`)
+                : t('Implied from cost ÷ litres', 'مستنتج من التكلفة ÷ اللترات')}
+            </div>
           )}
         </motion.div>
 
@@ -594,6 +655,37 @@ export default function FuelDashboard({ onSelectVehicle }) {
           color={fleetStats.healthScore > 80 ? 'var(--status-safe)' : 'var(--status-warn)'}
         />
       </div>
+
+      {hasTransactionLedger && scopedFuelTypes.length > 0 && (
+        <section className="fan-fuel-mix" aria-label={t('Fuel product mix', 'مزيج منتجات الوقود')}>
+          <div className="fan-fuel-mix-copy">
+            <span>{t('Transaction ledger', 'سجل المعاملات')}</span>
+            <strong>{t('Fuel product mix', 'مزيج منتجات الوقود')}</strong>
+            <small>{scopedTransactions.length.toLocaleString(locale)} {t('transactions in the selected fleet scope', 'معاملة ضمن نطاق الأسطول المحدد')}</small>
+          </div>
+          <div className="fan-fuel-mix-items">
+            {scopedFuelTypes.map((item) => (
+              <article key={item.fuelType}>
+                <div><Fuel size={15} /><strong>{item.fuelType}</strong></div>
+                <b>{item.litres.toLocaleString(locale, { maximumFractionDigits: 2 })} L</b>
+                <span>{item.cost.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}</span>
+                <small>{item.transactionCount} {t('transactions', 'معاملة')} · {item.averageCostPerLitre?.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 3 })} {currency}/L</small>
+              </article>
+            ))}
+          </div>
+          {scopedControlTotal != null && (
+            <div className={`fan-reconciliation ${Math.abs(scopedReconciliationVariance || 0) >= 0.01 ? 'has-variance' : 'is-matched'}`}>
+              <span>{t('Payment24 control', 'مطابقة Payment24')}</span>
+              <strong>{scopedControlTotal.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}</strong>
+              <small>
+                {Math.abs(scopedReconciliationVariance || 0) >= 0.01
+                  ? t(`Ledger difference: ${scopedReconciliationVariance.toFixed(2)} ${currency}`, `فرق السجل: ${scopedReconciliationVariance.toFixed(2)} ${currency}`)
+                  : t('Reconciled', 'متطابق')}
+              </small>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ── MONTHLY COMPARISON ─────────────────────────────────────────── */}
       {fleetComparison?.previous && (
@@ -659,27 +751,84 @@ export default function FuelDashboard({ onSelectVehicle }) {
 
           {costDecomposition?.priceEffect != null && Math.abs(costDecomposition.totalDelta) > 0.5 && (
             <div className="fan-decomp">
-              <div className="fan-decomp-title">
-                {t('What moved the fuel bill', 'ما الذي حرّك فاتورة الوقود')}
+              <div className="fan-decomp-head">
+                <div>
+                  <span className="fan-decomp-eyebrow">{t('Bill change explained', 'تفسير تغير الفاتورة')}</span>
+                  <h4>{t('Why did the fuel bill change?', 'لماذا تغيرت فاتورة الوقود؟')}</h4>
+                  <p>
+                    {costDecomposition.totalDelta > 0
+                      ? t('The bill increased compared with the previous month. Here is exactly where the increase came from.', 'ارتفعت الفاتورة مقارنة بالشهر السابق. فيما يلي مصدر الزيادة بالتفصيل.')
+                      : t('The bill decreased compared with the previous month. Here is exactly where the saving came from.', 'انخفضت الفاتورة مقارنة بالشهر السابق. فيما يلي مصدر التوفير بالتفصيل.')}
+                  </p>
+                </div>
                 <span className="fan-decomp-total">
+                  <small>{t('Net change', 'صافي التغير')}</small>
                   {costDecomposition.totalDelta > 0 ? '+' : '−'}
                   {convertCurrency(Math.abs(costDecomposition.totalDelta), currency).toLocaleString(locale, { maximumFractionDigits: 0 })} {currency}
                 </span>
               </div>
-              <DecompRow
-                label={t('Pump price change', 'تغيّر سعر اللتر')}
-                value={costDecomposition.priceEffect}
-                peer={costDecomposition.volumeEffect}
-                currency={currency}
-                locale={locale}
-              />
-              <DecompRow
-                label={t('Consumption change', 'تغيّر الاستهلاك')}
-                value={costDecomposition.volumeEffect}
-                peer={costDecomposition.priceEffect}
-                currency={currency}
-                locale={locale}
-              />
+
+              <div className="fan-bill-bridge">
+                <BillBridgeStep
+                  label={t('Previous month', 'الشهر السابق')}
+                  value={fleetComparison.previous.totalCost}
+                  currency={currency}
+                  locale={locale}
+                />
+                <span className="fan-bridge-arrow">→</span>
+                <BillBridgeStep
+                  label={t('Price impact', 'تأثير السعر')}
+                  value={costDecomposition.priceEffect}
+                  signed
+                  currency={currency}
+                  locale={locale}
+                  tone={costDecomposition.priceEffect > 0 ? 'bad' : 'good'}
+                />
+                <span className="fan-bridge-arrow">→</span>
+                <BillBridgeStep
+                  label={t('Volume impact', 'تأثير الكمية')}
+                  value={costDecomposition.volumeEffect}
+                  signed
+                  currency={currency}
+                  locale={locale}
+                  tone={costDecomposition.volumeEffect > 0 ? 'bad' : 'good'}
+                />
+                <span className="fan-bridge-arrow">→</span>
+                <BillBridgeStep
+                  label={t('This month', 'هذا الشهر')}
+                  value={fleetComparison.current.totalCost}
+                  currency={currency}
+                  locale={locale}
+                  emphasis
+                />
+              </div>
+
+              <div className="fan-factor-grid">
+                <DecompRow
+                  label={t('1. Pump price effect', '1. تأثير سعر اللتر')}
+                  detail={fleetComparison.current.pricePerLitre != null && fleetComparison.previous.pricePerLitre != null
+                    ? t(
+                        `Price moved from ${convertCurrency(fleetComparison.previous.pricePerLitre, currency).toLocaleString(locale, { maximumFractionDigits: 3 })} to ${convertCurrency(fleetComparison.current.pricePerLitre, currency).toLocaleString(locale, { maximumFractionDigits: 3 })} ${currency}/L.`,
+                        `تغير السعر من ${convertCurrency(fleetComparison.previous.pricePerLitre, currency).toLocaleString(locale, { maximumFractionDigits: 3 })} إلى ${convertCurrency(fleetComparison.current.pricePerLitre, currency).toLocaleString(locale, { maximumFractionDigits: 3 })} ${currency}/لتر.`
+                      )
+                    : ''}
+                  value={costDecomposition.priceEffect}
+                  peer={costDecomposition.volumeEffect}
+                  currency={currency}
+                  locale={locale}
+                />
+                <DecompRow
+                  label={t('2. Fuel volume effect', '2. تأثير كمية الوقود')}
+                  detail={t(
+                    `${Math.abs(fleetComparison.current.totalLitres - fleetComparison.previous.totalLitres).toLocaleString(locale, { maximumFractionDigits: 0 })} litres ${fleetComparison.current.totalLitres >= fleetComparison.previous.totalLitres ? 'more' : 'less'} were purchased than last month.`,
+                    `تم شراء ${Math.abs(fleetComparison.current.totalLitres - fleetComparison.previous.totalLitres).toLocaleString(locale, { maximumFractionDigits: 0 })} لتر ${fleetComparison.current.totalLitres >= fleetComparison.previous.totalLitres ? 'أكثر' : 'أقل'} من الشهر السابق.`
+                  )}
+                  value={costDecomposition.volumeEffect}
+                  peer={costDecomposition.priceEffect}
+                  currency={currency}
+                  locale={locale}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -772,41 +921,67 @@ export default function FuelDashboard({ onSelectVehicle }) {
                 <th onClick={() => setSortKey('litresPer100km')} style={{ cursor: 'pointer' }}>{t('L/100KM', 'لتر/100كم')}</th>
                 <th onClick={() => setSortKey('cost')} style={{ cursor: 'pointer' }}>{t(`COST (${currency})`, `التكلفة (${currency})`)}</th>
                 <th onClick={() => setSortKey('costPerKM')} style={{ cursor: 'pointer' }}>{t('COST/KM', 'التكلفة/كم')}</th>
+                {hasTransactionLedger && <th>{t('FUEL', 'الوقود')}</th>}
+                {hasTransactionLedger && <th>{t('TRANSACTIONS', 'المعاملات')}</th>}
                 <th onClick={() => setSortKey('deltaPct')} style={{ cursor: 'pointer' }}>{t('MOM Δ%', 'التغير %')}</th>
                 <th>{t('VERDICT', 'الحكم')}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filteredVehicles.map((v) => (
-                <tr key={v.plate} onClick={() => onSelectVehicle(v)} style={{ cursor: 'pointer' }}>
-                  <td style={{ fontWeight: 800 }}>{v.plate}</td>
-                  <td>{v.km.toLocaleString(locale)}</td>
-                  <td>{v.litres.toLocaleString(locale)} L</td>
-                  <td className="mono">
-                    {v.litresPer100km != null
-                      ? v.litresPer100km.toLocaleString(locale, { maximumFractionDigits: 1 })
-                      : '—'}
-                  </td>
-                  <td style={{ color: 'var(--fuel-amber)', fontWeight: 700 }}>
-                    {convertCurrency(v.cost, currency).toLocaleString(locale)}
-                  </td>
-                  <td className="mono">
-                    {v.costPerKm != null
-                      ? convertCurrency(v.costPerKm, currency).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                      : '—'}
-                  </td>
-                  <td className={`mono ${v.deltaL100?.pct != null ? (v.deltaL100.pct > 2 ? 'fan-delta-bad' : v.deltaL100.pct < -2 ? 'fan-delta-good' : 'fan-delta-neutral') : 'fan-delta-neutral'}`}>
-                    {v.deltaL100?.pct != null
-                      ? `${v.deltaL100.pct > 0 ? '+' : ''}${v.deltaL100.pct.toLocaleString(locale, { maximumFractionDigits: 1 })}%`
-                      : '—'}
-                  </td>
-                  <td><VerdictBadge verdict={v.verdict} /></td>
-                  <td style={{ textAlign: 'right' }}>
-                    <ChevronRight size={18} color="#555" />
-                  </td>
-                </tr>
-              ))}
+              {filteredVehicles.map((v) => {
+                const transactions = scopedTransactions
+                  .filter((item) => item.plate === v.plate)
+                  .sort((a, b) => new Date(b.date) - new Date(a.date));
+                const expanded = expandedPlate === v.plate;
+                const columnCount = hasTransactionLedger ? 11 : 9;
+                return (
+                  <React.Fragment key={v.plate}>
+                    <tr
+                      onClick={() => hasTransactionLedger
+                        ? setExpandedPlate(expanded ? null : v.plate)
+                        : onSelectVehicle?.(v)}
+                      className={expanded ? 'fan-vehicle-row-expanded' : ''}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td style={{ fontWeight: 800 }}>{v.plate}</td>
+                      <td>{v.km.toLocaleString(locale)}</td>
+                      <td>{v.litres.toLocaleString(locale)} L</td>
+                      <td className="mono">
+                        {v.comparisonReliable !== false && v.litresPer100km != null
+                          ? v.litresPer100km.toLocaleString(locale, { maximumFractionDigits: 1 })
+                          : '—'}
+                      </td>
+                      <td style={{ color: 'var(--fuel-amber)', fontWeight: 700 }}>
+                        {convertCurrency(v.cost, currency).toLocaleString(locale)}
+                      </td>
+                      <td className="mono">
+                        {v.comparisonReliable !== false && v.costPerKm != null
+                          ? convertCurrency(v.costPerKm, currency).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                          : '—'}
+                      </td>
+                      {hasTransactionLedger && <td><div className="fan-fuel-tags">{(v.fuelTypes || []).map((fuelType) => <span key={fuelType}>{fuelType}</span>)}</div></td>}
+                      {hasTransactionLedger && <td className="mono">{v.transactionCount.toLocaleString(locale)}</td>}
+                      <td className={`mono ${v.deltaL100?.pct != null ? (v.deltaL100.pct > 2 ? 'fan-delta-bad' : v.deltaL100.pct < -2 ? 'fan-delta-good' : 'fan-delta-neutral') : 'fan-delta-neutral'}`}>
+                        {v.deltaL100?.pct != null
+                          ? `${v.deltaL100.pct > 0 ? '+' : ''}${v.deltaL100.pct.toLocaleString(locale, { maximumFractionDigits: 1 })}%`
+                          : '—'}
+                      </td>
+                      <td><VerdictBadge verdict={v.verdict} /></td>
+                      <td style={{ textAlign: 'right' }}>
+                        <ChevronRight size={18} className={expanded ? 'fan-chevron-open' : ''} color="#555" />
+                      </td>
+                    </tr>
+                    {hasTransactionLedger && expanded && (
+                      <tr className="fan-transaction-detail-row">
+                        <td colSpan={columnCount}>
+                          <VehicleTransactions transactions={transactions} locale={locale} currency={currency} t={t} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -842,6 +1017,47 @@ function KPICard({ label, value, unit, trend, trendUp, color }) {
   );
 }
 
+function VehicleTransactions({ transactions, locale, currency, t }) {
+  if (transactions.length === 0) {
+    return <div className="fan-transaction-empty">{t('No transaction rows were found for this vehicle.', 'لم يتم العثور على معاملات لهذه المركبة.')}</div>;
+  }
+  return (
+    <div className="fan-transaction-ledger">
+      <div className="fan-transaction-ledger-head">
+        <div>
+          <span>{t('Monthly source detail', 'تفاصيل المصدر الشهري')}</span>
+          <strong>{transactions.length.toLocaleString(locale)} {t('fuel transactions', 'معاملة وقود')}</strong>
+        </div>
+        <small>{t('Amounts below are the original ADNOC transaction values.', 'القيم أدناه هي قيم معاملات أدنوك الأصلية.')}</small>
+      </div>
+      <div className="fan-transaction-scroll">
+        <table>
+          <thead><tr>
+            <th>{t('Date', 'التاريخ')}</th>
+            <th>{t('Merchant', 'المحطة')}</th>
+            <th>{t('Fuel type', 'نوع الوقود')}</th>
+            <th>{t('Cost / litre', 'السعر / لتر')}</th>
+            <th>{t('Litres', 'اللترات')}</th>
+            <th>{t('Amount', 'المبلغ')}</th>
+          </tr></thead>
+          <tbody>
+            {transactions.map((item) => (
+              <tr key={`${item.id}-${item.sourceRow}`}>
+                <td>{item.date ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(item.date)) : '—'}</td>
+                <td>{item.merchant || '—'}</td>
+                <td><span className="fan-transaction-fuel">{item.fuelType || '—'}</span></td>
+                <td>{Number(item.costPerLitre).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 3 })} {currency}</td>
+                <td>{Number(item.litres).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td><strong>{Number(item.amount).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}</strong></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /* One KPI tile in the Monthly Comparison band.
    lowerIsBetter: true → a drop is green; null → direction is informational. */
 function DeltaTile({ label, value, unit, pct, lowerIsBetter = true }) {
@@ -869,24 +1085,46 @@ function DeltaTile({ label, value, unit, pct, lowerIsBetter = true }) {
   );
 }
 
-/* One bar of the price-vs-volume cost decomposition. */
-function DecompRow({ label, value, peer, currency, locale }) {
-  const max = Math.max(Math.abs(value || 0), Math.abs(peer || 0), 1);
-  const widthPct = Math.max(4, (Math.abs(value) / max) * 100);
+function BillBridgeStep({ label, value, currency, locale, signed = false, tone = '', emphasis = false }) {
+  const prefix = signed ? (value > 0 ? '+' : value < 0 ? '−' : '') : '';
+  return (
+    <div className={`fan-bridge-step${tone ? ` fan-bridge-${tone}` : ''}${emphasis ? ' fan-bridge-emphasis' : ''}`}>
+      <span>{label}</span>
+      <strong>{prefix}{convertCurrency(Math.abs(value || 0), currency).toLocaleString(locale, { maximumFractionDigits: 0 })} <small>{currency}</small></strong>
+    </div>
+  );
+}
+
+/* Plain-language explanation of one price-vs-volume cost factor. */
+function DecompRow({ label, detail, value, peer, currency, locale }) {
+  const { t } = useLanguage();
+  const movement = Math.abs(value || 0) + Math.abs(peer || 0);
+  const sharePct = movement > 0 ? (Math.abs(value || 0) / movement) * 100 : 0;
   const adverse = value > 0; // added cost
   return (
     <div className="fan-decomp-row">
-      <span className="fan-decomp-label">{label}</span>
+      <div className="fan-factor-head">
+        <span className="fan-decomp-label">{label}</span>
+        <span className={`fan-decomp-value ${adverse ? 'fan-delta-bad' : 'fan-delta-good'}`}>
+          {value > 0 ? '+' : value < 0 ? '−' : ''}
+          {convertCurrency(Math.abs(value), currency).toLocaleString(locale, { maximumFractionDigits: 0 })} {currency}
+        </span>
+      </div>
+      {detail && <p className="fan-factor-detail">{detail}</p>}
       <div className="fan-decomp-track">
         <div
           className={`fan-decomp-bar ${adverse ? 'fan-decomp-bar-bad' : 'fan-decomp-bar-good'}`}
-          style={{ width: `${widthPct}%` }}
+          style={{ width: `${Math.max(2, sharePct)}%` }}
         />
       </div>
-      <span className={`fan-decomp-value ${adverse ? 'fan-delta-bad' : 'fan-delta-good'}`}>
-        {value > 0 ? '+' : '−'}
-        {convertCurrency(Math.abs(value), currency).toLocaleString(locale, { maximumFractionDigits: 0 })} {currency}
-      </span>
+      <div className="fan-factor-foot">
+        <span>{sharePct.toLocaleString(locale, { maximumFractionDigits: 0 })}% {t('of the explained movement', 'من التغير الموضح')}</span>
+        <strong className={adverse ? 'fan-delta-bad' : 'fan-delta-good'}>
+          {adverse
+            ? t('Added to the bill', 'أضاف إلى الفاتورة')
+            : t('Reduced the bill', 'خفض الفاتورة')}
+        </strong>
+      </div>
     </div>
   );
 }

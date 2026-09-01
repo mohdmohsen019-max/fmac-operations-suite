@@ -34,10 +34,6 @@ const CrisisModule         = lazy(() => import('./components/CrisisModule'))
 const WallboardModule      = lazy(() => import('./components/WallboardModule'))
 const HelpAdminDashboard   = lazy(() => import('./components/help/admin/HelpAdminDashboard'))
 const HelpAdminTicket      = lazy(() => import('./components/help/admin/HelpAdminTicket'))
-const HelpLanding          = lazy(() => import('./components/help/public/HelpLanding'))
-const HelpFormWizard       = lazy(() => import('./components/help/public/HelpFormWizard'))
-const HelpSuccess          = lazy(() => import('./components/help/public/HelpSuccess'))
-const HelpTrack            = lazy(() => import('./components/help/public/HelpTrack'))
 
 const NAV_ITEMS_DEF = [
   { id: 'fleet',     icon: Bus,      en: 'Fleet Management', ar: 'إدارة الأسطول',         path: '/fleet/dashboard' },
@@ -383,13 +379,18 @@ function MainAppLayout() {
       >
         <div className="ops-rail-header">
           <motion.button className="ops-rail-logo-tile" data-tip={t('Operations Overview', 'نظرة عامة على العمليات')} aria-label={t('Operations Overview', 'نظرة عامة على العمليات')} onClick={() => navigate('/dashboard')} whileTap={{ scale: 0.94 }}>
-            <img src="/favicon.png" alt="FMAC" className="ops-rail-logo-img" />
+            <span className="ops-rail-wordmark-window" aria-hidden="true">
+              <img src="/fmac-ops-logo-light.png" alt="" className="ops-rail-logo-img ops-rail-logo-img--dark-rail" />
+              <img src="/fmac-ops-logo.png" alt="" className="ops-rail-logo-img ops-rail-logo-img--light-rail" />
+            </span>
+            <span className="ops-rail-logo-rule" aria-hidden="true" />
           </motion.button>
         </div>
         <div className="ops-rail-nav">
           {NAV_ITEMS.map(({ id, icon: Icon, label, path }) => (
             <motion.button key={id} data-tip={label} aria-label={label} className={`ops-rail-item ${globalModule === id ? 'active' : ''}`} onClick={() => navigate(path)} whileTap={{ scale: 0.92 }} transition={{ type: 'spring', stiffness: 400, damping: 24 }}>
               <Icon size={20} strokeWidth={1.75} />
+              <span className="ops-rail-label">{label}</span>
             </motion.button>
           ))}
         </div>
@@ -416,6 +417,7 @@ function MainAppLayout() {
           </AnimatePresence>
           <motion.button className="ops-rail-item" data-tip={t('Sign Out', 'تسجيل الخروج')} aria-label={t('Sign Out', 'تسجيل الخروج')} onClick={() => signOut(auth)} whileTap={{ scale: 0.92 }}>
             <LogOut size={20} strokeWidth={1.75} />
+            <span className="ops-rail-label">{t('Sign Out', 'تسجيل الخروج')}</span>
           </motion.button>
         </div>
       </motion.nav>
@@ -566,13 +568,12 @@ function App() {
     <Suspense fallback={<RouteLoader />}>
       <Routes>
         {/* PUBLIC */}
-        <Route path="/"                             element={<HelpLanding />} />
-        <Route path="/submit/:type"                 element={<HelpFormWizard />} />
-        <Route path="/submit/success/:ticketId"     element={<HelpSuccess />} />
-        <Route path="/track"                        element={<HelpTrack />} />
+        <Route path="/"                             element={<Navigate to="/login" replace />} />
+        <Route path="/submit/*"                     element={<Navigate to="/login" replace />} />
+        <Route path="/track"                        element={<Navigate to="/login" replace />} />
 
         {/* AUTH */}
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
 
         {/* PROTECTED */}
         <Route element={<MainAuthGuard><MainAppLayout /></MainAuthGuard>}>

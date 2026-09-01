@@ -140,29 +140,31 @@ export default function HelpAdminDashboard() {
   };
 
   const exportExcel = () => {
+    const arabic = lang === 'ar';
     const data = filteredRequests.map(r => {
       const mins = resolutionMinutesOf(r);
       const ok = slaMetOf(r);
       return {
-        'Ticket ID': r.ticketNumber,
-        'Type': r.type?.toUpperCase(),
-        'Submitter': r.userInfo?.name,
-        'Status': r.status?.toUpperCase(),
-        'Priority': r.priority,
-        'Branch': r.userInfo?.branch,
-        'Date': r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString() : 'N/A',
-        'Resolution Time / زمن الإنجاز': mins == null ? '' : fmtDuration(mins, 'en'),
-        'Resolution (hours)': mins == null ? '' : Math.round((mins / 60) * 10) / 10,
-        'SLA Target (hours)': r.slaTargetHours ?? '',
-        'SLA Met': ok == null ? '' : ok ? 'YES' : 'NO',
-        'Resolution Satisfaction (1-5)': r.satisfaction?.rating ?? '',
-        'Submission Experience (1-5)': r.intakeRating?.value ?? '',
+        [arabic ? 'رقم الطلب' : 'Ticket ID']: r.ticketNumber,
+        [arabic ? 'النوع' : 'Type']: r.type?.toUpperCase(),
+        [arabic ? 'مقدم الطلب' : 'Submitter']: r.userInfo?.name,
+        [arabic ? 'الحالة' : 'Status']: r.status?.toUpperCase(),
+        [arabic ? 'الأولوية' : 'Priority']: r.priority,
+        [arabic ? 'الفرع' : 'Branch']: r.userInfo?.branch,
+        [arabic ? 'التاريخ' : 'Date']: r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString(arabic ? 'ar-AE' : 'en-GB') : 'N/A',
+        [arabic ? 'زمن الإنجاز' : 'Resolution Time']: mins == null ? '' : fmtDuration(mins, arabic ? 'ar' : 'en'),
+        [arabic ? 'زمن الإنجاز (ساعة)' : 'Resolution (hours)']: mins == null ? '' : Math.round((mins / 60) * 10) / 10,
+        [arabic ? 'مستهدف الاتفاقية (ساعة)' : 'SLA Target (hours)']: r.slaTargetHours ?? '',
+        [arabic ? 'الالتزام بالاتفاقية' : 'SLA Met']: ok == null ? '' : ok ? (arabic ? 'نعم' : 'YES') : (arabic ? 'لا' : 'NO'),
+        [arabic ? 'رضا الحل (1-5)' : 'Resolution Satisfaction (1-5)']: r.satisfaction?.rating ?? '',
+        [arabic ? 'تجربة التقديم (1-5)' : 'Submission Experience (1-5)']: r.intakeRating?.value ?? '',
       };
     });
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Requests');
-    XLSX.writeFile(wb, `FMAC_Requests_${new Date().toLocaleDateString()}.xlsx`);
+    if (arabic) wb.Workbook = { Views: [{ RTL: true }] };
+    XLSX.utils.book_append_sheet(wb, ws, arabic ? 'الطلبات' : 'Requests');
+    XLSX.writeFile(wb, `FMAC_Requests_${new Date().toISOString().slice(0, 10)}.xlsx`);
     setShowExport(false);
   };
 

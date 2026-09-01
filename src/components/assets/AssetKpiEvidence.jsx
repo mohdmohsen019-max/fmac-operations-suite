@@ -105,6 +105,7 @@ export default function AssetKpiEvidence({ assets = [], lang = 'ar' }) {
     }))
 
     const wb = XLSX.utils.book_new()
+    wb.Workbook = { Views: [{ RTL: true }] }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'ملخص القياس')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detail.length ? detail : [{ '—': 'لا توجد أصول' }]), 'تفصيل الأصول')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(failures.length ? failures : [{ '—': 'لا توجد حالات عدم مطابقة' }]), 'حالات عدم المطابقة')

@@ -1,0 +1,1706 @@
+{
+  "source": "ADNOC beneficiary vehicle fuel summary",
+  "sourceYear": 2026,
+  "currentRosterPeriod": "2026-06",
+  "periods": [
+    {
+      "period": "2026-01",
+      "sourceFile": "adnoc-jan.xlsx",
+      "rowCount": 23,
+      "vehicleCount": 23,
+      "totalAmountAed": 43698.6,
+      "totalVatAed": 2157.03,
+      "busAmountAed": 34795.83,
+      "otherAmountAed": 8902.77,
+      "allocations": [
+        {
+          "registration": "A45267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 45267 A PRIVATE",
+          "amountAed": 462.68,
+          "vatAed": 22.03,
+          "sourceRows": [
+            2
+          ]
+        },
+        {
+          "registration": "C29769",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 29769 C PRIVATE",
+          "amountAed": 1809.91,
+          "vatAed": 86.18,
+          "sourceRows": [
+            3
+          ]
+        },
+        {
+          "registration": "A20107",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 20107 A PRIVATE",
+          "amountAed": 565.21,
+          "vatAed": 26.92,
+          "sourceRows": [
+            4
+          ]
+        },
+        {
+          "registration": "C37074",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37074 C PRIVATE",
+          "amountAed": 1455.88,
+          "vatAed": 69.32,
+          "sourceRows": [
+            5
+          ]
+        },
+        {
+          "registration": "C37075",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37075 C PRIVATE",
+          "amountAed": 2556.29,
+          "vatAed": 121.72,
+          "sourceRows": [
+            6
+          ]
+        },
+        {
+          "registration": "C37072",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37072 C PRIVATE",
+          "amountAed": 1868.64,
+          "vatAed": 103.29,
+          "sourceRows": [
+            7
+          ]
+        },
+        {
+          "registration": "A21248",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 21248 A PRIVATE",
+          "amountAed": 2964.35,
+          "vatAed": 141.16,
+          "sourceRows": [
+            8
+          ]
+        },
+        {
+          "registration": "A33876",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33876 A PRIVATE",
+          "amountAed": 2721.2,
+          "vatAed": 129.57,
+          "sourceRows": [
+            9
+          ]
+        },
+        {
+          "registration": "A33867",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33867 A PRIVATE",
+          "amountAed": 6894.1,
+          "vatAed": 328.33,
+          "sourceRows": [
+            10
+          ]
+        },
+        {
+          "registration": "M99270",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99270 M PRIVATE",
+          "amountAed": 1527.5,
+          "vatAed": 72.75,
+          "sourceRows": [
+            11
+          ]
+        },
+        {
+          "registration": "M99271",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99271 M PRIVATE",
+          "amountAed": 1695.64,
+          "vatAed": 80.73,
+          "sourceRows": [
+            12
+          ]
+        },
+        {
+          "registration": "M99267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99267 M PRIVATE",
+          "amountAed": 663.44,
+          "vatAed": 31.59,
+          "sourceRows": [
+            13
+          ]
+        },
+        {
+          "registration": "M99273",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99273 M PRIVATE",
+          "amountAed": 1350.58,
+          "vatAed": 64.31,
+          "sourceRows": [
+            14
+          ]
+        },
+        {
+          "registration": "A8975",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 8975 A PRIVATE",
+          "amountAed": 1192.95,
+          "vatAed": 56.81,
+          "sourceRows": [
+            15
+          ]
+        },
+        {
+          "registration": "C26484",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 26484 C PRIVATE",
+          "amountAed": 839.55,
+          "vatAed": 39.98,
+          "sourceRows": [
+            16
+          ]
+        },
+        {
+          "registration": "M15143",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 15143 M PRIVATE",
+          "amountAed": 1285.03,
+          "vatAed": 75.47,
+          "sourceRows": [
+            17
+          ]
+        },
+        {
+          "registration": "A44041",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 44041 A PRIVATE",
+          "amountAed": 847.69,
+          "vatAed": 40.37,
+          "sourceRows": [
+            18
+          ]
+        },
+        {
+          "registration": "C37069",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37069 C PRIVATE",
+          "amountAed": 2280.15,
+          "vatAed": 108.58,
+          "sourceRows": [
+            19
+          ]
+        },
+        {
+          "registration": "M99268",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99268 M PRIVATE",
+          "amountAed": 2525.15,
+          "vatAed": 144.04,
+          "sourceRows": [
+            20
+          ]
+        },
+        {
+          "registration": "M85751",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85751 M PRIVATE",
+          "amountAed": 2041.71,
+          "vatAed": 97.22,
+          "sourceRows": [
+            21
+          ]
+        },
+        {
+          "registration": "M85756",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85756 M PRIVATE",
+          "amountAed": 1377.95,
+          "vatAed": 65.6,
+          "sourceRows": [
+            22
+          ]
+        },
+        {
+          "registration": "M85750",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85750 M PRIVATE",
+          "amountAed": 2347.39,
+          "vatAed": 135.58,
+          "sourceRows": [
+            23
+          ]
+        },
+        {
+          "registration": "M85759",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85759 M PRIVATE",
+          "amountAed": 2425.61,
+          "vatAed": 115.48,
+          "sourceRows": [
+            24
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2026-02",
+      "sourceFile": "adnoc-feb.xlsx",
+      "rowCount": 23,
+      "vehicleCount": 23,
+      "totalAmountAed": 39367.76,
+      "totalVatAed": 1946.1,
+      "busAmountAed": 32170.99,
+      "otherAmountAed": 7196.77,
+      "allocations": [
+        {
+          "registration": "A45267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 45267 A PRIVATE",
+          "amountAed": 190.72,
+          "vatAed": 9.09,
+          "sourceRows": [
+            2
+          ]
+        },
+        {
+          "registration": "C29769",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 29769 C PRIVATE",
+          "amountAed": 2500.63,
+          "vatAed": 119.09,
+          "sourceRows": [
+            3
+          ]
+        },
+        {
+          "registration": "A20107",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 20107 A PRIVATE",
+          "amountAed": 465.77,
+          "vatAed": 22.18,
+          "sourceRows": [
+            4
+          ]
+        },
+        {
+          "registration": "C37074",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37074 C PRIVATE",
+          "amountAed": 1852.64,
+          "vatAed": 88.22,
+          "sourceRows": [
+            5
+          ]
+        },
+        {
+          "registration": "C37075",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37075 C PRIVATE",
+          "amountAed": 2491.29,
+          "vatAed": 118.63,
+          "sourceRows": [
+            6
+          ]
+        },
+        {
+          "registration": "C37072",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37072 C PRIVATE",
+          "amountAed": 1727.25,
+          "vatAed": 82.27,
+          "sourceRows": [
+            7
+          ]
+        },
+        {
+          "registration": "A21248",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 21248 A PRIVATE",
+          "amountAed": 1990.13,
+          "vatAed": 94.77,
+          "sourceRows": [
+            8
+          ]
+        },
+        {
+          "registration": "A33876",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33876 A PRIVATE",
+          "amountAed": 2217.41,
+          "vatAed": 105.59,
+          "sourceRows": [
+            9
+          ]
+        },
+        {
+          "registration": "A33867",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33867 A PRIVATE",
+          "amountAed": 5811.52,
+          "vatAed": 276.73,
+          "sourceRows": [
+            10
+          ]
+        },
+        {
+          "registration": "M99270",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99270 M PRIVATE",
+          "amountAed": 1637.2,
+          "vatAed": 77.96,
+          "sourceRows": [
+            11
+          ]
+        },
+        {
+          "registration": "M99271",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99271 M PRIVATE",
+          "amountAed": 1753.29,
+          "vatAed": 83.49,
+          "sourceRows": [
+            12
+          ]
+        },
+        {
+          "registration": "M99267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99267 M PRIVATE",
+          "amountAed": 484.2,
+          "vatAed": 23.05,
+          "sourceRows": [
+            13
+          ]
+        },
+        {
+          "registration": "M99273",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99273 M PRIVATE",
+          "amountAed": 1306.77,
+          "vatAed": 86.05,
+          "sourceRows": [
+            14
+          ]
+        },
+        {
+          "registration": "A8975",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 8975 A PRIVATE",
+          "amountAed": 711.64,
+          "vatAed": 33.89,
+          "sourceRows": [
+            15
+          ]
+        },
+        {
+          "registration": "C26484",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 26484 C PRIVATE",
+          "amountAed": 393.61,
+          "vatAed": 18.74,
+          "sourceRows": [
+            16
+          ]
+        },
+        {
+          "registration": "M15143",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 15143 M PRIVATE",
+          "amountAed": 1094.44,
+          "vatAed": 52.11,
+          "sourceRows": [
+            17
+          ]
+        },
+        {
+          "registration": "A44041",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 44041 A PRIVATE",
+          "amountAed": 796.33,
+          "vatAed": 37.93,
+          "sourceRows": [
+            18
+          ]
+        },
+        {
+          "registration": "C37069",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37069 C PRIVATE",
+          "amountAed": 2124.8,
+          "vatAed": 101.2,
+          "sourceRows": [
+            19
+          ]
+        },
+        {
+          "registration": "M99268",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99268 M PRIVATE",
+          "amountAed": 2638.43,
+          "vatAed": 125.65,
+          "sourceRows": [
+            20
+          ]
+        },
+        {
+          "registration": "M85751",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85751 M PRIVATE",
+          "amountAed": 1477,
+          "vatAed": 70.33,
+          "sourceRows": [
+            21
+          ]
+        },
+        {
+          "registration": "M85756",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85756 M PRIVATE",
+          "amountAed": 1888.78,
+          "vatAed": 89.92,
+          "sourceRows": [
+            22
+          ]
+        },
+        {
+          "registration": "M85750",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85750 M PRIVATE",
+          "amountAed": 1744.88,
+          "vatAed": 106.89,
+          "sourceRows": [
+            23
+          ]
+        },
+        {
+          "registration": "M85759",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85759 M PRIVATE",
+          "amountAed": 2069.03,
+          "vatAed": 122.32,
+          "sourceRows": [
+            24
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2026-03",
+      "sourceFile": "adnoc-march (2).xlsx",
+      "rowCount": 23,
+      "vehicleCount": 23,
+      "totalAmountAed": 21461.02,
+      "totalVatAed": 1021.93,
+      "busAmountAed": 16169.85,
+      "otherAmountAed": 5291.17,
+      "allocations": [
+        {
+          "registration": "A45267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 45267 A PRIVATE",
+          "amountAed": 318.88,
+          "vatAed": 15.18,
+          "sourceRows": [
+            2
+          ]
+        },
+        {
+          "registration": "C29769",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 29769 C PRIVATE",
+          "amountAed": 857.21,
+          "vatAed": 40.82,
+          "sourceRows": [
+            3
+          ]
+        },
+        {
+          "registration": "A20107",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 20107 A PRIVATE",
+          "amountAed": 557.26,
+          "vatAed": 26.54,
+          "sourceRows": [
+            4
+          ]
+        },
+        {
+          "registration": "C37074",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37074 C PRIVATE",
+          "amountAed": 481.41,
+          "vatAed": 22.92,
+          "sourceRows": [
+            5
+          ]
+        },
+        {
+          "registration": "C37075",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37075 C PRIVATE",
+          "amountAed": 1148.27,
+          "vatAed": 54.68,
+          "sourceRows": [
+            6
+          ]
+        },
+        {
+          "registration": "C37072",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37072 C PRIVATE",
+          "amountAed": 997.39,
+          "vatAed": 47.49,
+          "sourceRows": [
+            7
+          ]
+        },
+        {
+          "registration": "A21248",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 21248 A PRIVATE",
+          "amountAed": 1554.44,
+          "vatAed": 74.02,
+          "sourceRows": [
+            8
+          ]
+        },
+        {
+          "registration": "A33876",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33876 A PRIVATE",
+          "amountAed": 1286.7,
+          "vatAed": 61.27,
+          "sourceRows": [
+            9
+          ]
+        },
+        {
+          "registration": "A33867",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33867 A PRIVATE",
+          "amountAed": 1312.71,
+          "vatAed": 62.51,
+          "sourceRows": [
+            10
+          ]
+        },
+        {
+          "registration": "M99270",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99270 M PRIVATE",
+          "amountAed": 763.1,
+          "vatAed": 36.34,
+          "sourceRows": [
+            11
+          ]
+        },
+        {
+          "registration": "M99271",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99271 M PRIVATE",
+          "amountAed": 1038.28,
+          "vatAed": 49.44,
+          "sourceRows": [
+            12
+          ]
+        },
+        {
+          "registration": "M99267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99267 M PRIVATE",
+          "amountAed": 525.24,
+          "vatAed": 25.01,
+          "sourceRows": [
+            13
+          ]
+        },
+        {
+          "registration": "M99273",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99273 M PRIVATE",
+          "amountAed": 1564.53,
+          "vatAed": 74.5,
+          "sourceRows": [
+            14
+          ]
+        },
+        {
+          "registration": "A8975",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 8975 A PRIVATE",
+          "amountAed": 350.75,
+          "vatAed": 16.7,
+          "sourceRows": [
+            15
+          ]
+        },
+        {
+          "registration": "C26484",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 26484 C PRIVATE",
+          "amountAed": 303.18,
+          "vatAed": 14.44,
+          "sourceRows": [
+            16
+          ]
+        },
+        {
+          "registration": "M15143",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 15143 M PRIVATE",
+          "amountAed": 222.88,
+          "vatAed": 10.61,
+          "sourceRows": [
+            17
+          ]
+        },
+        {
+          "registration": "A44041",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 44041 A PRIVATE",
+          "amountAed": 410.17,
+          "vatAed": 19.53,
+          "sourceRows": [
+            18
+          ]
+        },
+        {
+          "registration": "C37069",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37069 C PRIVATE",
+          "amountAed": 1077,
+          "vatAed": 51.29,
+          "sourceRows": [
+            19
+          ]
+        },
+        {
+          "registration": "M99268",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99268 M PRIVATE",
+          "amountAed": 1430.63,
+          "vatAed": 68.13,
+          "sourceRows": [
+            20
+          ]
+        },
+        {
+          "registration": "M85751",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85751 M PRIVATE",
+          "amountAed": 1312.96,
+          "vatAed": 62.52,
+          "sourceRows": [
+            21
+          ]
+        },
+        {
+          "registration": "M85756",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85756 M PRIVATE",
+          "amountAed": 823.91,
+          "vatAed": 39.23,
+          "sourceRows": [
+            22
+          ]
+        },
+        {
+          "registration": "M85750",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85750 M PRIVATE",
+          "amountAed": 1409.19,
+          "vatAed": 67.1,
+          "sourceRows": [
+            23
+          ]
+        },
+        {
+          "registration": "M85759",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85759 M PRIVATE",
+          "amountAed": 1714.93,
+          "vatAed": 81.66,
+          "sourceRows": [
+            24
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2026-04",
+      "sourceFile": "adnoc-april.xlsx",
+      "rowCount": 28,
+      "vehicleCount": 24,
+      "totalAmountAed": 61365.99,
+      "totalVatAed": 3065.04,
+      "busAmountAed": 50475.86,
+      "otherAmountAed": 10890.13,
+      "allocations": [
+        {
+          "registration": "A45267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 45267 A PRIVATE",
+          "amountAed": 283.12,
+          "vatAed": 13.48,
+          "sourceRows": [
+            2
+          ]
+        },
+        {
+          "registration": "C29769",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 29769 C PRIVATE",
+          "amountAed": 2508.7,
+          "vatAed": 119.46,
+          "sourceRows": [
+            3
+          ]
+        },
+        {
+          "registration": "A20107",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 20107 A PRIVATE",
+          "amountAed": 1015.1,
+          "vatAed": 48.34,
+          "sourceRows": [
+            4
+          ]
+        },
+        {
+          "registration": "C37074",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37074 C PRIVATE",
+          "amountAed": 1930.48,
+          "vatAed": 91.93,
+          "sourceRows": [
+            5
+          ]
+        },
+        {
+          "registration": "C37075",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37075 C PRIVATE",
+          "amountAed": 3771.9,
+          "vatAed": 179.61,
+          "sourceRows": [
+            6
+          ]
+        },
+        {
+          "registration": "C37072",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37072 C PRIVATE",
+          "amountAed": 2975.12,
+          "vatAed": 141.67,
+          "sourceRows": [
+            7
+          ]
+        },
+        {
+          "registration": "A21248",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 21248 A PRIVATE",
+          "amountAed": 3088.74,
+          "vatAed": 147.08,
+          "sourceRows": [
+            8
+          ]
+        },
+        {
+          "registration": "A33876",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33876 A PRIVATE",
+          "amountAed": 3522.23,
+          "vatAed": 167.73,
+          "sourceRows": [
+            9
+          ]
+        },
+        {
+          "registration": "A33867",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33867 A PRIVATE",
+          "amountAed": 9075.78,
+          "vatAed": 527.42,
+          "sourceRows": [
+            10
+          ]
+        },
+        {
+          "registration": "M99270",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99270 M PRIVATE",
+          "amountAed": 517.16,
+          "vatAed": 24.63,
+          "sourceRows": [
+            11
+          ]
+        },
+        {
+          "registration": "M99271",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99271 M PRIVATE",
+          "amountAed": 2446.88,
+          "vatAed": 116.52,
+          "sourceRows": [
+            12
+          ]
+        },
+        {
+          "registration": "M99267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99267 M PRIVATE",
+          "amountAed": 701.9,
+          "vatAed": 33.42,
+          "sourceRows": [
+            13
+          ]
+        },
+        {
+          "registration": "M99273",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99273 M PRIVATE",
+          "amountAed": 2392.49,
+          "vatAed": 113.93,
+          "sourceRows": [
+            14
+          ]
+        },
+        {
+          "registration": "A8975",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 8975 A PRIVATE",
+          "amountAed": 1190,
+          "vatAed": 56.67,
+          "sourceRows": [
+            15
+          ]
+        },
+        {
+          "registration": "C26484",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 26484 C PRIVATE",
+          "amountAed": 715.26,
+          "vatAed": 34.06,
+          "sourceRows": [
+            16
+          ]
+        },
+        {
+          "registration": "M15143",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 15143 M PRIVATE",
+          "amountAed": 1088.66,
+          "vatAed": 51.84,
+          "sourceRows": [
+            17
+          ]
+        },
+        {
+          "registration": "A44041",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 44041 A PRIVATE",
+          "amountAed": 842.34,
+          "vatAed": 40.11,
+          "sourceRows": [
+            18
+          ]
+        },
+        {
+          "registration": "C37069",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37069 C PRIVATE",
+          "amountAed": 3103.41,
+          "vatAed": 147.78,
+          "sourceRows": [
+            19
+          ]
+        },
+        {
+          "registration": "M99268",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99268 M PRIVATE",
+          "amountAed": 4587.78,
+          "vatAed": 242.28,
+          "sourceRows": [
+            20
+          ]
+        },
+        {
+          "registration": "M85751",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85751 M PRIVATE",
+          "amountAed": 3623.27,
+          "vatAed": 196.34,
+          "sourceRows": [
+            21,
+            26
+          ]
+        },
+        {
+          "registration": "M85756",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85756 M PRIVATE",
+          "amountAed": 2675.61,
+          "vatAed": 127.41,
+          "sourceRows": [
+            22,
+            27
+          ]
+        },
+        {
+          "registration": "M85750",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85750 M PRIVATE",
+          "amountAed": 4758.98,
+          "vatAed": 226.61,
+          "sourceRows": [
+            23,
+            28
+          ]
+        },
+        {
+          "registration": "M85759",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85759 M PRIVATE",
+          "amountAed": 4336.7,
+          "vatAed": 206.51,
+          "sourceRows": [
+            24,
+            29
+          ]
+        },
+        {
+          "registration": "A1645",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 1645 A PRIVATE",
+          "amountAed": 214.38,
+          "vatAed": 10.21,
+          "sourceRows": [
+            25
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2026-05",
+      "sourceFile": "adnoc-may.xlsx",
+      "rowCount": 23,
+      "vehicleCount": 23,
+      "totalAmountAed": 57661.86,
+      "totalVatAed": 2831.52,
+      "busAmountAed": 45804.9,
+      "otherAmountAed": 11856.96,
+      "allocations": [
+        {
+          "registration": "A45267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 45267 A PRIVATE",
+          "amountAed": 720.05,
+          "vatAed": 34.29,
+          "sourceRows": [
+            2
+          ]
+        },
+        {
+          "registration": "C29769",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 29769 C PRIVATE",
+          "amountAed": 1505.48,
+          "vatAed": 71.69,
+          "sourceRows": [
+            3
+          ]
+        },
+        {
+          "registration": "A20107",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 20107 A PRIVATE",
+          "amountAed": 1241.9,
+          "vatAed": 59.14,
+          "sourceRows": [
+            4
+          ]
+        },
+        {
+          "registration": "C37074",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37074 C PRIVATE",
+          "amountAed": 2222.79,
+          "vatAed": 105.85,
+          "sourceRows": [
+            5
+          ]
+        },
+        {
+          "registration": "C37075",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37075 C PRIVATE",
+          "amountAed": 2935.33,
+          "vatAed": 139.78,
+          "sourceRows": [
+            6
+          ]
+        },
+        {
+          "registration": "C37072",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37072 C PRIVATE",
+          "amountAed": 3656.89,
+          "vatAed": 188.42,
+          "sourceRows": [
+            7
+          ]
+        },
+        {
+          "registration": "A21248",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 21248 A PRIVATE",
+          "amountAed": 2534.42,
+          "vatAed": 120.69,
+          "sourceRows": [
+            8
+          ]
+        },
+        {
+          "registration": "A33876",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33876 A PRIVATE",
+          "amountAed": 3551.05,
+          "vatAed": 169.1,
+          "sourceRows": [
+            9
+          ]
+        },
+        {
+          "registration": "A33867",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33867 A PRIVATE",
+          "amountAed": 6695.73,
+          "vatAed": 318.84,
+          "sourceRows": [
+            10
+          ]
+        },
+        {
+          "registration": "M99270",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99270 M PRIVATE",
+          "amountAed": 1547.58,
+          "vatAed": 73.69,
+          "sourceRows": [
+            11
+          ]
+        },
+        {
+          "registration": "M99271",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99271 M PRIVATE",
+          "amountAed": 2473.18,
+          "vatAed": 117.77,
+          "sourceRows": [
+            12
+          ]
+        },
+        {
+          "registration": "M99267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99267 M PRIVATE",
+          "amountAed": 566.47,
+          "vatAed": 26.97,
+          "sourceRows": [
+            13
+          ]
+        },
+        {
+          "registration": "M99273",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99273 M PRIVATE",
+          "amountAed": 2500,
+          "vatAed": 166.67,
+          "sourceRows": [
+            14
+          ]
+        },
+        {
+          "registration": "C26484",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 26484 C PRIVATE",
+          "amountAed": 200.01,
+          "vatAed": 9.52,
+          "sourceRows": [
+            15
+          ]
+        },
+        {
+          "registration": "M15143",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 15143 M PRIVATE",
+          "amountAed": 1312.17,
+          "vatAed": 62.48,
+          "sourceRows": [
+            16
+          ]
+        },
+        {
+          "registration": "A44041",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 44041 A PRIVATE",
+          "amountAed": 983.84,
+          "vatAed": 46.85,
+          "sourceRows": [
+            17
+          ]
+        },
+        {
+          "registration": "C37069",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37069 C PRIVATE",
+          "amountAed": 3274.95,
+          "vatAed": 155.95,
+          "sourceRows": [
+            18
+          ]
+        },
+        {
+          "registration": "M99268",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99268 M PRIVATE",
+          "amountAed": 4944.56,
+          "vatAed": 235.46,
+          "sourceRows": [
+            19
+          ]
+        },
+        {
+          "registration": "A1645",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 1645 A PRIVATE",
+          "amountAed": 1859.34,
+          "vatAed": 88.54,
+          "sourceRows": [
+            20
+          ]
+        },
+        {
+          "registration": "M85751",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85751 M PRIVATE",
+          "amountAed": 2483.07,
+          "vatAed": 118.24,
+          "sourceRows": [
+            21
+          ]
+        },
+        {
+          "registration": "M85756",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85756 M PRIVATE",
+          "amountAed": 2710.44,
+          "vatAed": 129.07,
+          "sourceRows": [
+            22
+          ]
+        },
+        {
+          "registration": "M85750",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85750 M PRIVATE",
+          "amountAed": 3509.26,
+          "vatAed": 190.92,
+          "sourceRows": [
+            23
+          ]
+        },
+        {
+          "registration": "M85759",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85759 M PRIVATE",
+          "amountAed": 4233.35,
+          "vatAed": 201.59,
+          "sourceRows": [
+            24
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2026-06",
+      "sourceFile": "adnoc-june.xlsx",
+      "rowCount": 23,
+      "vehicleCount": 23,
+      "totalAmountAed": 53211.2,
+      "totalVatAed": 2614.83,
+      "busAmountAed": 39623.15,
+      "otherAmountAed": 13588.05,
+      "allocations": [
+        {
+          "registration": "A45267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 45267 A PRIVATE",
+          "amountAed": 799.15,
+          "vatAed": 38.05,
+          "sourceRows": [
+            2
+          ]
+        },
+        {
+          "registration": "C29769",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 29769 C PRIVATE",
+          "amountAed": 1857.61,
+          "vatAed": 88.46,
+          "sourceRows": [
+            3
+          ]
+        },
+        {
+          "registration": "A20107",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 20107 A PRIVATE",
+          "amountAed": 875.98,
+          "vatAed": 41.71,
+          "sourceRows": [
+            4
+          ]
+        },
+        {
+          "registration": "C37074",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37074 C PRIVATE",
+          "amountAed": 1240.63,
+          "vatAed": 82.89,
+          "sourceRows": [
+            5
+          ]
+        },
+        {
+          "registration": "C37075",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37075 C PRIVATE",
+          "amountAed": 3446.44,
+          "vatAed": 164.12,
+          "sourceRows": [
+            6
+          ]
+        },
+        {
+          "registration": "C37072",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37072 C PRIVATE",
+          "amountAed": 3136.32,
+          "vatAed": 149.35,
+          "sourceRows": [
+            7
+          ]
+        },
+        {
+          "registration": "A21248",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 21248 A PRIVATE",
+          "amountAed": 2833.13,
+          "vatAed": 134.91,
+          "sourceRows": [
+            8
+          ]
+        },
+        {
+          "registration": "A33876",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33876 A PRIVATE",
+          "amountAed": 3136.92,
+          "vatAed": 149.38,
+          "sourceRows": [
+            9
+          ]
+        },
+        {
+          "registration": "A33867",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33867 A PRIVATE",
+          "amountAed": 6923.4,
+          "vatAed": 329.69,
+          "sourceRows": [
+            10
+          ]
+        },
+        {
+          "registration": "M99270",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99270 M PRIVATE",
+          "amountAed": 1563.47,
+          "vatAed": 74.45,
+          "sourceRows": [
+            11
+          ]
+        },
+        {
+          "registration": "M99271",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99271 M PRIVATE",
+          "amountAed": 3495.74,
+          "vatAed": 166.46,
+          "sourceRows": [
+            12
+          ]
+        },
+        {
+          "registration": "M99267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99267 M PRIVATE",
+          "amountAed": 1049.99,
+          "vatAed": 50,
+          "sourceRows": [
+            13
+          ]
+        },
+        {
+          "registration": "M99273",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99273 M PRIVATE",
+          "amountAed": 2500,
+          "vatAed": 176.19,
+          "sourceRows": [
+            14
+          ]
+        },
+        {
+          "registration": "C26484",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 26484 C PRIVATE",
+          "amountAed": 223.63,
+          "vatAed": 10.65,
+          "sourceRows": [
+            15
+          ]
+        },
+        {
+          "registration": "M15143",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 15143 M PRIVATE",
+          "amountAed": 1508.63,
+          "vatAed": 71.84,
+          "sourceRows": [
+            16
+          ]
+        },
+        {
+          "registration": "A44041",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 44041 A PRIVATE",
+          "amountAed": 1710.01,
+          "vatAed": 81.43,
+          "sourceRows": [
+            17
+          ]
+        },
+        {
+          "registration": "C37069",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37069 C PRIVATE",
+          "amountAed": 2907.31,
+          "vatAed": 138.44,
+          "sourceRows": [
+            18
+          ]
+        },
+        {
+          "registration": "M99268",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99268 M PRIVATE",
+          "amountAed": 2689.42,
+          "vatAed": 128.07,
+          "sourceRows": [
+            19
+          ]
+        },
+        {
+          "registration": "A1645",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 1645 A PRIVATE",
+          "amountAed": 1424.92,
+          "vatAed": 67.85,
+          "sourceRows": [
+            20
+          ]
+        },
+        {
+          "registration": "M85751",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85751 M PRIVATE",
+          "amountAed": 2043.5,
+          "vatAed": 97.31,
+          "sourceRows": [
+            21
+          ]
+        },
+        {
+          "registration": "M85756",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85756 M PRIVATE",
+          "amountAed": 1861.37,
+          "vatAed": 88.64,
+          "sourceRows": [
+            22
+          ]
+        },
+        {
+          "registration": "M85750",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85750 M PRIVATE",
+          "amountAed": 2742.77,
+          "vatAed": 130.61,
+          "sourceRows": [
+            23
+          ]
+        },
+        {
+          "registration": "M85759",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85759 M PRIVATE",
+          "amountAed": 3240.86,
+          "vatAed": 154.33,
+          "sourceRows": [
+            24
+          ]
+        }
+      ]
+    },
+    {
+      "period": "2026-07",
+      "sourceFile": "adnoc-july.xlsx",
+      "rowCount": 22,
+      "vehicleCount": 22,
+      "totalAmountAed": 65255.6,
+      "totalVatAed": 3193.12,
+      "busAmountAed": 55628.43,
+      "otherAmountAed": 9627.17,
+      "allocations": [
+        {
+          "registration": "A45267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 45267 A PRIVATE",
+          "amountAed": 1220.8,
+          "vatAed": 58.13,
+          "sourceRows": [
+            2
+          ]
+        },
+        {
+          "registration": "C29769",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 29769 C PRIVATE",
+          "amountAed": 3771.94,
+          "vatAed": 208.19,
+          "sourceRows": [
+            3
+          ]
+        },
+        {
+          "registration": "A20107",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 20107 A PRIVATE",
+          "amountAed": 962,
+          "vatAed": 45.81,
+          "sourceRows": [
+            4
+          ]
+        },
+        {
+          "registration": "C37074",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37074 C PRIVATE",
+          "amountAed": 3049.97,
+          "vatAed": 145.24,
+          "sourceRows": [
+            5
+          ]
+        },
+        {
+          "registration": "C37075",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37075 C PRIVATE",
+          "amountAed": 5423.54,
+          "vatAed": 258.26,
+          "sourceRows": [
+            6
+          ]
+        },
+        {
+          "registration": "C37072",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37072 C PRIVATE",
+          "amountAed": 3785.48,
+          "vatAed": 208.83,
+          "sourceRows": [
+            7
+          ]
+        },
+        {
+          "registration": "A21248",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 21248 A PRIVATE",
+          "amountAed": 4382.36,
+          "vatAed": 208.68,
+          "sourceRows": [
+            8
+          ]
+        },
+        {
+          "registration": "A33876",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33876 A PRIVATE",
+          "amountAed": 3197.41,
+          "vatAed": 152.26,
+          "sourceRows": [
+            9
+          ]
+        },
+        {
+          "registration": "A33867",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 33867 A PRIVATE",
+          "amountAed": 6286.51,
+          "vatAed": 327.93,
+          "sourceRows": [
+            10
+          ]
+        },
+        {
+          "registration": "M99270",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99270 M PRIVATE",
+          "amountAed": 3082.96,
+          "vatAed": 146.81,
+          "sourceRows": [
+            11
+          ]
+        },
+        {
+          "registration": "M99271",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99271 M PRIVATE",
+          "amountAed": 3180.56,
+          "vatAed": 151.46,
+          "sourceRows": [
+            12
+          ]
+        },
+        {
+          "registration": "M99267",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99267 M PRIVATE",
+          "amountAed": 550.84,
+          "vatAed": 26.23,
+          "sourceRows": [
+            13
+          ]
+        },
+        {
+          "registration": "M99273",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 99273 M PRIVATE",
+          "amountAed": 1509.84,
+          "vatAed": 71.9,
+          "sourceRows": [
+            14
+          ]
+        },
+        {
+          "registration": "M15143",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 15143 M PRIVATE",
+          "amountAed": 1170.2,
+          "vatAed": 55.72,
+          "sourceRows": [
+            15
+          ]
+        },
+        {
+          "registration": "A44041",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 44041 A PRIVATE",
+          "amountAed": 499.62,
+          "vatAed": 23.79,
+          "sourceRows": [
+            16
+          ]
+        },
+        {
+          "registration": "C37069",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 37069 C PRIVATE",
+          "amountAed": 4142.13,
+          "vatAed": 197.24,
+          "sourceRows": [
+            17
+          ]
+        },
+        {
+          "registration": "M99268",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 99268 M PRIVATE",
+          "amountAed": 4706.33,
+          "vatAed": 224.11,
+          "sourceRows": [
+            18
+          ]
+        },
+        {
+          "registration": "A1645",
+          "vehicleClass": "other",
+          "vehicleInfo": "FUJAIRAH 1645 A PRIVATE",
+          "amountAed": 533.31,
+          "vatAed": 25.4,
+          "sourceRows": [
+            19
+          ]
+        },
+        {
+          "registration": "M85751",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85751 M PRIVATE",
+          "amountAed": 2968.99,
+          "vatAed": 141.38,
+          "sourceRows": [
+            20
+          ]
+        },
+        {
+          "registration": "M85756",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85756 M PRIVATE",
+          "amountAed": 3236.79,
+          "vatAed": 154.13,
+          "sourceRows": [
+            21
+          ]
+        },
+        {
+          "registration": "M85750",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85750 M PRIVATE",
+          "amountAed": 3662.59,
+          "vatAed": 174.41,
+          "sourceRows": [
+            22
+          ]
+        },
+        {
+          "registration": "M85759",
+          "vehicleClass": "bus",
+          "vehicleInfo": "FUJAIRAH 85759 M PRIVATE",
+          "amountAed": 3931.43,
+          "vatAed": 187.21,
+          "sourceRows": [
+            23
+          ]
+        }
+      ]
+    }
+  ]
+}
+

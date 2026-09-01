@@ -75,6 +75,12 @@ function buildSubject(type, payload = {}) {
       return `Low Stock Alert — ${payload.nameEn || payload.nameAr || ''}`.trim();
     case 'monthly_report_reminder':
       return `📋 Monthly Report Reminder — ${payload.monthLabel || ''}`.trim();
+    case 'fleet_driver_changed': return `Fleet Driver Changed — ${payload.registration || ''}`.trim();
+    case 'fleet_external_transport': return `External Transportation Logged — ${payload.registration || ''}`.trim();
+    case 'fleet_overtime_logged': return `Driver Overtime Logged — ${payload.personName || ''}`.trim();
+    case 'fleet_fine_logged': return `Traffic Fine Logged — ${payload.registration || payload.driverName || ''}`.trim();
+    case 'fleet_registration_expiry': return `Vehicle Renewal Attention — ${payload.registration || ''}`.trim();
+    case 'fleet_maintenance_completed': return `Preventive Maintenance Completed — ${payload.registration || ''}`.trim();
     default:
       return 'FMAC Operations Notification';
   }
@@ -136,6 +142,19 @@ function buildTemplate(type, payload = {}) {
         </p>
         ${button(`${APP_URL}/reports`, 'Go to Reports')}
       `);
+
+    case 'fleet_driver_changed':
+      return wrap(`<p style="font-size:13px;color:${COLORS.gold};text-transform:uppercase;letter-spacing:.12em">Bus Driver Assignment Changed</p>${bigStat(payload.registration || '—', COLORS.gold)}<table style="width:100%;border-collapse:collapse;margin:18px 0 26px">${row('New driver', esc(payload.driverName || '—'))}${row('Effective date', esc(payload.effectiveDate || '—'))}${row('Changed by', esc(payload.changedBy || '—'))}</table>${button(`${APP_URL}/fleet/drivers`, 'Open Driver Register')}`);
+    case 'fleet_external_transport':
+      return wrap(`<p style="font-size:13px;color:${COLORS.gold};text-transform:uppercase;letter-spacing:.12em">External Transportation Logged</p>${bigStat(payload.registration || '—', COLORS.gold)}<table style="width:100%;border-collapse:collapse;margin:18px 0 26px">${row('Driver / staff', esc(payload.personName || '—'))}${row('Date', esc(payload.date || '—'))}${row('Purpose', esc(payload.reason || '—'))}</table>${button(`${APP_URL}/fleet/external-transportation`, 'Open External Transportation')}`);
+    case 'fleet_overtime_logged':
+      return wrap(`<p style="font-size:13px;color:${COLORS.gold};text-transform:uppercase;letter-spacing:.12em">Driver Overtime Logged</p>${bigStat(`${payload.hours ?? '—'} h`, COLORS.gold)}<table style="width:100%;border-collapse:collapse;margin:18px 0 26px">${row('Person', esc(payload.personName || '—'))}${row('Date', esc(payload.date || '—'))}${row('Reason', esc(payload.reason || '—'))}</table>${button(`${APP_URL}/fleet/overtime`, 'Open Overtime Register')}`);
+    case 'fleet_fine_logged':
+      return wrap(`<p style="font-size:13px;color:${COLORS.red};text-transform:uppercase;letter-spacing:.12em">Traffic Fine Logged</p>${bigStat(`AED ${payload.amountAed ?? '—'}`, COLORS.red)}<table style="width:100%;border-collapse:collapse;margin:18px 0 26px">${row('Vehicle', esc(payload.registration || '—'))}${row('Driver', esc(payload.driverName || '—'))}${row('Date', esc(payload.date || '—'))}${row('Reference', esc(payload.referenceNo || '—'))}</table>${button(`${APP_URL}/fleet/risk`, 'Open Traffic Fines')}`);
+    case 'fleet_registration_expiry':
+      return wrap(`<p style="font-size:13px;color:${COLORS.red};text-transform:uppercase;letter-spacing:.12em">Vehicle Renewal Attention</p>${bigStat(payload.registration || '—', COLORS.gold)}<table style="width:100%;border-collapse:collapse;margin:18px 0 26px">${row('Registration expiry', esc(payload.registrationExpiry || '—'))}${row('Insurance expiry', esc(payload.insuranceExpiry || '—'))}${row('Status', esc(payload.status || 'Requires attention'), COLORS.red)}</table>${button(`${APP_URL}/fleet/vehicle-registration`, 'Open Registration Register')}`);
+    case 'fleet_maintenance_completed':
+      return wrap(`<p style="font-size:13px;color:${COLORS.gold};text-transform:uppercase;letter-spacing:.12em">Preventive Maintenance Completed</p>${bigStat(payload.registration || '—', COLORS.gold)}<table style="width:100%;border-collapse:collapse;margin:18px 0 26px">${row('Service', esc(payload.service || '—'))}${row('Completion date', esc(payload.date || '—'))}${row('Odometer', `${esc(payload.odometerKm ?? '—')} km`)}${row('Cost', `AED ${esc(payload.costAed ?? 0)}`)}</table>${button(`${APP_URL}/fleet/maintenance`, 'Open Maintenance')}`);
 
     default:
       return wrap(`<p style="font-size:14px; color:${COLORS.text};">You have a new notification from FMAC Operations Suite.</p>`);

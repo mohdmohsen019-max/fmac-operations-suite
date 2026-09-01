@@ -1,35 +1,15 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, Plus, Trash2, Check, ChevronRight, ChevronLeft,
-  User, Package, FileText, RefreshCw, AlertTriangle, Printer
+  User, Package, FileText, RefreshCw, AlertTriangle, ShieldAlert, ShieldCheck
 } from 'lucide-react'
-import { db, auth, storage } from '../../firebase'
-import {
-  collection, addDoc, updateDoc, doc, serverTimestamp,
-  increment, runTransaction, getDoc
-} from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import html2canvas from 'html2canvas'
-import jsPDF from 'jspdf'
 import { useLanguage } from '../../contexts/LanguageContext'
-import { getSportLabel, getRoleLabel, getUnitLabel, fmtDateTime, DEFAULT_SPORTS, DEFAULT_ROLES, OTHER_SPORT } from './shared'
+import { getSportLabel, getRoleLabel, fmtDateTime, DEFAULT_SPORTS, DEFAULT_ROLES, OTHER_SPORT } from './shared'
 import CustomSelect from '../CustomSelect'
-import { sendNotification } from '../../utils/notify'
-
-// Generate receipt number — ISS-YYYY-XXXX
-async function nextReceiptNumber() {
-  const configRef = doc(db, 'inventory_config', 'main')
-  let newNum = 1
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(configRef)
-    const current = snap.exists() ? (snap.data().lastReceiptNumber || 0) : 0
-    newNum = current + 1
-    tx.set(configRef, { lastReceiptNumber: newNum }, { merge: true })
-  })
-  const year = new Date().getFullYear()
-  return `ISS-${year}-${String(newNum).padStart(4, '0')}`
-}
+import { usePermissions } from '../../hooks/usePermissions'
+import InventoryEvidencePicker from './InventoryEvidencePicker'
+import { submitInventoryRequest } from './inventoryApprovalService'
 
 function StepIndicator({ step, t }) {
   const steps = [
@@ -212,8 +192,9 @@ function ReceiptDocument({ receipt, t, lang, sports }) {
   )
 }
 
-export default function InventoryIssue({ items, settings, onIssueComplete }) {
+export default function InventoryIssue({ items, settings, onIssueComplete, canRequest }) {
   const { t, lang } = useLanguage()
+  const { userProfile } = usePermissions()
   const [step, setStep] = useState(1)
   const [recipient, setRecipient] = useState({
     sport: '', sportAr: '', sportOther: '', personName: '', role: 'player', roleAr: '', playerNames: '', notes: ''
@@ -221,7 +202,8 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
   const [selectedItems, setSelectedItems] = useState([])
   const [saving, setSaving] = useState(false)
   const [receipt, setReceipt] = useState(null)
-  const receiptRef = useRef(null)
+  const [evidenceFiles, setEvidenceFiles] = useState([])
+  const [submitError, setSubmitError] = useState('')
 
   const sports = settings?.sports || DEFAULT_SPORTS
   const roles = DEFAULT_ROLES
@@ -256,11 +238,9 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
 
   const handleConfirm = async () => {
     if (saving) return
+    setSubmitError('')
     setSaving(true)
     try {
-      const user = auth.currentUser
-      const receiptNumber = await nextReceiptNumber()
-
       const sport = sports.find(s => s.id === recipient.sport)
       const role = roles.find(r => r.id === recipient.role)
       const playerNames = recipient.role === 'coach' ? (recipient.playerNames.trim() || null) : null
@@ -271,6 +251,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
           itemId: r.item.id,
           itemNameAr: r.item.nameAr,
           itemNameEn: r.item.nameEn,
+          itemSku: r.item.sku,
           sku: r.item.sku,
           size: r.item.size || null,
           quantity: r.qty,
@@ -280,7 +261,6 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
       })
 
       const receiptData = {
-        receiptNumber,
         issuedTo: {
           sport: recipient.sport,
           /* For "Other" the free-text name is what identifies the discipline,
@@ -294,99 +274,23 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
           playerNames,
         },
         items: receiptItems,
-        issuedBy: user?.uid || 'unknown',
-        issuedByName: user?.displayName || user?.email || 'Unknown',
-        issuedAt: serverTimestamp(),
-        status: 'pending_signature',
         notes: recipient.notes || null,
-        pdfUrl: null,
       }
 
-      const receiptRef2 = await addDoc(collection(db, 'issuance_receipts'), receiptData)
+      const submitted = await submitInventoryRequest({
+        type: 'stock_out',
+        items: receiptItems,
+        details: { issuedTo: receiptData.issuedTo },
+        notes: receiptData.notes,
+      }, evidenceFiles, userProfile)
 
-      // Write movements and update stock
-      await Promise.all(selectedItems.map(async r => {
-        const prev = r.item.currentStock
-        const newStock = Math.max(0, prev - r.qty)
-        // Low-stock detection: fire once per dip below threshold.
-        const threshold = r.item.minThreshold ?? 5
-        const nowLow = newStock <= threshold && r.item.low_stock_notified !== true
-        await updateDoc(doc(db, 'inventory_items', r.item.id), {
-          currentStock: increment(-r.qty),
-          updatedAt: serverTimestamp(),
-          ...(nowLow ? { low_stock_notified: true } : {}),
-        })
-        if (nowLow) {
-          try {
-            sendNotification('inventory_low', {
-              nameEn: r.item.nameEn,
-              nameAr: r.item.nameAr,
-              quantity: newStock,
-              threshold,
-              category: r.item.category || '',
-            })
-          } catch (notifyErr) {
-            console.error('inventory_low notification failed silently:', notifyErr)
-          }
-        }
-        await addDoc(collection(db, 'inventory_movements'), {
-          itemId: r.item.id,
-          itemNameAr: r.item.nameAr,
-          itemNameEn: r.item.nameEn,
-          itemSku: r.item.sku,
-          type: 'stock_out',
-          quantity: r.qty,
-          previousStock: prev,
-          newStock,
-          reason: 'issued',
-          issuedTo: {
-            sport: recipient.sport,
-            sportAr: isOtherSport ? otherName : (sport?.ar || recipient.sport),
-            sportOther: isOtherSport ? otherName : null,
-            personName: recipient.personName || null,
-            role: recipient.role,
-            playerNames,
-          },
-          deliveryNoteRef: null,
-          receiptId: receiptRef2.id,
-          performedBy: user?.uid || 'unknown',
-          performedByName: user?.displayName || user?.email || 'Unknown',
-          createdAt: serverTimestamp(),
-          notes: recipient.notes || null,
-        })
-      }))
-
-      setReceipt({ ...receiptData, issuedAt: new Date(), id: receiptRef2.id })
+      setReceipt({ ...receiptData, ...submitted, requestedAt: new Date() })
       setStep(4)
     } catch (err) {
       console.error(err)
-      alert(t('Error issuing items. Please try again.', 'خطأ في صرف الأصناف. يرجى المحاولة مجدداً.'))
+      setSubmitError(err.message || t('Could not submit the issue request.', 'تعذر تقديم طلب الصرف.'))
     } finally {
       setSaving(false)
-    }
-  }
-
-  const handleGeneratePDF = async () => {
-    const el = document.getElementById('inv-receipt-doc')
-    if (!el) return
-    try {
-      await document.fonts.ready
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
-      const imgData = canvas.toDataURL('image/jpeg', 0.95)
-      const pdf = new jsPDF('p', 'mm', 'a4', true)
-      const pdfW = 210
-      const pdfH = (canvas.height * pdfW) / canvas.width
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH)
-      pdf.save(`${receipt.receiptNumber}.pdf`)
-
-      // Upload to storage
-      const pdfBlob = pdf.output('blob')
-      const storageRef = ref(storage, `issuance_receipts/${receipt.id}.pdf`)
-      await uploadBytes(storageRef, pdfBlob)
-      const url = await getDownloadURL(storageRef)
-      await updateDoc(doc(db, 'issuance_receipts', receipt.id), { pdfUrl: url })
-    } catch (err) {
-      console.error('PDF error:', err)
     }
   }
 
@@ -394,12 +298,22 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
     setStep(1)
     setRecipient({ sport: '', sportAr: '', sportOther: '', personName: '', role: 'player', roleAr: '', playerNames: '', notes: '' })
     setSelectedItems([])
+    setEvidenceFiles([])
+    setSubmitError('')
     setReceipt(null)
     onIssueComplete?.()
   }
 
   return (
     <div className="inv-issue">
+      {!canRequest && (
+        <div className="inv-workflow-guard">
+          <ShieldAlert size={28} />
+          <strong>{t('Issue requests are initiated by the Warehouse/Store Manager.', 'يتم تقديم طلبات الصرف من مدير المخزن.')}</strong>
+          <span>{t('Use the Approvals tab to review requests assigned to your role.', 'استخدم تبويب الاعتمادات لمراجعة الطلبات المسندة إلى دورك.')}</span>
+        </div>
+      )}
+      {canRequest && <>
       {step < 4 && <StepIndicator step={step} t={t} />}
 
       <AnimatePresence mode="wait">
@@ -492,6 +406,13 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
                 onChange={e => setRecipient(p => ({ ...p, notes: e.target.value }))}
               />
             </div>
+
+            <InventoryEvidencePicker
+              files={evidenceFiles}
+              onChange={setEvidenceFiles}
+              title={t('Issue authorisation evidence', 'إثبات أمر الصرف')}
+              description={t('Attach the order, email, letter or other authorisation to issue these items.', 'أرفق الأمر أو البريد أو الخطاب أو أي تفويض آخر لصرف هذه الأصناف.')}
+            />
 
             <div className="inv-form-actions">
               <button
@@ -593,7 +514,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
             initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}>
             <div className="inv-form-title">
-              <FileText size={16} /> {t('Confirm & Issue', 'تأكيد وصرف')}
+              <FileText size={16} /> {t('Confirm request', 'تأكيد الطلب')}
             </div>
 
             <div className="inv-confirm-block">
@@ -636,6 +557,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
             </div>
 
             <div className="inv-form-actions">
+              {submitError && <div className="inv-error-msg">{submitError}</div>}
               <button className="inv-btn inv-btn-ghost" onClick={() => setStep(2)}>
                 <ChevronLeft size={15} /> {t('Back', 'رجوع')}
               </button>
@@ -646,7 +568,7 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
               >
                 {saving
                   ? <><RefreshCw size={15} className="inv-spin" /> {t('Processing…', 'جارٍ المعالجة…')}</>
-                  : <><Check size={15} /> {t('Confirm & Print Receipt', 'تأكيد وطباعة الإذن')}</>
+                  : <><Check size={15} /> {t('Submit for approval', 'تقديم للاعتماد')}</>
                 }
               </button>
             </div>
@@ -668,30 +590,31 @@ export default function InventoryIssue({ items, settings, onIssueComplete }) {
               </div>
               <div>
                 <div style={{ fontWeight: 700, color: 'var(--theme-text-main)' }}>
-                  {t('Issued Successfully', 'تم الصرف بنجاح')}
+                  {t('Issue request submitted', 'تم تقديم طلب الصرف')}
                 </div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--theme-text-muted)' }}>
-                  {receipt.receiptNumber}
+                  {receipt.requestCode}
                 </div>
               </div>
             </div>
 
-            {/* Preview receipt */}
-            <div style={{ overflowX: 'auto', border: '1px solid var(--theme-border)', borderRadius: 8, marginBottom: 20 }}>
-              <ReceiptDocument receipt={receipt} t={t} lang={lang} sports={sports} />
+            <div className="inv-request-submitted">
+              <ShieldCheck size={22} />
+              <div>
+                <strong>{t('Awaiting Sports Activities Specialist', 'بانتظار أخصائي الأنشطة الرياضية')}</strong>
+                <span>{t('No inventory was deducted. Stock changes only after final approval by Head of Operations.', 'لم يتم خصم أي مخزون. لا تُرحّل الكميات إلا بعد الاعتماد النهائي من رئيس العمليات.')}</span>
+              </div>
             </div>
 
             <div className="inv-form-actions">
               <button className="inv-btn inv-btn-ghost" onClick={resetForm}>
-                {t('New Issue', 'صرف جديد')}
-              </button>
-              <button className="inv-btn inv-btn-primary" onClick={handleGeneratePDF}>
-                <Printer size={15} /> {t('Download PDF', 'تحميل PDF')}
+                {t('New request', 'طلب جديد')}
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+      </>}
     </div>
   )
 }

@@ -1,0 +1,19 @@
+.custom-date-popover {
+  position: fixed;
+  z-index: 1000;
+  direction: ltr;
+}
+
+.custom-date-container[dir='rtl'] .custom-date-label {
+  text-align: right;
+}
+
+.external-insights-period .external-date-control {
+  flex: 1 1 136px;
+}
+
+@media (max-width: 480px) {
+  .custom-date-popover {
+    width: min(286px, calc(100vw - 24px));
+  }
+}

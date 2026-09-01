@@ -7,7 +7,7 @@ import {
 import { useLanguage } from '../../contexts/LanguageContext'
 import { getItemStatus, getSportLabel, getCatLabel } from './shared'
 import CustomSelect from '../CustomSelect'
-import exportCsv from '../../utils/exportCsv'
+import { downloadStockWorkbook } from './inventoryStockExport'
 
 function StatusBadge({ status, t }) {
   const cfg = {
@@ -31,7 +31,7 @@ export default function InventoryStock({
   items, settings, isAdmin, scanMode, setScanMode,
   onOpenBarcode, onEditItem, onViewHistory, selectedItems, setSelectedItems,
 }) {
-  const { t, lang } = useLanguage()
+  const { t, lang, locale } = useLanguage()
   const [search, setSearch] = useState(
     () => new URLSearchParams(window.location.search).get('q') || ''
   )
@@ -60,15 +60,18 @@ export default function InventoryStock({
   }, [items, search, filterCat, filterSport, filterStatus])
 
   const exportItems = () => {
-    exportCsv(
-      `fmac-stock-${new Date().toISOString().slice(0, 10)}`,
-      ['Name (EN)', 'Name (AR)', 'SKU', 'Barcode', 'Category', 'Sport', 'Current Stock', 'Min Threshold', 'Status'],
-      filtered.map(i => [
-        i.nameEn, i.nameAr, i.sku, i.barcode,
-        getCatLabel(i.category, categories, lang), getSportLabel(i.sport, sports, lang),
-        i.currentStock ?? 0, i.minThreshold ?? 5, getItemStatus(i),
-      ])
-    )
+    downloadStockWorkbook(filtered, {
+      categories,
+      sports,
+      lang,
+      locale,
+      filters: {
+        search: search || '',
+        category: filterCat === 'all' ? '' : filterCat,
+        sport: filterSport === 'all' ? '' : filterSport,
+        status: filterStatus === 'all' ? '' : filterStatus,
+      },
+    })
   }
 
   const toggleSelect = (id) => {
@@ -119,8 +122,8 @@ export default function InventoryStock({
         <div className="inv-toolbar-right">
           <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={exportItems}
             disabled={filtered.length === 0}
-            title={t('Export the current view as CSV', 'تصدير العرض الحالي كملف CSV')}>
-            <Download size={14} /> CSV
+            title={t('Export the current view to Excel', 'تصدير العرض الحالي إلى Excel')}>
+            <Download size={14} /> Excel
           </button>
           {selectedItems.length > 0 && (
             <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={() => {

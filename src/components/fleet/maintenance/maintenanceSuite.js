@@ -18,6 +18,9 @@ import { collection, onSnapshot, writeBatch, doc } from 'firebase/firestore'
 import { db } from '../../../firebase'
 import { cartrackService } from '../../../services/cartrackService'
 import { normReg } from '../../../services/fleetMeta'
+import { canonicalFleetRegistration, deduplicateCanonicalTrips, mergeCanonicalVehicles } from '../../../services/fleetIdentity'
+import { componentLifecycle, oilStatusOf } from './maintenanceCalculations'
+import { DEFAULT_MAINTENANCE_TEMPLATES } from './preventiveMaintenance'
 
 export const OIL_DEFAULT_INTERVAL_KM = 10000
 export const OIL_GLOBAL_DOC_ID = '_default'
@@ -47,18 +50,6 @@ export function recordKeyOf(r) {
 /* Cartrack getVehicles() reports the odometer in metres
    (see FleetDriverLog which divides by 1000). */
 export const odoKmOf = (v) => Math.round((parseFloat(v?.odometer) || 0) / 1000)
-
-export function partStatusOf(pct) {
-  if (pct >= 0.9) return 'critical'
-  if (pct >= 0.75) return 'attention'
-  return 'ok'
-}
-
-export function oilStatusOf(remaining, interval) {
-  if (remaining < 0) return 'overdue'
-  if (remaining <= interval * 0.1) return 'due-soon'
-  return 'ok'
-}
 
 /* When the live catalog is still the in-code seed, stage all seed docs into
    the batch (deterministic ids) so a partial write never hides the rest. */
@@ -96,22 +87,40 @@ export function useMaintenanceFiles() {
 }
 
 /* ── The suite: vehicles in scope + catalog + installs + oil + alerts ──── */
-export function useMaintenanceSuite(scope, inScope) {
+export function useMaintenanceSuite(scope, inScope, aliasMap = null) {
   const [vehState, setVehState] = useState({ list: [], loading: true })
   const [catalogDocs, setCatalogDocs] = useState(null) // null = first snapshot pending
   const [installs, setInstalls] = useState([])
   const [oilState, setOilState] = useState({ map: new Map(), globalInterval: OIL_DEFAULT_INTERVAL_KM })
+  const [templateDocs, setTemplateDocs] = useState(null)
+  const [preventivePlans, setPreventivePlans] = useState([])
 
   /* Vehicles with live odometer — re-fetched whenever scope/classification
      changes. The previous list stays visible while the new one loads. */
   useEffect(() => {
     let cancelled = false
-    cartrackService.getVehicles(scope)
-      .then((list) => {
+    const end = new Date()
+    const start = new Date(end.getTime() - 30 * 86400000)
+    const timestamp = (date, final = false) => `${date.toISOString().slice(0, 10)} ${final ? '23:59:59' : '00:00:00'}`
+    Promise.all([
+      cartrackService.getVehicles(scope),
+      cartrackService.getTrips(timestamp(start), timestamp(end, true)).catch(() => []),
+    ])
+      .then(([list, tripRows]) => {
         if (cancelled) return
-        const filtered = (list || [])
-          .filter((v) => v?.registration && inScope(v.registration))
-          .map((v) => ({ ...v, reg: normReg(v.registration), odoKm: odoKmOf(v) }))
+        const distanceByVehicle = new Map()
+        deduplicateCanonicalTrips(tripRows || [], aliasMap).forEach((trip) => {
+          const reg = canonicalFleetRegistration(trip.registration, aliasMap)
+          if (!inScope(reg)) return
+          distanceByVehicle.set(reg, (distanceByVehicle.get(reg) || 0) + (Number(trip.trip_distance) || 0) / 1000)
+        })
+        const filtered = mergeCanonicalVehicles(
+          (list || []).filter((v) => v?.registration && inScope(v.registration)),
+          aliasMap,
+        ).map((v) => {
+          const reg = canonicalFleetRegistration(v.registration, aliasMap)
+          return { ...v, reg, odoKm: odoKmOf(v), avgDailyKm: (distanceByVehicle.get(reg) || 0) / 30 }
+        })
           .sort((a, b) => a.reg.localeCompare(b.reg))
         setVehState({ list: filtered, loading: false })
       })
@@ -120,7 +129,7 @@ export function useMaintenanceSuite(scope, inScope) {
         if (!cancelled) setVehState((prev) => ({ list: prev.list, loading: false }))
       })
     return () => { cancelled = true }
-  }, [scope, inScope])
+  }, [scope, inScope, aliasMap])
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -130,6 +139,18 @@ export function useMaintenanceSuite(scope, inScope) {
     )
     return unsub
   }, [])
+
+  useEffect(() => onSnapshot(
+    collection(db, 'fleet_maintenance_templates'),
+    (snap) => setTemplateDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => { console.error('fleet_maintenance_templates subscription error:', err); setTemplateDocs([]) },
+  ), [])
+
+  useEffect(() => onSnapshot(
+    collection(db, 'fleet_maintenance_plans'),
+    (snap) => setPreventivePlans(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => console.error('fleet_maintenance_plans subscription error:', err),
+  ), [])
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -173,6 +194,13 @@ export function useMaintenanceSuite(scope, inScope) {
     [catalog],
   )
 
+  const preventiveTemplatesAreSeed = templateDocs !== null && templateDocs.length === 0
+  const preventiveTemplates = useMemo(() => {
+    if (templateDocs === null) return null
+    const rows = templateDocs.length ? templateDocs : DEFAULT_MAINTENANCE_TEMPLATES
+    return [...rows].sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999))
+  }, [templateDocs])
+
   /* Latest install per vehicle × part (highest installedAtKm wins —
      the most recent replacement is by definition the furthest one). */
   const latestInstalls = useMemo(() => {
@@ -181,7 +209,10 @@ export function useMaintenanceSuite(scope, inScope) {
       const key = `${normReg(inst.vehicleReg)}|${inst.partId}`
       const km = parseFloat(inst.installedAtKm) || 0
       const prev = map.get(key)
-      if (!prev || km >= (parseFloat(prev.installedAtKm) || 0)) map.set(key, inst)
+      const prevKm = parseFloat(prev?.installedAtKm) || 0
+      const installedTime = Date.parse(inst.installedDate || '') || 0
+      const prevTime = Date.parse(prev?.installedDate || '') || 0
+      if (!prev || km > prevKm || (km === prevKm && installedTime >= prevTime)) map.set(key, inst)
     })
     return map
   }, [installs])
@@ -191,11 +222,16 @@ export function useMaintenanceSuite(scope, inScope) {
     vehicle: v,
     parts: activeParts.map((p) => {
       const install = latestInstalls.get(`${v.reg}|${p.id}`) || null
-      if (!install) return { part: p, install: null, status: 'none', pct: 0, usedKm: 0 }
-      const usedKm = Math.max(0, v.odoKm - (parseFloat(install.installedAtKm) || 0))
-      const lifespan = parseFloat(p.lifespanKm) > 0 ? parseFloat(p.lifespanKm) : 1
-      const pct = usedKm / lifespan
-      return { part: p, install, usedKm, pct, status: partStatusOf(pct) }
+      if (!install) return { part: p, install: null, status: 'none', pct: 0, usedKm: 0, usedDays: 0 }
+      const lifecyclePart = install.lifecycleBasis === 'time'
+        ? { ...p, lifecycleBasis: 'time', lifespanDays: install.lifespanDays || p.lifespanDays }
+        : p
+      return { part: p, install, ...componentLifecycle({
+        currentKm: v.odoKm,
+        installedAtKm: install.installedAtKm,
+        installedDate: install.installedDate,
+        part: lifecyclePart,
+      }) }
     }),
   })), [vehState.list, activeParts, latestInstalls])
 
@@ -213,7 +249,9 @@ export function useMaintenanceSuite(scope, inScope) {
     return {
       vehicle: v, rec, interval, hasOwnInterval: ownInterval > 0,
       lastChangeKm: lastKm, lastChangeDate: rec.lastChangeDate || null,
-      nextDueKm, remaining, status: oilStatusOf(remaining, interval),
+      nextDueKm, remaining,
+      odometerGap: lastKm - v.odoKm,
+      status: oilStatusOf(remaining, interval, v.odoKm, lastKm),
     }
   }), [vehState.list, oilState])
 
@@ -222,22 +260,23 @@ export function useMaintenanceSuite(scope, inScope) {
   const alerts = useMemo(() => {
     const list = []
     oilRows.forEach((row) => {
-      if (row.status === 'overdue' || row.status === 'due-soon') {
+      if (row.status === 'invalid' || row.status === 'overdue' || row.status === 'due-soon') {
         list.push({
           id: `oil_${row.vehicle.reg}`, type: 'oil', reg: row.vehicle.reg,
-          severity: row.status === 'overdue' ? 'critical' : 'attention',
-          rank: row.status === 'overdue' ? 0 : 2,
+          status: row.status, odometerGap: row.odometerGap,
+          severity: row.status === 'invalid' || row.status === 'overdue' ? 'critical' : 'attention',
+          rank: row.status === 'invalid' || row.status === 'overdue' ? 0 : 2,
           urgency: -row.remaining, remaining: row.remaining,
         })
       }
     })
     partsHealth.forEach(({ vehicle, parts }) => {
       parts.forEach((ph) => {
-        if (ph.status === 'critical' || ph.status === 'attention') {
+        if (ph.status === 'overdue' || ph.status === 'due' || ph.status === 'due-soon') {
           list.push({
             id: `part_${vehicle.reg}_${ph.part.id}`, type: 'part', reg: vehicle.reg,
-            part: ph.part, severity: ph.status === 'critical' ? 'critical' : 'attention',
-            rank: ph.status === 'critical' ? 1 : 3,
+            part: ph.part, severity: ph.status === 'overdue' || ph.status === 'due' ? 'critical' : 'attention',
+            rank: ph.status === 'overdue' ? 1 : ph.status === 'due' ? 2 : 3,
             urgency: ph.pct, pct: ph.pct,
           })
         }
@@ -249,8 +288,8 @@ export function useMaintenanceSuite(scope, inScope) {
   const summary = useMemo(() => {
     let warnings = 0; let critical = 0
     partsHealth.forEach(({ parts }) => parts.forEach((ph) => {
-      if (ph.status === 'critical') { critical += 1; warnings += 1 }
-      else if (ph.status === 'attention') warnings += 1
+      if (ph.status === 'overdue' || ph.status === 'due') { critical += 1; warnings += 1 }
+      else if (ph.status === 'due-soon') warnings += 1
     }))
     const oilOverdue = oilRows.filter((r) => r.status === 'overdue').length
     const oilDueSoon = oilRows.filter((r) => r.status === 'due-soon').length
@@ -264,6 +303,7 @@ export function useMaintenanceSuite(scope, inScope) {
     latestInstalls,
     oilMap: oilState.map,
     globalOilInterval: oilState.globalInterval,
+    preventiveTemplates, preventiveTemplatesAreSeed, preventivePlans,
     partsHealth, oilRows, alerts, summary,
   }
 }

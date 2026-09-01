@@ -18,13 +18,14 @@ const OIL_LABEL = {
   ok:         { en: 'OK', ar: 'سليم' },
   'due-soon': { en: 'Oil change approaching', ar: 'اقترب موعد تغيير الزيت' },
   overdue:    { en: 'Overdue', ar: 'متأخر' },
+  invalid:    { en: 'Data error', ar: 'خطأ في البيانات' },
   none:       { en: 'No record', ar: 'لا يوجد سجل' },
 }
 
 function OilStatusBadge({ status }) {
   const { t } = useLanguage()
   const l = OIL_LABEL[status] || OIL_LABEL.none
-  return <span className={`fms-status fms-status--${status === 'overdue' ? 'critical' : status === 'due-soon' ? 'attention' : status}`}>{t(l.en, l.ar)}</span>
+  return <span className={`fms-status fms-status--${status === 'invalid' || status === 'overdue' ? 'critical' : status === 'due-soon' ? 'attention' : status}`}>{t(l.en, l.ar)}</span>
 }
 
 /* ── Per-vehicle editor: last change + own interval ────────────────────── */
@@ -41,6 +42,13 @@ function OilEditModal({ row, globalInterval, onClose }) {
     const kmNum = parseFloat(lastKm)
     if (Number.isNaN(kmNum) || kmNum < 0) {
       setError(t('Enter a valid odometer reading.', 'أدخل قراءة عداد صحيحة.'))
+      return
+    }
+    if (kmNum > v.odoKm) {
+      setError(t(
+        `The last-change reading cannot exceed the current odometer (${v.odoKm.toLocaleString()} km).`,
+        `لا يمكن أن تتجاوز قراءة آخر تغيير العداد الحالي (${v.odoKm.toLocaleString()} كم).`,
+      ))
       return
     }
     const intNum = parseFloat(interval)
@@ -108,7 +116,7 @@ function OilEditModal({ row, globalInterval, onClose }) {
 }
 
 /* ── Main section ──────────────────────────────────────────────────────── */
-export default function OilTracking({ suite, canEdit, displayName }) {
+export default function OilTracking({ suite, canEdit }) {
   const { t, locale } = useLanguage()
   const { oilRows, vehiclesLoading, vehicles, globalOilInterval } = suite
   const [editRow, setEditRow] = useState(null)
@@ -215,7 +223,7 @@ export default function OilTracking({ suite, canEdit, displayName }) {
           <table className="fleet-table">
             <thead>
               <tr>
-                <th>{t('Vehicle', 'المركبة')}</th>
+                <th>{t('Plate number', 'رقم اللوحة')}</th>
                 <th>{t('Odometer (km)', 'العداد (كم)')}</th>
                 <th>{t('Last change', 'آخر تغيير')}</th>
                 <th>{t('Interval (km)', 'الفترة (كم)')}</th>
@@ -231,20 +239,32 @@ export default function OilTracking({ suite, canEdit, displayName }) {
               )}
               {oilRows.map((row) => (
                 <tr key={row.vehicle.reg}>
-                  <td style={{ fontWeight: 700 }}>{displayName(row.vehicle.reg, locale)}</td>
+                  <td className="fms-mono" style={{ fontWeight: 800 }}>{row.vehicle.reg}</td>
                   <td className="fms-mono">{row.vehicle.odoKm.toLocaleString(locale)}</td>
-                  <td className="fms-mono">
+                  <td className={`fms-mono${row.status === 'invalid' ? ' fms-t-risk' : ''}`}>
                     {row.status === 'none'
                       ? <span className="fms-muted">{t('No record', 'لا يوجد سجل')}</span>
-                      : <>{row.lastChangeKm.toLocaleString(locale)}<span className="fms-hint" style={{ marginInlineStart: 6 }}>{row.lastChangeDate || ''}</span></>}
+                      : <>
+                          {row.lastChangeKm.toLocaleString(locale)}
+                          <span className="fms-hint" style={{ marginInlineStart: 6 }}>{row.lastChangeDate || ''}</span>
+                          {row.status === 'invalid' && (
+                            <span className="fms-data-error">
+                              <AlertTriangle size={11} />
+                              {t(
+                                `${row.odometerGap.toLocaleString(locale)} km above current odometer`,
+                                `أعلى من العداد الحالي بمقدار ${row.odometerGap.toLocaleString(locale)} كم`,
+                              )}
+                            </span>
+                          )}
+                        </>}
                   </td>
                   <td className="fms-mono">
                     {row.interval.toLocaleString(locale)}
                     {!row.hasOwnInterval && <span className="fms-hint" style={{ marginInlineStart: 4 }}>{t('(global)', '(عام)')}</span>}
                   </td>
-                  <td className="fms-mono">{row.status === 'none' ? '—' : row.nextDueKm.toLocaleString(locale)}</td>
+                  <td className="fms-mono">{row.status === 'none' || row.status === 'invalid' ? '—' : row.nextDueKm.toLocaleString(locale)}</td>
                   <td className={`fms-mono${row.status === 'overdue' ? ' fms-t-risk' : row.status === 'due-soon' ? ' fms-t-warn' : ''}`}>
-                    {row.status === 'none' ? '—' : row.remaining.toLocaleString(locale)}
+                    {row.status === 'none' || row.status === 'invalid' ? '—' : row.remaining.toLocaleString(locale)}
                   </td>
                   <td><OilStatusBadge status={row.status} /></td>
                   {canEdit && (

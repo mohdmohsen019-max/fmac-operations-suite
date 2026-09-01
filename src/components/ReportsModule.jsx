@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   BarChart2, Plus, ChevronLeft, Check, X, RefreshCw,
-  Truck, Wrench, Users, MessageSquare, Package,
+  Truck, Wrench, Users, Package, Route, Clock3, ShieldAlert, IdCard,
   Image, Fuel, Receipt, FolderOpen, FileText, AlertCircle,
   GripVertical, RotateCcw, BookOpen, Download, BellRing
 } from 'lucide-react'
@@ -40,16 +40,20 @@ const HOD_EMAIL = import.meta.env.VITE_HOD_EMAIL
    the department's, not whoever happened to compile the file. */
 const HOD_NAME_AR = 'ايهاب استيته'
 
-const ICON_MAP = { Truck, Wrench, Users, MessageSquare, Package, Image, Fuel, Receipt, FolderOpen }
+const ICON_MAP = { Truck, Wrench, Users, Package, Route, Clock3, ShieldAlert, IdCard, Image, Fuel, Receipt, FolderOpen }
 
 const REPORT_SECTIONS = [
   { key: 'bus_trips',           nameAr: 'حركة الحافلات',   nameEn: 'Bus Odometers & Trips',  type: 'auto',   required: true,  icon: 'Truck' },
   { key: 'maintenance',         nameAr: 'صيانة الحافلات',  nameEn: 'Bus Maintenance',        type: 'auto',   required: true,  icon: 'Wrench' },
   { key: 'player_registration', nameAr: 'تسجيل اللاعبين', nameEn: 'Player Registration',    type: 'manual', required: true,  icon: 'Users' },
-  { key: 'complaints',          nameAr: 'شكاوى',           nameEn: 'Complaints & Requests',  type: 'auto',   required: true,  icon: 'MessageSquare' },
   { key: 'inventory',           nameAr: 'المخازن',          nameEn: 'Inventory',              type: 'manual', required: true,  icon: 'Package' },
   { key: 'media',               nameAr: 'ميديا',            nameEn: 'Media',                  type: 'manual', required: true,  icon: 'Image' },
   { key: 'fuel',                nameAr: 'بترول',            nameEn: 'Fuel Consumption',       type: 'auto',   required: true,  icon: 'Fuel' },
+  { key: 'ridership',           nameAr: 'تشغيل الحافلات والركاب', nameEn: 'Bus Ridership & Sessions', type: 'auto', required: true, icon: 'Users' },
+  { key: 'external_transport',  nameAr: 'النقل الخارجي', nameEn: 'External Transportation', type: 'auto', required: true, icon: 'Route' },
+  { key: 'driver_overtime',     nameAr: 'العمل الإضافي للسائقين', nameEn: 'Driver Overtime', type: 'auto', required: true, icon: 'Clock3' },
+  { key: 'traffic_fines',       nameAr: 'المخالفات المرورية', nameEn: 'Traffic Fines', type: 'auto', required: true, icon: 'ShieldAlert' },
+  { key: 'registration_compliance', nameAr: 'صلاحية تسجيل المركبات', nameEn: 'Vehicle Registration Compliance', type: 'auto', required: true, icon: 'IdCard' },
   { key: 'admin_costs',         nameAr: 'تكاليف ادارية',   nameEn: 'Administrative Costs',   type: 'manual', required: true,  icon: 'Receipt' },
   { key: 'projects',            nameAr: 'مشاريع',           nameEn: 'Projects',               type: 'manual', required: false, icon: 'FolderOpen' },
 ]
@@ -506,7 +510,7 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
         .map(s => {
           const def = REPORT_SECTIONS.find(d => d.key === s.sectionKey)
           let parsedContent = {}
-          try { parsedContent = typeof s.content === 'string' ? JSON.parse(s.content) : (s.content || {}) } catch {}
+          try { parsedContent = typeof s.content === 'string' ? JSON.parse(s.content) : (s.content || {}) } catch { parsedContent = {} }
           return { ...s, nameAr: def?.nameAr || s.sectionKey, nameEn: def?.nameEn, parsedContent }
         }),
     }
@@ -612,8 +616,12 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
       let data = null
       if (sectionKey === 'bus_trips') data = await reportGenerationService.generateBusTrips(report.month)
       else if (sectionKey === 'maintenance') data = await reportGenerationService.generateMaintenance(report.month)
-      else if (sectionKey === 'complaints') data = await reportGenerationService.generateComplaints(report.month)
       else if (sectionKey === 'fuel') data = await reportGenerationService.generateFuel(report.month)
+      else if (sectionKey === 'ridership') data = await reportGenerationService.generateRidership(report.month)
+      else if (sectionKey === 'external_transport') data = await reportGenerationService.generateExternalTransportation(report.month)
+      else if (sectionKey === 'driver_overtime') data = await reportGenerationService.generateDriverOvertime(report.month)
+      else if (sectionKey === 'traffic_fines') data = await reportGenerationService.generateTrafficFines(report.month)
+      else if (sectionKey === 'registration_compliance') data = await reportGenerationService.generateRegistrationCompliance(report.month)
 
       if (!data) throw new Error('No data generated')
 
@@ -624,10 +632,21 @@ function DetailView({ reportId, user, isMasterAdmin, isHOD, lang, t, onBack }) {
         submittedAt: serverTimestamp()
       }
 
-      await updateDoc(doc(db, 'report_sections', secId), updates)
+      const sectionDef = REPORT_SECTIONS.find((item) => item.key === sectionKey)
+      await setDoc(doc(db, 'report_sections', secId), {
+        reportId,
+        sectionKey,
+        sectionNameAr: sectionDef?.nameAr || sectionKey,
+        sectionNameEn: sectionDef?.nameEn || sectionKey,
+        type: sectionDef?.type || 'auto',
+        included: true,
+        ...updates,
+      }, { merge: true })
       
       // Update local state
-      const next = sections.map(s => s.id === secId ? { ...s, ...updates } : s)
+      const next = sections.some(s => s.id === secId)
+        ? sections.map(s => s.id === secId ? { ...s, ...updates } : s)
+        : [...sections, { id: secId, reportId, sectionKey, included: true, ...updates }]
       setSections(next)
       
       const newStatus = computeStatus(next)

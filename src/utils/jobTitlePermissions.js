@@ -17,13 +17,14 @@ export const JOB_TITLE_PERMISSIONS = {
     permissions: {
       logistics: 'edit',
       fleet: 'edit',
+      fleetRidership: 'edit',
       inventory: 'edit',
       helpDesk: 'edit',
       assets: 'edit',
       strategy: 'edit',
       insights: 'edit',
       crisis: 'edit',
-      reports: ['bus_trips', 'maintenance', 'fuel', 'admin_costs', 'player_registration', 'complaints', 'inventory', 'media', 'projects'],
+      reports: ['bus_trips', 'maintenance', 'fuel', 'ridership', 'external_transport', 'driver_overtime', 'traffic_fines', 'registration_compliance', 'admin_costs', 'player_registration', 'inventory', 'media', 'projects'],
     },
   },
   'Sports Activities Specialist': {
@@ -31,13 +32,14 @@ export const JOB_TITLE_PERMISSIONS = {
     permissions: {
       logistics: 'edit',
       fleet: 'edit',
+      fleetRidership: 'edit',
       inventory: 'view',
       helpDesk: 'view',
       assets: 'view',
       strategy: 'view',
       insights: 'view',
       crisis: 'view',
-      reports: ['bus_trips', 'maintenance', 'fuel', 'admin_costs'],
+      reports: ['bus_trips', 'maintenance', 'fuel', 'ridership', 'external_transport', 'driver_overtime', 'traffic_fines', 'registration_compliance', 'admin_costs'],
     },
   },
   'Logistics Specialist': {
@@ -45,13 +47,14 @@ export const JOB_TITLE_PERMISSIONS = {
     permissions: {
       logistics: 'edit',
       fleet: 'edit',
+      fleetRidership: 'edit',
       inventory: 'view',
       helpDesk: 'view',
       assets: 'view',
       strategy: 'view',
       insights: 'view',
       crisis: 'view',
-      reports: ['bus_trips', 'maintenance', 'fuel', 'admin_costs'],
+      reports: ['bus_trips', 'maintenance', 'fuel', 'ridership', 'external_transport', 'driver_overtime', 'traffic_fines', 'registration_compliance', 'admin_costs'],
     },
   },
   'Warehouse/Store Manager': {
@@ -59,6 +62,7 @@ export const JOB_TITLE_PERMISSIONS = {
     permissions: {
       logistics: 'view',
       fleet: 'view',
+      fleetRidership: 'view',
       inventory: 'edit',
       helpDesk: 'view',
       assets: 'edit',
@@ -73,13 +77,14 @@ export const JOB_TITLE_PERMISSIONS = {
     permissions: {
       logistics: 'view',
       fleet: 'view',
+      fleetRidership: 'view',
       inventory: 'view',
       helpDesk: 'edit',
       assets: 'view',
       strategy: 'view',
       insights: 'view',
       crisis: 'view',
-      reports: ['player_registration', 'complaints'],
+      reports: ['player_registration'],
     },
   },
   'Media Coordinator': {
@@ -87,6 +92,7 @@ export const JOB_TITLE_PERMISSIONS = {
     permissions: {
       logistics: 'view',
       fleet: 'view',
+      fleetRidership: 'view',
       inventory: 'view',
       helpDesk: 'view',
       assets: 'view',
@@ -101,6 +107,7 @@ export const JOB_TITLE_PERMISSIONS = {
     permissions: {
       logistics: 'view',
       fleet: 'view',
+      fleetRidership: 'view',
       inventory: 'view',
       helpDesk: 'view',
       assets: 'view',
@@ -115,6 +122,7 @@ export const JOB_TITLE_PERMISSIONS = {
     permissions: {
       logistics: 'view',
       fleet: 'view',
+      fleetRidership: 'view',
       inventory: 'view',
       helpDesk: 'view',
       assets: 'view',

@@ -8,13 +8,16 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "qa:reports": "node scripts/generate-report-qa-samples.mjs",
     "sync-pdf-worker": "node scripts/sync-pdf-worker.mjs"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
+    "@react-pdf/renderer": "^4.3.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "firebase": "^12.10.0",
+    "exceljs": "^4.4.0",
+    "firebase": "^12.17.1",
     "firebase-admin": "^13.7.0",
     "framer-motion": "^12.38.0",
     "hls.js": "^1.6.16",

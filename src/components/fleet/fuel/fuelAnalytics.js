@@ -56,6 +56,46 @@ export function rowsToTotals(rows = [], pricePerLitre = null) {
 }
 
 /**
+ * Reduce one stored ADNOC statement to the fleet scope currently selected in
+ * the header. Per-vehicle allocations are the source of truth because they
+ * keep historic statements responsive to later vehicle classification fixes.
+ * The stored bus/other summaries are retained as a safe fallback for older
+ * statements that pre-date allocation rows.
+ */
+export function statementTotalsForScope(statement = {}, scope = 'all', matchesVehicle = () => true) {
+  const allocations = Array.isArray(statement.vehicleAllocations)
+    ? statement.vehicleAllocations
+    : [];
+
+  if (allocations.length > 0) {
+    const selected = scope === 'all'
+      ? allocations
+      : allocations.filter((row) => matchesVehicle(row?.plate || row?.registration));
+    const registrations = new Set();
+    const totals = selected.reduce((acc, row) => {
+      const registration = String(row?.plate || row?.registration || '').trim().toUpperCase();
+      if (registration) registrations.add(registration);
+      acc.totalCost += num(row?.cost ?? row?.amountAed);
+      acc.totalLitres += num(row?.litres);
+      return acc;
+    }, { totalCost: 0, totalLitres: 0 });
+    return { ...totals, vehicleCount: registrations.size, derivedFrom: 'allocations' };
+  }
+
+  const summary = scope === 'buses'
+    ? statement.busTotals
+    : scope === 'others'
+      ? statement.otherVehicleTotals
+      : statement;
+  return {
+    totalCost: num(summary?.cost ?? summary?.totalCost),
+    totalLitres: num(summary?.litres ?? summary?.totalLitres),
+    vehicleCount: num(summary?.vehicleCount ?? statement.vehicleCount),
+    derivedFrom: scope === 'all' ? 'statement' : 'scope-summary',
+  };
+}
+
+/**
  * Fleet-level KPIs for one month.
  * A manually entered price/litre wins; otherwise it is implied from cost ÷ litres.
  */
@@ -100,6 +140,7 @@ export function vehicleMetrics(row = {}) {
     km,
     litres,
     cost,
+    telemetry: row.telemetry || null,
     litresPer100km: km > 0 ? (litres / km) * 100 : null,
     costPerKm: safeDiv(cost, km),
   };
@@ -118,13 +159,27 @@ export function compareVehicles(currentRows = [], previousRows = [], thresholdPc
   return currentRows.map((row) => {
     const cur = vehicleMetrics(row);
     const prev = prevByPlate.get(cur.plate) || null;
-    const deltaL100 = prev ? delta(cur.litresPer100km, prev.litresPer100km) : { abs: null, pct: null };
-    const deltaCostPerKm = prev ? delta(cur.costPerKm, prev.costPerKm) : { abs: null, pct: null };
+    /* Cartrack can return only the tail end of a month while the odometer has
+       already advanced substantially since the preceding month's final trip.
+       The fuel allocation is then complete but the distance denominator is not.
+       Never turn that telemetry gap into a fuel-efficiency accusation. */
+    const firstOdo = Number(cur.telemetry?.firstOdometer);
+    const previousLastOdo = Number(prev?.telemetry?.lastOdometer);
+    const untrackedKm = Number.isFinite(firstOdo) && Number.isFinite(previousLastOdo) && firstOdo >= previousLastOdo
+      ? (firstOdo - previousLastOdo) / 1000
+      : 0;
+    const comparisonReliable = !(untrackedKm > Math.max(100, cur.km * 0.1));
+    const deltaL100 = prev && comparisonReliable
+      ? delta(cur.litresPer100km, prev.litresPer100km)
+      : { abs: null, pct: null };
+    const deltaCostPerKm = prev && comparisonReliable
+      ? delta(cur.costPerKm, prev.costPerKm)
+      : { abs: null, pct: null };
     let verdict = null;
     if (deltaL100.pct != null) {
       verdict = deltaL100.pct < -thresholdPct ? 'improving' : deltaL100.pct > thresholdPct ? 'worsening' : 'stable';
     }
-    return { ...cur, prev, deltaL100, deltaCostPerKm, verdict };
+    return { ...cur, prev, deltaL100, deltaCostPerKm, verdict, comparisonReliable, untrackedKm };
   });
 }
 
@@ -185,7 +240,7 @@ export function generateInsights({ fleet, vehicles = [], decomposition, currency
   }
 
   /* Biggest improvement / biggest deterioration */
-  const rated = vehicles.filter((v) => v.deltaL100?.pct != null);
+  const rated = vehicles.filter((v) => v.comparisonReliable !== false && v.deltaL100?.pct != null);
   if (rated.length > 0) {
     const best = rated.reduce((a, b) => (b.deltaL100.pct < a.deltaL100.pct ? b : a));
     const worst = rated.reduce((a, b) => (b.deltaL100.pct > a.deltaL100.pct ? b : a));
@@ -209,8 +264,19 @@ export function generateInsights({ fleet, vehicles = [], decomposition, currency
     }
   }
 
+  const withheld = vehicles.filter((v) => v.comparisonReliable === false);
+  if (withheld.length > 0) {
+    insights.push({
+      id: 'telemetry-coverage',
+      tone: 'info',
+      score: 11,
+      en: `${withheld.length} vehicle efficiency comparison${withheld.length === 1 ? ' was' : 's were'} withheld because Cartrack mileage is incomplete for part of the month.`,
+      ar: `تم حجب ${fmt(withheld.length, 0)} ${withheld.length === 1 ? 'مقارنة' : 'مقارنات'} لكفاءة المركبات لأن بيانات المسافة من Cartrack غير مكتملة لجزء من الشهر.`,
+    });
+  }
+
   /* Most expensive vehicle per km this month */
-  const costed = vehicles.filter((v) => v.costPerKm != null);
+  const costed = vehicles.filter((v) => v.comparisonReliable !== false && v.costPerKm != null);
   if (costed.length > 1) {
     const priciest = costed.reduce((a, b) => (b.costPerKm > a.costPerKm ? b : a));
     insights.push({

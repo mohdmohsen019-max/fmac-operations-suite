@@ -261,6 +261,114 @@ export const reportGenerationService = {
     }
   },
 
+  async generateRidership(monthStr) {
+    const snap = await getDocs(collection(db, 'fleet_ridership_counts'))
+    const records = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => String(r.date || '').startsWith(monthStr))
+    const totalRiders = records.reduce((sum, r) => sum + (Number(r.riders) || 0), 0)
+    const byBus = new Map()
+    records.forEach(r => {
+      const plate = r.classSnapshot?.registration || 'Unassigned'
+      const current = byBus.get(plate) || { plate, riders: 0, sessions: 0 }
+      current.riders += Number(r.riders) || 0
+      current.sessions += 1
+      byBus.set(plate, current)
+    })
+    const ranking = [...byBus.values()].sort((a, b) => b.riders - a.riders)
+    return {
+      summary: `${totalRiders.toLocaleString()} riders were recorded across ${records.length.toLocaleString()} bus sessions during the month.`,
+      summaryAr: `تم تسجيل ${totalRiders.toLocaleString()} راكباً عبر ${records.length.toLocaleString()} حصة حافلة خلال الشهر.`,
+      keyPoints: [`Active buses with saved ridership: ${byBus.size}`, `Highest ridership: ${ranking[0]?.plate || 'N/A'} (${ranking[0]?.riders || 0})`],
+      keyPointsAr: [`الحافلات ذات سجلات ركاب: ${byBus.size}`, `أعلى عدد ركاب: ${ranking[0]?.plate || 'غير متوفر'} (${ranking[0]?.riders || 0})`],
+      tables: [{ title: 'Ridership by Bus', headers: ['Registration', 'Recorded Sessions', 'Riders'], rows: ranking.map(r => [r.plate, r.sessions, r.riders]) }],
+      numbers: { totalRiders, recordedSessions: records.length, activeBuses: byBus.size },
+    }
+  },
+
+  async generateExternalTransportation(monthStr) {
+    const snap = await getDocs(collection(db, 'fleet_external_transportation'))
+    const records = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => String(r.date || '').startsWith(monthStr))
+    const grouped = new Map()
+    records.forEach(r => {
+      const key = r.personName || 'Unassigned'
+      const current = grouped.get(key) || { name: key, requests: 0, vehicles: new Set() }
+      current.requests += 1
+      if (r.vehicleRegistration) current.vehicles.add(r.vehicleRegistration)
+      grouped.set(key, current)
+    })
+    const ranking = [...grouped.values()].sort((a, b) => b.requests - a.requests)
+    const vehicles = new Set(records.map(r => r.vehicleRegistration).filter(Boolean))
+    return {
+      summary: `${records.length} external transportation requests were recorded during the month.`,
+      summaryAr: `تم تسجيل ${records.length} طلب نقل خارجي خلال الشهر.`,
+      keyPoints: [`Drivers/staff involved: ${grouped.size}`, `Most active person: ${ranking[0]?.name || 'N/A'} (${ranking[0]?.requests || 0})`],
+      keyPointsAr: [`عدد السائقين والموظفين المشاركين: ${grouped.size}`, `الأكثر نشاطاً: ${ranking[0]?.name || 'غير متوفر'} (${ranking[0]?.requests || 0})`],
+      tables: [{ title: 'External Transportation by Person', headers: ['Driver / Staff', 'Requests', 'Vehicles Used'], rows: ranking.map(r => [r.name, r.requests, [...r.vehicles].join(', ') || '—']) }],
+      numbers: { requestCount: records.length, driverCount: grouped.size, vehicleCount: vehicles.size },
+    }
+  },
+
+  async generateDriverOvertime(monthStr) {
+    const snap = await getDocs(collection(db, 'fleet_driver_overtime'))
+    const records = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => String(r.date || '').startsWith(monthStr))
+    const grouped = new Map()
+    records.forEach(r => {
+      const name = r.driverName || 'Unassigned'
+      const current = grouped.get(name) || { name, minutes: 0, entries: 0 }
+      current.minutes += Number(r.durationMinutes) || 0
+      current.entries += 1
+      grouped.set(name, current)
+    })
+    const ranking = [...grouped.values()].sort((a, b) => b.minutes - a.minutes)
+    const totalMinutes = records.reduce((sum, r) => sum + (Number(r.durationMinutes) || 0), 0)
+    return {
+      summary: `${(totalMinutes / 60).toFixed(2)} overtime hours were recorded in ${records.length} entries.`,
+      summaryAr: `تم تسجيل ${(totalMinutes / 60).toFixed(2)} ساعة عمل إضافي ضمن ${records.length} سجلاً.`,
+      keyPoints: [`People with overtime: ${grouped.size}`, `Highest total: ${ranking[0]?.name || 'N/A'} (${((ranking[0]?.minutes || 0) / 60).toFixed(2)} h)`],
+      keyPointsAr: [`الأشخاص ذوو العمل الإضافي: ${grouped.size}`, `أعلى إجمالي: ${ranking[0]?.name || 'غير متوفر'} (${((ranking[0]?.minutes || 0) / 60).toFixed(2)} ساعة)`],
+      tables: [{ title: 'Overtime by Person', headers: ['Driver / Staff', 'Entries', 'Hours'], rows: ranking.map(r => [r.name, r.entries, (r.minutes / 60).toFixed(2)]) }],
+      numbers: { totalHours: Number((totalMinutes / 60).toFixed(2)), entryCount: records.length, driverCount: grouped.size },
+    }
+  },
+
+  async generateTrafficFines(monthStr) {
+    const snap = await getDocs(collection(db, 'fleet_fines'))
+    const records = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => String(r.date || '').startsWith(monthStr))
+    const totalAmount = records.reduce((sum, r) => sum + (Number(r.amountAed) || 0), 0)
+    const vehicles = new Set(records.map(r => r.vehicleReg).filter(Boolean))
+    return {
+      summary: records.length ? `${records.length} traffic fines totalling AED ${totalAmount.toLocaleString()} were recorded.` : 'No traffic fines were recorded for the selected month.',
+      summaryAr: records.length ? `تم تسجيل ${records.length} مخالفة مرورية بقيمة إجمالية ${totalAmount.toLocaleString()} درهم.` : 'لم يتم تسجيل أي مخالفات مرورية خلال الشهر المحدد.',
+      keyPoints: [`Vehicles affected: ${vehicles.size}`, records.length ? `Average fine: AED ${(totalAmount / records.length).toFixed(2)}` : 'Fine-free period confirmed by the register.'],
+      keyPointsAr: [`المركبات المتأثرة: ${vehicles.size}`, records.length ? `متوسط المخالفة: ${(totalAmount / records.length).toFixed(2)} درهم` : 'تؤكد السجلات أن الفترة خالية من المخالفات.'],
+      tables: [{ title: 'Traffic Fine Register', headers: ['Date', 'Registration', 'Driver', 'Amount'], rows: records.map(r => [r.date, r.vehicleReg || '—', r.driverName || '—', `AED ${Number(r.amountAed || 0).toLocaleString()}`]) }],
+      numbers: { fineCount: records.length, totalAmount, vehicleCount: vehicles.size },
+    }
+  },
+
+  async generateRegistrationCompliance(monthStr) {
+    const snap = await getDocs(collection(db, 'fleet_vehicle_registrations'))
+    const records = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    const periodEnd = endOfMonth(parseISO(`${monthStr}-01`))
+    const followUpEnd = new Date(periodEnd); followUpEnd.setDate(followUpEnd.getDate() + 60)
+    const stateOf = (record) => {
+      const dates = [record.registrationExpiry, record.insuranceExpiry].filter(Boolean).map(v => new Date(`${v}T00:00:00`)).filter(d => !isNaN(d))
+      if (!dates.length) return 'missing'
+      if (dates.some(d => d <= periodEnd)) return 'expired'
+      if (dates.some(d => d <= followUpEnd)) return 'expiring'
+      return 'valid'
+    }
+    const statusCounts = { valid: 0, expiring: 0, expired: 0, missing: 0 }
+    records.forEach(r => { statusCounts[stateOf(r)] += 1 })
+    return {
+      summary: `${statusCounts.valid} vehicle records are valid; ${statusCounts.expiring} require renewal follow-up and ${statusCounts.expired} are expired as of month end.`,
+      summaryAr: `${statusCounts.valid} سجلاً سارياً، و${statusCounts.expiring} سجلاً يحتاج متابعة التجديد، و${statusCounts.expired} سجلاً منتهياً حتى نهاية الشهر.`,
+      keyPoints: [`Records missing renewal dates: ${statusCounts.missing}`, `Follow-up window: 60 days after month end`],
+      keyPointsAr: [`السجلات التي تنقصها تواريخ التجديد: ${statusCounts.missing}`, 'نافذة المتابعة: 60 يوماً بعد نهاية الشهر'],
+      tables: [{ title: 'Registration Compliance', headers: ['Registration', 'Registration Expiry', 'Insurance Expiry', 'Status'], rows: records.map(r => [r.registration || r.id, r.registrationExpiry || '—', r.insuranceExpiry || '—', stateOf(r)]) }],
+      numbers: statusCounts,
+    }
+  },
+
   _getTopCategory(records) {
     const cats = {}
     records.forEach(r => { if (r.category) cats[r.category] = (cats[r.category] || 0) + 1 })

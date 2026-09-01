@@ -10,6 +10,8 @@ admin.initializeApp();
 // RESEND_API_KEY lives only in Firebase secrets — never on the client.
 // Set it with:  firebase functions:secrets:set RESEND_API_KEY
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
+const CARTRACK_API_KEY = defineSecret('CARTRACK_API_KEY');
+const CARTRACK_BASE_URL = 'https://fleetapi-me.cartrack.com/rest';
 
 const FROM = 'FMAC Operations <notifications@fmac.space>';
 const MASTER_ADMIN_EMAIL = 'admin@fmac.com';
@@ -18,8 +20,77 @@ const MASTER_ADMIN_EMAIL = 'admin@fmac.com';
 // server-side (see sendNotification) — never taken from the request body.
 const ALLOWED_NOTIFICATION_TYPES = new Set([
   'new_ticket', 'escalated_ticket', 'inventory_low', 'monthly_report_reminder',
+  'fleet_driver_changed', 'fleet_external_transport', 'fleet_overtime_logged',
+  'fleet_fine_logged', 'fleet_registration_expiry', 'fleet_maintenance_completed',
 ]);
 const MAX_RECIPIENTS = 50;
+
+/* Authenticated Cartrack proxy. The vendor credential must never be bundled by
+   Vite or sent to the browser. Only the small endpoint surface used by Fleet is
+   allowed, and the upstream host is fixed to prevent this becoming an SSRF
+   proxy. Configure with: firebase functions:secrets:set CARTRACK_API_KEY */
+const CARTRACK_PATHS = [
+  /^vehicles$/,
+  /^vehicles\/status$/,
+  /^vehicles\/[A-Za-z0-9_-]+\/events$/,
+  /^trips$/,
+  /^alerts$/,
+  /^mifleet\/maintenance$/,
+  /^vision\/livestream\/[A-Za-z0-9_-]+$/,
+];
+
+exports.cartrackProxy = onRequest(
+  { cors: true, secrets: [CARTRACK_API_KEY], timeoutSeconds: 120 },
+  async (req, res) => {
+    if (!['GET', 'POST'].includes(req.method)) {
+      res.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+
+    const bearer = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    try {
+      if (!bearer) throw new Error('missing token');
+      await admin.auth().verifyIdToken(bearer);
+    } catch {
+      res.status(401).json({ error: 'unauthenticated' });
+      return;
+    }
+
+    const path = String(req.path || '').replace(/^\/api\/cartrack\/?/, '').replace(/^\//, '');
+    if (!CARTRACK_PATHS.some((pattern) => pattern.test(path))) {
+      res.status(404).json({ error: 'unsupported_endpoint' });
+      return;
+    }
+
+    const secret = CARTRACK_API_KEY.value();
+    if (!secret) {
+      res.status(503).json({ error: 'cartrack_not_configured' });
+      return;
+    }
+
+    const upstream = new URL(`${CARTRACK_BASE_URL}/${path}`);
+    for (const [key, value] of Object.entries(req.query || {})) {
+      if (typeof value === 'string') upstream.searchParams.set(key, value);
+    }
+
+    try {
+      const response = await fetch(upstream, {
+        method: req.method,
+        headers: {
+          Authorization: `Basic ${secret}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: req.method === 'POST' ? JSON.stringify(req.body || {}) : undefined,
+      });
+      const text = await response.text();
+      res.status(response.status).type(response.headers.get('content-type') || 'application/json').send(text);
+    } catch (err) {
+      console.error('Cartrack proxy failed:', err);
+      res.status(502).json({ error: 'upstream_unavailable' });
+    }
+  },
+);
 
 /* ──────────────────────────────────────────────────────────────────────
    Master-admin: reset a user's password to the temporary default.

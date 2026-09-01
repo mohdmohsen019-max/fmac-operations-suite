@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, ShieldCheck, X, CheckCircle, XCircle, Trash2,
-  Clock, Search, Lock, Key, Pencil, UserCheck, UserX, Crown,
+  Clock, Search, Lock, Key, Pencil, UserCheck, UserX, Crown, Bus,
 } from 'lucide-react';
 import { db, functions } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
@@ -18,6 +18,7 @@ import {
 import CustomSelect from './CustomSelect';
 import NotificationSettings from './NotificationSettings';
 import ModuleVisibilitySettings from './ModuleVisibilitySettings';
+import { recordActivity } from '../services/activityLog';
 import './UserManagementModule.css';
 
 /* ── helpers ── */
@@ -83,6 +84,7 @@ export function UserAvatar({ user, size = '', statusDotColor }) {
 const MODULE_LABELS = {
   logistics: { en: 'Logistics', ar: 'اللوجستيات' },
   fleet:     { en: 'Fleet',     ar: 'الأسطول' },
+  fleetRidership: { en: 'Fleet › Ridership', ar: 'الأسطول › ركاب الحافلات', child: true },
   inventory: { en: 'Inventory', ar: 'المخزون' },
   helpDesk:  { en: 'Help Desk', ar: 'الدعم' },
   assets:    { en: 'Assets',    ar: 'الأصول' },
@@ -104,7 +106,7 @@ function PermEditor({ perms, onChange, lang }) {
       {Object.entries(MODULE_LABELS).map(([key, label]) => {
         const current = perms?.[key] || 'none';
         return (
-          <div key={key} className="um-permgrid-row">
+          <div key={key} className={`um-permgrid-row${label.child ? ' is-child' : ''}`}>
             <span className="um-permgrid-name">{lang === 'ar' ? label.ar : label.en}</span>
             <div className="um-permgrid-levels">
               {PERM_LEVELS.map(lv => (
@@ -127,33 +129,28 @@ function PermEditor({ perms, onChange, lang }) {
 
 function PermPills({ permissions, lang }) {
   if (!permissions) return <span style={{ color: 'var(--theme-text-ghost)', fontSize: '0.75rem' }}>—</span>;
+  const active = Object.entries(MODULE_LABELS)
+    .map(([key, label]) => ({ key, label: lang === 'ar' ? label.ar : label.en, level: permissions[key] }))
+    .filter(item => item.level === 'view' || item.level === 'edit');
+  const editing = active.filter(item => item.level === 'edit');
+  const viewing = active.filter(item => item.level === 'view');
+  const fullAccess = active.length === Object.keys(MODULE_LABELS).length && viewing.length === 0;
+  const concise = fullAccess
+    ? (lang === 'ar' ? 'وصول كامل' : 'Full access')
+    : editing.length === 1 && viewing.length === 1
+      ? `${editing[0].label} ${lang === 'ar' ? 'تعديل' : 'Edit'} + ${viewing[0].label} ${lang === 'ar' ? 'عرض' : 'View'}`
+      : `${active.length} ${lang === 'ar' ? 'وحدات' : 'modules'}`;
+  const breakdown = active
+    .map(item => `${item.label}: ${item.level === 'edit' ? (lang === 'ar' ? 'تعديل' : 'Edit') : (lang === 'ar' ? 'عرض' : 'View')}`)
+    .join(' · ');
   return (
-    <div className="um-perms">
-      {Object.entries(MODULE_LABELS).map(([key, label]) => {
-        const level = permissions[key];
-        const color = level === 'edit' ? 'var(--status-safe)' : level === 'view' ? 'var(--status-warn)' : 'var(--theme-text-ghost)';
-        const levelLabel = level === 'edit'
-          ? (lang === 'ar' ? 'تعديل' : 'Edit')
-          : level === 'view'
-            ? (lang === 'ar' ? 'عرض' : 'View')
-            : (lang === 'ar' ? 'لا شيء' : 'None');
-        return (
-          <span
-            key={key}
-            className="um-perm-pill"
-            title={`${lang === 'ar' ? label.ar : label.en}: ${levelLabel}`}
-            style={{
-              color,
-              borderColor: `${color}38`,
-              background: `${color}14`,
-              opacity: !level || level === 'none' ? 0.45 : 1,
-            }}
-          >
-            {(lang === 'ar' ? label.ar : label.en)} · {levelLabel}
-          </span>
-        );
-      })}
-    </div>
+    <span className="um-access-summary" title={breakdown || (lang === 'ar' ? 'لا توجد صلاحيات' : 'No module access')}>
+      <span className="um-access-summary__dot" />
+      <span>{active.length ? concise : (lang === 'ar' ? 'لا توجد صلاحيات' : 'No access')}</span>
+      {!fullAccess && active.length > 0 && (
+        <small>{editing.length} {lang === 'ar' ? 'تعديل' : 'edit'} · {viewing.length} {lang === 'ar' ? 'عرض' : 'view'}</small>
+      )}
+    </span>
   );
 }
 
@@ -294,6 +291,7 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
         approvedBy: user?.email,
         approvedAt: serverTimestamp(),
       });
+      await recordActivity({ module: 'users', submodule: 'accounts', action: 'account_approved', titleEn: `Account approved · ${approveTarget.displayName || approveTarget.email}`, titleAr: `تمت الموافقة على الحساب · ${approveTarget.displayName || approveTarget.email}`, detailEn: approveJobTitle, detailAr: approveJobTitle, recordId: approveTarget.uid, path: '/users/dashboard', actor: { uid: user?.uid, email: user?.email, name: user?.displayName } });
       showToast(`${lang === 'ar' ? 'تمت الموافقة على' : 'Approved'} ${approveTarget.displayName || approveTarget.email}`);
       // TODO: wire an approval-notification email through utils/notify.js (needs
       // a 'user_approved' template). The old Web3Forms path used a placeholder
@@ -317,6 +315,7 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
     if (!confirmed) return;
     try {
       await updateDoc(doc(db, 'users', u.uid), { status: 'rejected' });
+      await recordActivity({ module: 'users', submodule: 'accounts', action: 'account_rejected', titleEn: `Account request rejected · ${u.displayName || u.email}`, titleAr: `تم رفض طلب الحساب · ${u.displayName || u.email}`, recordId: u.uid, path: '/users/dashboard', actor: { uid: user?.uid, email: user?.email, name: user?.displayName } });
       showToast(`${lang === 'ar' ? 'تم رفض طلب' : 'Rejected'} ${u.displayName || u.email}`);
       // TODO: wire a rejection-notification email through utils/notify.js when a
       // template exists (the old Web3Forms path had a placeholder key and never
@@ -356,6 +355,22 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
         // master admin / HOD grants or revokes individual module access.
         permissions: { ...mapping.permissions, ...editPerms },
       });
+      await recordActivity({
+        module: 'users',
+        submodule: 'permissions',
+        action: 'permissions_updated',
+        titleEn: `Permissions updated · ${editTarget.displayName || editTarget.email}`,
+        titleAr: `تم تحديث الصلاحيات · ${editTarget.displayName || editTarget.email}`,
+        detailEn: editPerms.fleet === 'view' && editPerms.fleetRidership === 'edit'
+          ? 'Ridership edit access with read-only Fleet access'
+          : `Role: ${editJobTitle}`,
+        detailAr: editPerms.fleet === 'view' && editPerms.fleetRidership === 'edit'
+          ? 'تعديل ركاب الحافلات مع عرض بقية الأسطول فقط'
+          : `الدور: ${editJobTitle}`,
+        recordId: editTarget.uid,
+        path: '/users/dashboard',
+        actor: { uid: user?.uid, email: user?.email, name: user?.displayName },
+      });
       showToast(lang === 'ar' ? 'تم تحديث الدور' : 'Role updated');
       setEditTarget(null);
     } catch (err) {
@@ -375,6 +390,7 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
         status: newStatus,
         approved: newStatus === 'approved',
       });
+      await recordActivity({ module: 'users', submodule: 'accounts', action: `account_${newStatus}`, titleEn: `Account ${newStatus} · ${u.displayName || u.email}`, titleAr: `${newStatus === 'approved' ? 'تم تفعيل الحساب' : 'تم إيقاف الحساب'} · ${u.displayName || u.email}`, recordId: u.uid, path: '/users/dashboard', actor: { uid: user?.uid, email: user?.email, name: user?.displayName } });
       showToast(lang === 'ar' ? 'تم تحديث الحالة' : 'Status updated');
     } catch (err) {
       console.error('handleToggleStatus failed:', err);
@@ -392,6 +408,7 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
     if (!confirmed) return;
     try {
       await deleteDoc(doc(db, 'users', u.uid));
+      await recordActivity({ module: 'users', submodule: 'accounts', action: 'account_deleted', titleEn: `Account deleted · ${u.displayName || u.email}`, titleAr: `تم حذف الحساب · ${u.displayName || u.email}`, recordId: u.uid, path: '/users/dashboard', actor: { uid: user?.uid, email: user?.email, name: user?.displayName } });
       showToast(lang === 'ar' ? 'تم الحذف' : 'User deleted');
     } catch (err) {
       console.error('handleDelete failed:', err);
@@ -401,9 +418,14 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
 
   /* ── Password reset handlers ── */
   const handleSetTempPassword = async (req) => {
-    const uid = req.uid;
+    // Public recovery requests contain only an email so the signed-out screen
+    // never needs access to the private users collection.
+    const matchingUser = allUsers.find((account) =>
+      String(account.email || '').trim().toLowerCase() === String(req.email || '').trim().toLowerCase()
+    );
+    const uid = req.uid || matchingUser?.uid;
     if (!uid) {
-      alert(lang === 'ar' ? 'UID المستخدم غير موجود في الطلب.' : 'User UID is missing from the request. Re-submit is needed.');
+      alert(lang === 'ar' ? 'لا يوجد حساب مسجل بهذا البريد الإلكتروني.' : 'No registered user account matches this email address.');
       return;
     }
     try {
@@ -413,6 +435,7 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
         status: 'resolved',
         resolvedAt: serverTimestamp(),
       });
+      await recordActivity({ module: 'users', submodule: 'password-resets', action: 'temporary_password_set', titleEn: `Temporary password set · ${req.email}`, titleAr: `تم تعيين كلمة مرور مؤقتة · ${req.email}`, recordId: req.id, path: '/users/dashboard', actor: { uid: user?.uid, email: user?.email, name: user?.displayName } });
       showToast(lang === 'ar'
         ? 'تم تعيين كلمة المرور المؤقتة "000000" — سيُطلب من المستخدم تغييرها عند تسجيل الدخول'
         : 'Temp password set to "000000" — user will be prompted to change it on next login');
@@ -429,6 +452,7 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
   const handleDismissReset = async (req) => {
     try {
       await updateDoc(doc(db, 'password_reset_requests', req.id), { status: 'dismissed' });
+      await recordActivity({ module: 'users', submodule: 'password-resets', action: 'password_reset_dismissed', titleEn: `Password reset dismissed · ${req.email}`, titleAr: `تم رفض طلب إعادة كلمة المرور · ${req.email}`, recordId: req.id, path: '/users/dashboard', actor: { uid: user?.uid, email: user?.email, name: user?.displayName } });
       showToast(lang === 'ar' ? 'تم رفض الطلب' : 'Request dismissed');
     } catch (err) {
       console.error('handleDismissReset failed:', err);
@@ -670,6 +694,28 @@ export default function UserManagementModule({ isMasterAdmin: isMasterAdminProp 
                 </div>
                 <div className="um-field">
                   <label>{lang === 'ar' ? 'صلاحيات الوحدات' : 'Module Access'}</label>
+                  <button
+                    type="button"
+                    className="um-ridership-preset"
+                    onClick={() => setEditPerms(current => ({
+                      ...current,
+                      logistics: 'view',
+                      fleet: 'view',
+                      fleetRidership: 'edit',
+                      inventory: 'view',
+                      helpDesk: 'view',
+                      assets: 'view',
+                      strategy: 'view',
+                      insights: 'view',
+                      crisis: 'view',
+                    }))}
+                  >
+                    <Bus size={15} />
+                    <span>
+                      <strong>{lang === 'ar' ? 'تطبيق صلاحية محرر ركاب الحافلات' : 'Apply Ridership editor preset'}</strong>
+                      <small>{lang === 'ar' ? 'تعديل ركاب الحافلات فقط، وعرض بقية الوحدات.' : 'Edit Ridership only; view every other module.'}</small>
+                    </span>
+                  </button>
                   <PermEditor perms={editPerms} onChange={setEditPerms} lang={lang} />
                 </div>
               </div>
@@ -901,7 +947,7 @@ function AllUsersTab({
                 <tr>
                   <th>{lang === 'ar' ? 'المستخدم' : 'User'}</th>
                   <th>{lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title'}</th>
-                  <th>{lang === 'ar' ? 'الصلاحيات' : 'Permissions'}</th>
+                  <th>{lang === 'ar' ? 'ملخص الوصول' : 'Access summary'}</th>
                   <th>{lang === 'ar' ? 'آخر دخول' : 'Last Login'}</th>
                   <th>{lang === 'ar' ? 'الحالة' : 'Status'}</th>
                   <th style={{ textAlign: lang === 'ar' ? 'left' : 'right' }}>{lang === 'ar' ? 'إجراءات' : 'Actions'}</th>

@@ -1,18 +1,17 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowUpRight, ArrowDownRight, RefreshCw, Download, Filter, StickyNote
+  ArrowUpRight, ArrowDownRight, RefreshCw, Download, FileText, StickyNote, Paperclip, ExternalLink
 } from 'lucide-react'
 import { db } from '../../firebase'
 import {
-  collection, query, where, orderBy, getDocs, Timestamp, limit
+  collection, query, where, orderBy, getDocs, Timestamp
 } from 'firebase/firestore'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { getSportLabel, fmtDateTime, DEFAULT_SPORTS } from './shared'
 import CustomSelect from '../CustomSelect'
-import * as XLSX from 'xlsx'
-
-const PAGE_SIZE = 50
+import { openInventoryEvidence } from './inventoryApprovalService'
+import { exportInventoryMovementExcel, exportInventoryMovementPdf } from './inventoryMovementReport'
 
 export default function InventoryHistory({ items, settings }) {
   const { t, lang } = useLanguage()
@@ -25,6 +24,8 @@ export default function InventoryHistory({ items, settings }) {
   const [filterSport, setFilterSport] = useState('all')
   const [filterItem, setFilterItem] = useState('')
   const [openNote, setOpenNote] = useState(null)
+  const [evidenceError, setEvidenceError] = useState('')
+  const [exporting, setExporting] = useState('')
 
   const sports = settings?.sports || DEFAULT_SPORTS
 
@@ -60,8 +61,7 @@ export default function InventoryHistory({ items, settings }) {
         collection(db, 'inventory_movements'),
         where('createdAt', '>=', Timestamp.fromDate(start)),
         where('createdAt', '<=', Timestamp.fromDate(end)),
-        orderBy('createdAt', 'desc'),
-        limit(PAGE_SIZE)
+        orderBy('createdAt', 'desc')
       )
       const snap = await getDocs(q)
       let data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -90,26 +90,29 @@ export default function InventoryHistory({ items, settings }) {
 
   useEffect(() => { loadMovements() }, [loadMovements])
 
-  const exportExcel = () => {
-    const rows = movements.map(m => ({
-      Date: fmtDateTime(m.createdAt),
-      Type: m.type === 'stock_in' ? 'In' : m.type === 'stock_out' ? 'Out' : 'Adj',
-      'Item (AR)': m.itemNameAr,
-      'Item (EN)': m.itemNameEn,
-      SKU: m.itemSku,
-      Qty: m.quantity,
-      'Prev Stock': m.previousStock,
-      'New Stock': m.newStock,
-      Sport: m.issuedTo?.sport || '',
-      Recipient: m.issuedTo?.personName || '',
-      Reference: m.deliveryNoteRef || m.receiptId || '',
-      By: m.performedByName,
-      Notes: m.notes || '',
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Movements')
-    XLSX.writeFile(wb, `inventory-movements-${new Date().toISOString().split('T')[0]}.xlsx`)
+  const exportOptions = () => {
+    const { start, end } = getDateRange()
+    const dateFormat = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-AE' : 'en-AE', { day: '2-digit', month: 'short', year: 'numeric' })
+    return {
+      movements,
+      locale: lang === 'ar' ? 'ar-AE' : 'en-AE',
+      period: `${dateFormat.format(start)} – ${dateFormat.format(end)}`,
+      sportLabel: (value) => getSportLabel(value, lang, sports),
+      formatDate: fmtDateTime,
+    }
+  }
+
+  const runExport = async (format) => {
+    setExporting(format)
+    setEvidenceError('')
+    try {
+      if (format === 'pdf') await exportInventoryMovementPdf(exportOptions())
+      else await exportInventoryMovementExcel(exportOptions())
+    } catch (error) {
+      setEvidenceError(error.message || t('Unable to create the report.', 'تعذر إنشاء التقرير.'))
+    } finally {
+      setExporting('')
+    }
   }
 
   const typeBadge = (type) => {
@@ -173,11 +176,16 @@ export default function InventoryHistory({ items, settings }) {
         </div>
 
         <div className="inv-toolbar-right">
-          <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={exportExcel}>
-            <Download size={14} /> {t('Export Excel', 'تصدير Excel')}
+          <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={() => runExport('pdf')} disabled={!!exporting}>
+            <FileText size={14} /> {exporting === 'pdf' ? t('Preparing…', 'جارٍ الإعداد…') : 'PDF'}
+          </button>
+          <button className="inv-btn inv-btn-ghost inv-btn-sm" onClick={() => runExport('excel')} disabled={!!exporting}>
+            <Download size={14} /> {exporting === 'excel' ? t('Preparing…', 'جارٍ الإعداد…') : t('Excel', 'Excel')}
           </button>
         </div>
       </div>
+
+      {evidenceError && <div className="inv-error-msg" style={{ marginBottom: 12 }}>{evidenceError}</div>}
 
       <div className="inv-results-count">
         {movements.length} {t('records', 'سجل')}
@@ -203,6 +211,7 @@ export default function InventoryHistory({ items, settings }) {
                 <th>{t('Recipient', 'المستلم')}</th>
                 <th>{t('Reference', 'المرجع')}</th>
                 <th>{t('By', 'بواسطة')}</th>
+                <th>{t('Evidence', 'المستندات')}</th>
                 <th>{t('Notes', 'ملاحظات')}</th>
               </tr>
             </thead>
@@ -256,6 +265,15 @@ export default function InventoryHistory({ items, settings }) {
                       {mv.performedByName}
                     </td>
                     <td>
+                      {mv.evidence?.length ? (
+                        <button type="button" className="inv-history-evidence" onClick={() => { setEvidenceError(''); openInventoryEvidence(mv.evidence[0]).catch((openError) => setEvidenceError(openError.message)) }} title={mv.evidence.map(file => file.name).join('\n')}>
+                          <Paperclip size={13} />
+                          {mv.evidence.length}
+                          <ExternalLink size={10} />
+                        </button>
+                      ) : <span style={{ color: 'var(--theme-text-ghost)' }}>—</span>}
+                    </td>
+                    <td>
                       {hasNote ? (
                         <button
                           className={`inv-note-btn ${noteOpen ? 'active' : ''}`}
@@ -277,7 +295,7 @@ export default function InventoryHistory({ items, settings }) {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                       >
-                        <td colSpan={9} style={{ padding: 0 }}>
+                        <td colSpan={10} style={{ padding: 0 }}>
                           <div className="inv-note-panel">
                             <StickyNote size={14} style={{ flexShrink: 0, marginTop: 2, color: 'var(--theme-accent)' }} />
                             <div>

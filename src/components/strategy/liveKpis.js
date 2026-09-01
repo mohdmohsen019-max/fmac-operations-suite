@@ -60,12 +60,13 @@ const sessionMs = (d) => {
  */
 export async function computeLiveKpis() {
   const now = new Date()
-  const [requests, assets, auditLog, maintenance, reports, sections,
+  const [requests, assets, auditLog, maintenance, preventivePlans, reports, sections,
          sessions, fuel, movements, trips] = await Promise.all([
     safeDocs('requests'),
     safeDocs('assets'),
     safeDocs('asset_audit_log'),
     safeDocs('maintenance'),
+    safeDocs('fleet_maintenance_plans'),
     safeDocs('monthly_reports'),
     safeDocs('report_sections'),
     safeDocs('sessions'),
@@ -167,18 +168,35 @@ export async function computeLiveKpis() {
     }
   }
 
-  /* Maintenance follow-up — vehicles serviced this quarter vs known vehicles */
-  if (maintenance) {
-    const known = new Set(maintenance.map(m => m.vehicle || m.plate).filter(Boolean))
+  /* Preventive maintenance: scheduled jobs due vs completed/on-time jobs. */
+  if (maintenance && preventivePlans) {
     const range = periodRange('quarterly', now)
-    const serviced = new Set(
-      maintenance.filter(m => inRange(toMillis(m.date || m.createdAt), range))
-                 .map(m => m.vehicle || m.plate).filter(Boolean)
-    )
+    const cycles = new Map()
+    maintenance.filter(record => record.maintenanceType === 'preventive').forEach(record => {
+      const due = toMillis(record.originalDueDate || record.dueDate)
+      if (!inRange(due, range)) return
+      const completed = toMillis(record.completedAt || record.date)
+      const key = record.planCycleId || `${record.preventivePlanId || record.planTemplateId || record.id}|${due}`
+      cycles.set(key, { completed: completed > 0, onTime: completed > 0 && completed <= due })
+    })
+    preventivePlans.forEach(plan => {
+      const due = toMillis(plan.nextDueDate)
+      if (!inRange(due, range)) return
+      const key = `${plan.id}|${due}`
+      if (!cycles.has(key)) cycles.set(key, { completed: false, onTime: false })
+    })
+    const due = cycles.size
+    const completed = [...cycles.values()].filter(cycle => cycle.completed).length
+    const onTime = [...cycles.values()].filter(cycle => cycle.onTime).length
+    out.preventiveMaintenance = {
+      value: pct(onTime, due), num: onTime, den: due,
+      noteEn: due ? 'preventive jobs completed on time vs due this quarter' : 'no preventive jobs due this quarter',
+      noteAr: due ? 'الصيانات الوقائية المنجزة في موعدها مقابل المستحقة هذا الربع' : 'لا توجد صيانات وقائية مستحقة هذا الربع',
+    }
     out.maintenanceFollowup = {
-      value: pct(serviced.size, known.size), num: serviced.size, den: known.size,
-      noteEn: 'vehicles with maintenance this quarter',
-      noteAr: 'مركبات لها صيانة هذا الربع',
+      value: pct(completed, due), num: completed, den: due,
+      noteEn: due ? 'scheduled preventive jobs completed vs due this quarter' : 'no preventive jobs due this quarter',
+      noteAr: due ? 'الصيانات الوقائية المجدولة والمنجزة مقابل المستحقة هذا الربع' : 'لا توجد صيانات وقائية مستحقة هذا الربع',
     }
   }
 

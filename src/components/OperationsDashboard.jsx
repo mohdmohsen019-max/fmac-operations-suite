@@ -1,21 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
-import {
-  Search, Bell, Bus, Package, BarChart2, ChevronRight, MonitorPlay, FileText,
-} from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { db } from '../firebase';
 import { collection, getDocs, query } from 'firebase/firestore';
 import { cartrackService } from '../services/cartrackService';
+import { canonicalFleetRegistration, deduplicateCanonicalTrips, mergeCanonicalVehicles } from '../services/fleetIdentity';
 import { useLanguage } from '../contexts/LanguageContext';
-import LanguageToggle from './shared/LanguageToggle';
-import ThemeToggle from './shared/ThemeToggle';
+import FujairahCommandDashboard from './dashboard/FujairahCommandDashboard';
 import './OperationsDashboard.css';
-
-/* Brand red — the ONLY place this hex exists in this file (chart line + dot). */
-const RED = '#c70017';
 
 /* Camera-group plates (mirrors the fleet module's registration filter). */
 const FLEET_PLATES = [
@@ -25,8 +17,14 @@ const FLEET_PLATES = [
 ];
 
 const isFleetPlate = (registration) => {
-  const reg = (registration || '').trim().toUpperCase().replace(/\s/g, '');
-  return FLEET_PLATES.some(p => reg === p || reg === p.replace(/\s/g, ''));
+  const reg = canonicalFleetRegistration(registration);
+  return FLEET_PLATES.includes(reg);
+};
+
+const toMillis = (timestamp) => {
+  if (!timestamp) return 0;
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 };
 
 const getGreeting = (t) => {
@@ -36,25 +34,6 @@ const getGreeting = (t) => {
   return t('Good evening', 'مساء الخير');
 };
 
-const toMillis = (ts) => {
-  if (!ts) return 0;
-  const d = ts.toDate ? ts.toDate() : new Date(ts);
-  const ms = d.getTime();
-  return isNaN(ms) ? 0 : ms;
-};
-
-/* Compact age like Image B: "65d" / "3h" / "12m" */
-const ageShort = (ts) => {
-  const ms = toMillis(ts);
-  if (!ms) return '—';
-  const mins = Math.floor((Date.now() - ms) / 60000);
-  if (mins < 60) return `${Math.max(mins, 0)}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-};
-
-const RANGES = ['1D', '1W', '1M', '1Y'];
 
 export default function OperationsDashboard({ userProfile }) {
   const navigate = useNavigate();
@@ -109,7 +88,7 @@ export default function OperationsDashboard({ userProfile }) {
   /* ── Fleet status (gold card) ── */
   const fetchFleetStatus = async () => {
     try {
-      const vehicles = await cartrackService.getVehicles();
+      const vehicles = mergeCanonicalVehicles((await cartrackService.getVehicles()) || []);
       const onRoute = vehicles ? vehicles.filter(v => v.ignition).length : 0;
       setFleetStatus({ onRoute, total: vehicles ? vehicles.length : 14 });
     } catch {
@@ -129,16 +108,10 @@ export default function OperationsDashboard({ userProfile }) {
       const end = format(endOfDay(now), 'yyyy-MM-dd HH:mm:ss');
       const raw = (await cartrackService.getTrips(start, end)) || [];
 
-      const seen = new Set();
-      const trips = raw.filter(trip => {
+      const trips = deduplicateCanonicalTrips(raw).filter(trip => {
         if (!isFleetPlate(trip.registration)) return false;
         const dist = parseFloat(trip.trip_distance) || 0;
         if (dist <= 0) return false;
-        const key = trip.trip_id
-          ? String(trip.trip_id)
-          : `${trip.registration}-${trip.start_timestamp}-${dist}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
         return true;
       });
 
@@ -445,305 +418,36 @@ export default function OperationsDashboard({ userProfile }) {
 
   const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString(locale));
 
-  /* ── Render ── */
+  /* Render */
   return (
-    <motion.div className="odx" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
-      {/* ── Header ── */}
-      <header className="odx-head">
-        <h1 className="odx-title">
-          {getGreeting(t)}{firstName ? `, ${firstName}` : ''}
-        </h1>
-        <div className="odx-head-right">
-          <div className="odx-toggles">
-            <LanguageToggle />
-            <ThemeToggle />
-          </div>
-          <div className="odx-head-icons">
-            <button
-              className="odx-icon-circle"
-              aria-label={t('Search (Ctrl+K)', 'بحث (Ctrl+K)')}
-              title="Ctrl+K"
-              onClick={() => window.dispatchEvent(new CustomEvent('fmac:palette'))}
-            >
-              <Search size={15} strokeWidth={2} />
-            </button>
-            <button
-              className="odx-icon-circle"
-              aria-label={t('Print the daily brief', 'طباعة الموجز اليومي')}
-              title={t('Daily brief', 'الموجز اليومي')}
-              onClick={printBrief}
-            >
-              <FileText size={15} strokeWidth={2} />
-            </button>
-            <button
-              className="odx-icon-circle"
-              aria-label={t('Open the ops wallboard (TV mode)', 'فتح شاشة العمليات (وضع TV)')}
-              title={t('Wallboard', 'شاشة العمليات')}
-              onClick={() => navigate('/wallboard')}
-            >
-              <MonitorPlay size={15} strokeWidth={2} />
-            </button>
-            <div className="odx-bell-wrap" ref={bellRef}>
-              <button
-                className="odx-icon-circle"
-                aria-label={t('Notifications', 'الإشعارات')}
-                onClick={() => setBellOpen(v => !v)}
-              >
-                <Bell size={15} strokeWidth={2} />
-                {attentionCount > 0 && <span className="odx-bell-dot" aria-hidden="true" />}
-              </button>
-              {bellOpen && (
-                <div className="odx-bell-menu">
-                  {bellItems.length === 0 ? (
-                    <div className="odx-bell-none">
-                      {t('All clear — nothing needs attention.', 'كل شيء على ما يرام.')}
-                    </div>
-                  ) : bellItems.map(item => (
-                    <button
-                      key={item.key}
-                      className="odx-bell-item"
-                      onClick={() => { setBellOpen(false); navigate(item.path); }}
-                    >
-                      <b dir="ltr">{item.n.toLocaleString(locale)}</b>
-                      <span>{item.label}</span>
-                      <ChevronRight size={13} strokeWidth={2} />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button className="odx-user-pill" onClick={() => navigate('/profile')} aria-label={t('My Profile', 'ملفي الشخصي')}>
-              <span className="odx-user-avatar">
-                {userProfile?.photoURL ? (
-                  <img src={userProfile.photoURL} alt="" />
-                ) : (
-                  (displayName || 'A').trim().charAt(0).toUpperCase()
-                )}
-              </span>
-              <span className="odx-user-name">{firstName || t('Admin', 'مسؤول')}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* ── Row 1 — tinted stat cards ── */}
-      <div className="odx-row1">
-        <div className="odx-col">
-          <h2 className="odx-sec">{t('Fleet activity', 'نشاط الأسطول')}</h2>
-          <div className="odx-card odx-card--red">
-            <div className="odx-value" dir="ltr">
-              {tripData?.totalKm == null ? '—' : `${tripData.totalKm.toLocaleString(locale)} ${t('km', 'كم')}`}
-            </div>
-            <div className="odx-label">{rangeLabel}</div>
-            <div className="odx-chart" dir="ltr">
-              {tripData && tripData.points.length > 0 && (
-                <ResponsiveContainer width="100%" height={130}>
-                  <AreaChart data={tripData.points} margin={{ top: 36, right: 10, left: 4, bottom: 2 }}>
-                    <defs>
-                      {/* The single permitted gradient: chart area fill */}
-                      <linearGradient id="odxTripFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#f7d6da" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#f7d6da" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Area
-                      type="monotone"
-                      dataKey="v"
-                      stroke={RED}
-                      strokeWidth={2}
-                      fill="url(#odxTripFill)"
-                      isAnimationActive={false}
-                      dot={(p) => {
-                        const last = tripData.points.length - 1;
-                        if (p.index !== last || p.cx == null) return <g key={`d-${p.index}`} />;
-                        const label = `${tripData.points[last].v.toLocaleString(locale)} km`;
-                        const w = label.length * 6.5 + 16;
-                        const bx = p.cx - w - 10 < 0 ? p.cx + 10 : p.cx - w - 10;
-                        return (
-                          <g key={`d-${p.index}`}>
-                            <rect x={bx} y={p.cy - 30} width={w} height={20} rx={10} fill="#0a0a0a" />
-                            <text x={bx + w / 2} y={p.cy - 16} textAnchor="middle" fill="#ffffff" fontSize={10} fontWeight={600}>
-                              {label}
-                            </text>
-                            <circle cx={p.cx} cy={p.cy} r={4} fill={RED} stroke="#ffffff" strokeWidth={2} />
-                          </g>
-                        );
-                      }}
-                      activeDot={{ r: 3.5, fill: RED, stroke: '#fdeef0', strokeWidth: 2 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-            <div className="odx-range-tabs" dir="ltr">
-              {RANGES.map(r => (
-                <button
-                  key={r}
-                  className={`odx-range-tab${fleetRange === r ? ' active' : ''}`}
-                  onClick={() => changeRange(r)}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="odx-col">
-          <h2 className="odx-sec">{t('Modules', 'الوحدات')}</h2>
-          <button className="odx-card odx-card--purple" onClick={() => navigate('/reports')}>
-            <div>
-              <div className="odx-value" dir="ltr">
-                {reportStats ? `${fmt(reportStats.approved)} / ${fmt(reportStats.total)}` : '—'}
-              </div>
-              <div className="odx-label">{t('Sections approved', 'الأقسام المعتمدة')}</div>
-            </div>
-            <div className="odx-card-foot">
-              <span className="odx-chip odx-chip--purple"><BarChart2 size={16} strokeWidth={2} /></span>
-              <span className="odx-sub odx-sub--purple">{monthName}</span>
-            </div>
-          </button>
-        </div>
-
-        <div className="odx-col">
-          <div className="odx-sec-spacer" aria-hidden="true" />
-          <button className="odx-card odx-card--green" onClick={() => navigate('/inventory')}>
-            <div>
-              <div className="odx-value" dir="ltr">{fmt(invStats?.total)}</div>
-              <div className="odx-label">{t('Items in stock', 'أصناف في المخزون')}</div>
-            </div>
-            <div className="odx-card-foot">
-              <span className="odx-chip odx-chip--green"><Package size={16} strokeWidth={2} /></span>
-              <span className="odx-sub odx-sub--green">
-                {invStats?.out != null ? `${fmt(invStats.out)} ${t('out', 'نفذ')}` : '—'}
-              </span>
-            </div>
-          </button>
-        </div>
-
-        <div className="odx-col">
-          <div className="odx-sec-spacer" aria-hidden="true" />
-          <button className="odx-card odx-card--gold" onClick={() => navigate('/fleet/dashboard')}>
-            <div>
-              <div className="odx-value" dir="ltr">
-                {fleetStatus ? `${fmt(fleetStatus.onRoute)} / ${fmt(fleetStatus.total)}` : '—'}
-              </div>
-              <div className="odx-label">{t('Buses on route', 'حافلات في الطريق')}</div>
-            </div>
-            <div className="odx-card-foot">
-              <span className="odx-chip odx-chip--gold"><Bus size={16} strokeWidth={2} /></span>
-              <span className="odx-sub odx-sub--gold">{t('Live', 'مباشر')}</span>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* ── Row 2 — naked tickets table + dark anchor card ── */}
-      <div className="odx-row2">
-        <div className="odx-assetsblock">
-          <div className="odx-table-head">
-            <h2 className="odx-table-title" dir="ltr">
-              {assetStats == null
-                ? '—'
-                : `${(assetStats.total ?? 0).toLocaleString(locale)} ${t('assets', 'أصلاً')} · ${(assetStats.missing ?? 0).toLocaleString(locale)} ${t('missing', 'مفقود')}`}
-            </h2>
-            <button className="odx-window-pill" onClick={() => navigate('/assets')}>
-              {t('Open assets', 'فتح الأصول')} <ChevronRight size={12} strokeWidth={2} />
-            </button>
-          </div>
-
-          {assetStats == null ? (
-            <div className="odx-empty">—</div>
-          ) : assetStats.rooms.length === 0 ? (
-            <div className="odx-empty">{t('No assets registered yet', 'لا توجد أصول مسجلة بعد')}</div>
-          ) : (
-            <div className="odx-asset-rows">
-              {(() => {
-                const max = Math.max(...assetStats.rooms.map(r => r.count), 1);
-                return assetStats.rooms.map(room => (
-                  <button
-                    key={room.key}
-                    className="odx-asset-row"
-                    onClick={() => navigate('/assets')}
-                  >
-                    <span className="odx-asset-name" dir="auto">
-                      {lang === 'ar' ? room.ar : room.en}
-                    </span>
-                    <span className="odx-asset-track" dir="ltr">
-                      <span className="odx-asset-fill" style={{ width: `${Math.max((room.count / max) * 100, 4)}%` }} />
-                    </span>
-                    <span className="odx-asset-count" dir="ltr">{room.count.toLocaleString(locale)}</span>
-                  </button>
-                ));
-              })()}
-            </div>
-          )}
-        </div>
-
-        {/* Dark anchor card — the single most urgent operational state */}
-        <div className="odx-dark">
-          {urgency ? (
-            <>
-              <div className="odx-dark-line1" dir="ltr">
-                <span>{fmt(urgency.n)} {urgency.unit}</span>
-                <span className="odx-dark-pill">{urgency.pill}</span>
-              </div>
-              <div className="odx-dark-line2">{urgency.line2}</div>
-              <p className="odx-dark-body">{urgency.body}</p>
-              <button className="odx-dark-cta" onClick={() => navigate(urgency.path)}>
-                {urgency.cta}
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="odx-dark-line2">{t('All clear', 'كل شيء على ما يرام')}</div>
-              <p className="odx-dark-body">
-                {t('No urgent operational state right now.', 'لا توجد حالة تشغيلية عاجلة حالياً.')}
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ── Stock movements — naked table, full width ── */}
-      <div className="odx-moves">
-        <h2 className="odx-table-title">{t('Latest stock movements', 'أحدث حركات المخزون')}</h2>
-        <table className="odx-table">
-          <thead>
-            <tr>
-              <th className="odx-th">{t('Item', 'الصنف')}</th>
-              <th className="odx-th">{t('By', 'بواسطة')}</th>
-              <th className="odx-th odx-th--end">{t('Qty', 'الكمية')}</th>
-              <th className="odx-th odx-th--end">{t('Age', 'العمر')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {movements == null ? (
-              <tr><td className="odx-td odx-td--empty" colSpan={4}>—</td></tr>
-            ) : movements.length === 0 ? (
-              <tr><td className="odx-td odx-td--empty" colSpan={4}>{t('No stock movements yet.', 'لا توجد حركات مخزون بعد.')}</td></tr>
-            ) : movements.map(mv => {
-              const isIn = mv.type === 'stock_in';
-              return (
-                <tr key={mv.id} className="odx-tr" onClick={() => navigate('/inventory')}>
-                  <td className="odx-td">
-                    <span className="odx-move-name" dir="auto">
-                      {mv.itemNameAr || mv.itemNameEn || mv.itemSku}
-                    </span>
-                  </td>
-                  <td className="odx-td odx-td--muted" dir="auto">
-                    {mv.issuedTo?.personName || mv.performedByName || '—'}
-                  </td>
-                  <td className={`odx-td odx-td--end odx-qty ${isIn ? 'odx-qty--in' : 'odx-qty--out'}`} dir="ltr">
-                    {isIn ? '+' : '−'}{mv.quantity}
-                  </td>
-                  <td className="odx-td odx-td--muted odx-td--end" dir="ltr">{ageShort(mv.createdAt)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </motion.div>
+    <FujairahCommandDashboard
+      t={t}
+      lang={lang}
+      locale={locale}
+      navigate={navigate}
+      userProfile={userProfile}
+      displayName={displayName}
+      firstName={firstName}
+      greeting={getGreeting(t)}
+      printBrief={printBrief}
+      bellOpen={bellOpen}
+      setBellOpen={setBellOpen}
+      bellRef={bellRef}
+      attentionCount={attentionCount}
+      bellItems={bellItems}
+      urgency={urgency}
+      signals={signals}
+      tripData={tripData}
+      fleetRange={fleetRange}
+      changeRange={changeRange}
+      rangeLabel={rangeLabel}
+      fleetStatus={fleetStatus}
+      reportStats={reportStats}
+      invStats={invStats}
+      assetStats={assetStats}
+      movements={movements}
+      monthName={monthName}
+      fmt={fmt}
+    />
   );
 }

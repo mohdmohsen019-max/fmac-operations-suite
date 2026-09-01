@@ -3,6 +3,9 @@ import * as XLSX from 'xlsx';
 export const exportToExcel = (data, filename = 'exported_data') => {
   const worksheet = XLSX.utils.json_to_sheet(data);
   const workbook = XLSX.utils.book_new();
+  const containsArabic = (value) => /[\u0600-\u06FF]/u.test(String(value || ''));
+  const rightToLeft = (data || []).some((row) => Object.entries(row || {}).some(([key, value]) => containsArabic(key) || containsArabic(value)));
+  if (rightToLeft) workbook.Workbook = { Views: [{ RTL: true }] };
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
   
   // Clean column widths based on keys

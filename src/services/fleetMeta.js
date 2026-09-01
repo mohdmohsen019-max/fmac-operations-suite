@@ -12,22 +12,22 @@
  *   { registration, vehicleClass: 'bus'|'other', busNumber, driverName,
  *     manufacturer, model, label, notes, updatedAt, updatedBy }
  *
- * Classification default for vehicles with no document yet:
- *   registration in BUS_REGS → 'bus', anything else → 'other'.
+ * Classification default for vehicles with no document is based only on the
+ * confirmed bus registry. Unknown registrations remain `other` until staff
+ * explicitly classify them as buses.
+ * Historical number-only plates are linked to the known full bus plate when
+ * the numeric suffix is unique (for example 85750 → M85750).
  */
 import { db } from '../firebase'
 import {
   collection, doc, onSnapshot, setDoc, serverTimestamp,
 } from 'firebase/firestore'
-import { FLEET_MAPPING } from './fleetMapping'
+import { FLEET_MAPPING, resolveKnownBusRegistration } from './fleetMapping'
+import { buildFleetAliasMap, canonicalFleetRegistration } from './fleetIdentity'
 
 /* The 14 bus registrations — used ONLY as the default classification seed.
    The live class of any vehicle is whatever fleet_vehicle_meta says. */
-export const BUS_REGS = [
-  'A21248', 'A33867', 'A33876', 'C29769', 'C37069',
-  'C37072', 'C37074', 'C37075', 'M85750', 'M85751',
-  'M85756', 'M85759', 'M99268', 'M99270',
-]
+export const BUS_REGS = Object.keys(FLEET_MAPPING)
 
 export const VEHICLE_CLASSES = [
   { id: 'bus',   en: 'Bus Fleet',      ar: 'أسطول الحافلات' },
@@ -39,7 +39,8 @@ export const normReg = (reg) => String(reg || '').toUpperCase().replace(/\s/g, '
 /* Default (pre-edit) metadata for a registration. */
 export function defaultMetaFor(registration) {
   const reg = normReg(registration)
-  const seed = FLEET_MAPPING[reg]
+  const canonicalReg = resolveKnownBusRegistration(reg)
+  const seed = FLEET_MAPPING[canonicalReg]
   if (seed) {
     return {
       registration: reg,
@@ -49,17 +50,43 @@ export function defaultMetaFor(registration) {
       manufacturer: seed.manufacturer,
       model: seed.model,
       label: '',
+      plateNumber: canonicalReg,
+      cartrackRegistration: reg,
+      cartrackId: '',
+      category: 'Passenger Transport',
+      vehicleType: 'Bus',
+      internalIdentifier: seed.busNumber,
+      year: '',
+      capacity: '',
+      operationalStatus: 'active',
+      trackingStatus: 'tracked',
+      trackingNote: 'Tracked by Cartrack.',
+      clubOwned: true,
+      ownership: 'club',
       notes: '',
     }
   }
   return {
     registration: reg,
-    vehicleClass: BUS_REGS.includes(reg) ? 'bus' : 'other',
+    vehicleClass: 'other',
     busNumber: '',
     driverName: '',
     manufacturer: '',
     model: '',
     label: '',
+    plateNumber: reg,
+    cartrackRegistration: reg,
+    cartrackId: '',
+    category: '',
+    vehicleType: '',
+    internalIdentifier: '',
+    year: '',
+    capacity: '',
+    operationalStatus: 'active',
+    trackingStatus: 'not_tracked',
+    trackingNote: 'Not tracked by Cartrack; retained as a club-owned fleet vehicle.',
+    clubOwned: true,
+    ownership: 'club',
     notes: '',
   }
 }
@@ -84,9 +111,32 @@ export function subscribeFleetMeta(cb) {
 /* Effective metadata: stored doc merged over the seed defaults. */
 export function effectiveMeta(registration, metaMap) {
   const reg = normReg(registration)
+  const canonicalReg = canonicalFleetRegistration(reg, buildFleetAliasMap(metaMap))
   const base = defaultMetaFor(reg)
-  const stored = metaMap?.get?.(reg)
-  return stored ? { ...base, ...stored, registration: reg } : base
+  const stored = metaMap?.get?.(reg) || (canonicalReg !== reg ? metaMap?.get?.(canonicalReg) : null)
+  if (!stored) return base
+
+  const merged = {
+    ...base,
+    ...stored,
+    registration: reg,
+    canonicalRegistration: canonicalReg,
+    telemetryAliases: Array.isArray(stored.telemetryAliases) ? stored.telemetryAliases : [],
+  }
+  // Explicit edits win. Older metadata without a class inherits the confirmed
+  // registry default, so an unrelated numeric car plate never becomes a bus.
+  merged.vehicleClass = ['bus', 'other'].includes(stored.vehicleClass)
+    ? stored.vehicleClass
+    : base.vehicleClass
+  if (merged.vehicleClass === 'bus') {
+    merged.vehicleType = merged.vehicleType || 'Bus'
+    merged.category = merged.category || 'Passenger Transport'
+  }
+  // Preserve a deliberately entered full plate, but repair old number-only
+  // metadata when its unique known plate prefix can be recovered.
+  const storedPlate = normReg(stored.plateNumber)
+  if (canonicalReg !== reg && (!storedPlate || storedPlate === reg)) merged.plateNumber = canonicalReg
+  return merged
 }
 
 export function classOf(registration, metaMap) {
@@ -95,6 +145,7 @@ export function classOf(registration, metaMap) {
 
 /* Does a registration belong in the given scope? */
 export function matchesScope(registration, scope, metaMap) {
+  if (effectiveMeta(registration, metaMap).clubOwned === false) return false
   if (scope === 'all') return true
   const cls = classOf(registration, metaMap)
   return scope === 'others' ? cls === 'other' : cls === 'bus'

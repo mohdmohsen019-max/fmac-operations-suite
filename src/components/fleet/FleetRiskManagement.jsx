@@ -1,17 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Activity, AlertCircle, User, ShieldAlert, PieChart as PieIcon, Zap,
-  Receipt, Plus, Pencil, Trash2, Download, X, Check, Wallet, RotateCcw,
+  Receipt, Plus, Pencil, Trash2, Download, X, Wallet, Paperclip, ExternalLink,
+  CalendarDays, FileText, ShieldCheck,
 } from 'lucide-react';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
 } from 'recharts';
 import {
-  collection, getDocs, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
+  collection, getDocs, query, orderBy, setDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore';
-import * as XLSX from 'xlsx';
-import { db, auth } from '../../firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db, auth, storage } from '../../firebase';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useFleetSettings } from './FleetSettingsContext';
 import { useFleetScope } from './FleetScopeContext';
@@ -21,6 +22,13 @@ import CustomSelect from '../CustomSelect';
 import { format } from 'date-fns';
 import './FleetModule.css';
 import './FleetFines.css';
+import DriverScores from './DriverScores';
+import { ensureTrafficFinesImport } from './trafficFinesImport65';
+import {
+  buildFinesReportSummary, noFinesStatement, reportingPeriodLabel, scopeName,
+} from './trafficFinesReportData';
+import { exportTrafficFinesExcel, exportTrafficFinesPdf } from './trafficFinesReport';
+import { sendNotification } from '../../utils/notify';
 
 /* ══════════════════════════════════════════════════════════════════
    Safety & Behavior — two internal tabs:
@@ -53,7 +61,7 @@ export default function FleetRiskManagement({ canEdit }) {
         </button>
       </div>
 
-      {tab === 'behavior' ? <BehaviorTab /> : <FinesTab canEdit={canEdit} />}
+      {tab === 'behavior' ? <DriverScores /> : <FinesTab canEdit={canEdit} />}
     </div>
   );
 }
@@ -62,7 +70,10 @@ export default function FleetRiskManagement({ canEdit }) {
    TAB 1 — Behavior (existing scorecards / risk events, unchanged)
    ══════════════════════════════════════════════════════════════════ */
 
-function BehaviorTab() {
+// Kept temporarily as a rollback reference while the native-style scorecard
+// replaces the former seven-day violation dashboard.
+// eslint-disable-next-line no-unused-vars
+function LegacyBehaviorTab() {
   const { settings } = useFleetSettings();
   const { t, locale } = useLanguage();
   const [violations, setViolations] = useState([]);
@@ -260,6 +271,7 @@ function BehaviorTab() {
    ══════════════════════════════════════════════════════════════════ */
 
 const FINE_TYPES = [
+  { id: 'unknown',   en: 'Not specified',        ar: 'غير محدد' },
   { id: 'speeding',  en: 'Speeding',            ar: 'تجاوز السرعة' },
   { id: 'parking',   en: 'Illegal Parking',     ar: 'وقوف خاطئ' },
   { id: 'red_light', en: 'Running a Red Light', ar: 'تجاوز إشارة' },
@@ -279,30 +291,36 @@ const emptyFineDraft = () => ({
   date: format(new Date(), 'yyyy-MM-dd'),
   fineType: 'speeding',
   amountAed: '',
-  status: 'unpaid',
   referenceNo: '',
   notes: '',
+  details: '',
 });
 
 function FinesTab({ canEdit }) {
   const { t, locale, lang } = useLanguage();
-  const { inScope, displayName } = useFleetScope();
+  const { scope, inScope, displayName, metaOf, metaMap, classOf } = useFleetScope();
 
   const [fines, setFines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [vehicles, setVehicles] = useState([]);
   const [filterDriver, setFilterDriver] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [filterMonth, setFilterMonth] = useState('all');
   const [modal, setModal] = useState(null); // { mode: 'add'|'edit', id?, draft }
   const [modalError, setModalError] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // fine object
   const [busyId, setBusyId] = useState(null);
+  const [evidenceFile, setEvidenceFile] = useState(null);
+  const [exporting, setExporting] = useState('');
 
   const fetchFines = useCallback(async () => {
     setLoading(true);
     try {
+      try {
+        await ensureTrafficFinesImport(db, auth.currentUser?.email || '');
+      } catch (importError) {
+        console.warn('Traffic fines workbook import was not permitted:', importError);
+      }
       const snap = await getDocs(query(collection(db, 'fleet_fines'), orderBy('date', 'desc')));
       setFines(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) {
@@ -327,43 +345,68 @@ function FinesTab({ canEdit }) {
     [displayName, lang]
   );
 
-  // Scope: fines tied to a vehicle follow the global scope switch;
-  // fines with no vehicle always show.
+  const resolvedDriver = useCallback((fine) => fine.driverName || metaOf(fine.vehicleReg).driverName || '', [metaOf]);
+
+  const scopeDriverNames = useMemo(() => {
+    if (scope === 'all') return new Set();
+    const names = new Set();
+    metaMap.forEach((_, registration) => {
+      const meta = metaOf(registration);
+      const matches = scope === 'buses' ? classOf(registration) === 'bus' : classOf(registration) === 'other';
+      if (matches && meta.driverName) names.add(String(meta.driverName).trim().toLowerCase());
+    });
+    return names;
+  }, [scope, metaMap, metaOf, classOf]);
+
+  // Vehicle-linked fines follow the classified fleet scope. A driver-only
+  // record is included only when that named driver belongs to the scope.
   const scoped = useMemo(
-    () => fines.filter(f => !f.vehicleReg || inScope(f.vehicleReg)),
-    [fines, inScope]
+    () => fines.filter((fine) => {
+      if (fine.vehicleReg) return inScope(fine.vehicleReg);
+      if (scope === 'all') return true;
+      const driver = String(fine.driverName || '').trim().toLowerCase();
+      return !!driver && scopeDriverNames.has(driver);
+    }),
+    [fines, inScope, scope, scopeDriverNames]
   );
 
   const driverOptions = useMemo(() => {
-    const names = [...new Set(scoped.map(f => f.driverName).filter(Boolean))].sort();
+    const names = [...new Set(scoped.map(resolvedDriver).filter(Boolean))].sort();
     return [{ value: 'all', label: t('All drivers', 'كل السائقين') }, ...names.map(n => ({ value: n, label: n }))];
-  }, [scoped, t]);
-
-  const monthOptions = useMemo(() => {
-    const months = [...new Set(scoped.map(f => (f.date || '').slice(0, 7)).filter(m => m.length === 7))].sort().reverse();
-    const fmt = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' });
-    return [
-      { value: 'all', label: t('All months', 'كل الأشهر') },
-      ...months.map(m => ({ value: m, label: fmt.format(new Date(`${m}-01T00:00:00`)) })),
-    ];
-  }, [scoped, locale, t]);
+  }, [scoped, resolvedDriver, t]);
 
   const filtered = useMemo(() => {
     return scoped
-      .filter(f => filterDriver === 'all' || f.driverName === filterDriver)
-      .filter(f => filterStatus === 'all' || f.status === filterStatus)
+      .filter(f => filterDriver === 'all' || resolvedDriver(f) === filterDriver)
       .filter(f => filterMonth === 'all' || (f.date || '').startsWith(filterMonth))
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  }, [scoped, filterDriver, filterStatus, filterMonth]);
+  }, [scoped, filterDriver, filterMonth, resolvedDriver]);
 
   const totals = useMemo(() => {
     const amt = (f) => parseFloat(f.amountAed) || 0;
-    const unpaid = filtered.filter(f => f.status !== 'paid');
+    const ranked = (key, value = () => 1) => {
+      const values = new Map();
+      filtered.forEach((f) => { const group = key(f); if (group) values.set(group, (values.get(group) || 0) + value(f)); });
+      return [...values.entries()].sort((a, b) => b[1] - a[1])[0] || null;
+    };
+    const vehicleCounts = new Map();
+    filtered.forEach((f) => { if (f.vehicleReg) vehicleCounts.set(f.vehicleReg, (vehicleCounts.get(f.vehicleReg) || 0) + 1); });
+    const affectedVehicles = vehicleCounts.size;
+    const recentCutoff = format(new Date(Date.now() - 30 * 86400000), 'yyyy-MM-dd');
+    const recent = filtered.filter((f) => (f.date || '') >= recentCutoff);
+    const areaOf = (f) => (f.details || '').split('-')[0]?.trim();
     return {
       count: filtered.length,
       totalAed: filtered.reduce((s, f) => s + amt(f), 0),
-      unpaidCount: unpaid.length,
-      unpaidAed: unpaid.reduce((s, f) => s + amt(f), 0),
+      averageAed: filtered.length ? filtered.reduce((s, f) => s + amt(f), 0) / filtered.length : 0,
+      affectedVehicles,
+      repeatVehicles: [...vehicleCounts.values()].filter((count) => count > 1).length,
+      topVehicle: ranked((f) => f.vehicleReg),
+      costliestVehicle: ranked((f) => f.vehicleReg, amt),
+      peakMonth: ranked((f) => (f.date || '').slice(0, 7)),
+      topArea: ranked(areaOf),
+      recentCount: recent.length,
+      recentAed: recent.reduce((sum, fine) => sum + amt(fine), 0),
     };
   }, [filtered]);
 
@@ -372,9 +415,23 @@ function FinesTab({ canEdit }) {
     ...vehicles.map(v => ({ value: v.registration, label: vehLabel(v.registration) })),
   ]), [vehicles, vehLabel, t]);
 
-  const openAdd = () => { setModalError(''); setModal({ mode: 'add', draft: emptyFineDraft() }); };
+  const selectedPeriodLabel = useMemo(
+    () => filterMonth === 'all'
+      ? t('All recorded dates', 'كل التواريخ المسجلة')
+      : reportingPeriodLabel(filterMonth, locale),
+    [filterMonth, locale, t]
+  );
+
+  const emptyStatement = useMemo(() => noFinesStatement({
+    scope,
+    driver: filterDriver,
+    periodLabel: reportingPeriodLabel(filterMonth === 'all' ? '' : filterMonth, 'en-AE'),
+  }), [scope, filterDriver, filterMonth]);
+
+  const openAdd = () => { setModalError(''); setEvidenceFile(null); setModal({ mode: 'add', draft: emptyFineDraft() }); };
   const openEdit = (f) => {
     setModalError('');
+    setEvidenceFile(null);
     setModal({
       mode: 'edit',
       id: f.id,
@@ -384,9 +441,9 @@ function FinesTab({ canEdit }) {
         date: f.date || format(new Date(), 'yyyy-MM-dd'),
         fineType: f.fineType || 'other',
         amountAed: f.amountAed ?? '',
-        status: f.status === 'paid' ? 'paid' : 'unpaid',
         referenceNo: f.referenceNo || '',
         notes: f.notes || '',
+        details: f.details || '',
       },
     });
   };
@@ -396,11 +453,14 @@ function FinesTab({ canEdit }) {
   const saveFine = async () => {
     if (!modal) return;
     const d = modal.draft;
-    if (!d.driverName.trim()) { setModalError(t('Driver name is required.', 'اسم السائق مطلوب.')); return; }
     if (!d.date) { setModalError(t('Date is required.', 'التاريخ مطلوب.')); return; }
     const amount = parseFloat(d.amountAed);
     if (isNaN(amount) || amount < 0) { setModalError(t('Enter a valid amount in AED.', 'أدخل مبلغاً صحيحاً بالدرهم.')); return; }
 
+    if (evidenceFile && (evidenceFile.size > 10 * 1024 * 1024 || !/^(application\/pdf|image\/(jpeg|png|webp))$/.test(evidenceFile.type))) {
+      setModalError(t('Evidence must be PDF, JPG, PNG or WEBP and no larger than 10MB.', 'يجب أن يكون الدليل PDF أو JPG أو PNG أو WEBP وألا يتجاوز 10 ميجابايت.'));
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -409,18 +469,32 @@ function FinesTab({ canEdit }) {
         date: d.date,
         fineType: d.fineType,
         amountAed: amount,
-        status: d.status === 'paid' ? 'paid' : 'unpaid',
         referenceNo: d.referenceNo.trim(),
         notes: d.notes.trim(),
+        details: d.details.trim(),
       };
+      const fineRef = modal.mode === 'add' ? doc(collection(db, 'fleet_fines')) : doc(db, 'fleet_fines', modal.id);
+      if (evidenceFile) {
+        const safeName = evidenceFile.name.replace(/[^\w.\-()\s]/g, '_');
+        const path = `fleet_fines/${fineRef.id}/${Date.now()}_${safeName}`;
+        await uploadBytes(storageRef(storage, path), evidenceFile, { contentType: evidenceFile.type });
+        payload.evidence = { name: evidenceFile.name, path, url: await getDownloadURL(storageRef(storage, path)), contentType: evidenceFile.type, size: evidenceFile.size };
+      }
       if (modal.mode === 'add') {
-        await addDoc(collection(db, 'fleet_fines'), {
+        await setDoc(fineRef, {
           ...payload,
           createdAt: serverTimestamp(),
           createdBy: auth.currentUser?.email || '',
         });
+        await sendNotification('fleet_fine_logged', {
+          registration: payload.vehicleReg,
+          driverName: payload.driverName,
+          date: payload.date,
+          amountAed: payload.amountAed,
+          referenceNo: payload.referenceNo,
+        });
       } else {
-        await updateDoc(doc(db, 'fleet_fines', modal.id), payload);
+        await updateDoc(fineRef, payload);
       }
       setModal(null);
       await fetchFines();
@@ -432,22 +506,13 @@ function FinesTab({ canEdit }) {
     }
   };
 
-  const togglePaid = async (f) => {
-    setBusyId(f.id);
-    try {
-      await updateDoc(doc(db, 'fleet_fines', f.id), { status: f.status === 'paid' ? 'unpaid' : 'paid' });
-      setFines(prev => prev.map(x => x.id === f.id ? { ...x, status: f.status === 'paid' ? 'unpaid' : 'paid' } : x));
-    } catch (err) {
-      console.error('Fine status toggle error:', err);
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   const deleteFine = async () => {
     if (!confirmDelete) return;
     setBusyId(confirmDelete.id);
     try {
+      if (confirmDelete.evidence?.path) {
+        try { await deleteObject(storageRef(storage, confirmDelete.evidence.path)); } catch (err) { console.warn('Fine evidence delete failed:', err); }
+      }
       await deleteDoc(doc(db, 'fleet_fines', confirmDelete.id));
       setFines(prev => prev.filter(x => x.id !== confirmDelete.id));
       setConfirmDelete(null);
@@ -458,30 +523,30 @@ function FinesTab({ canEdit }) {
     }
   };
 
-  const exportExcel = () => {
-    if (filtered.length === 0) return;
-    const typeAr = (id) => { const f = FINE_TYPES.find(x => x.id === id); return f ? f.ar : (id || ''); };
-    const rows = filtered.map(f => ({
-      'التاريخ': f.date || '',
-      'اسم السائق': f.driverName || '',
-      'المركبة': f.vehicleReg ? vehLabel(f.vehicleReg) : '',
-      'رقم اللوحة': f.vehicleReg || '',
-      'نوع المخالفة': typeAr(f.fineType),
-      'المبلغ (د.إ)': parseFloat(f.amountAed) || 0,
-      'الحالة': f.status === 'paid' ? 'مدفوعة' : 'غير مدفوعة',
-      'الرقم المرجعي': f.referenceNo || '',
-      'ملاحظات': f.notes || '',
-    }));
-    rows.push({
-      'التاريخ': '', 'اسم السائق': 'الإجمالي', 'المركبة': '', 'رقم اللوحة': '',
-      'نوع المخالفة': `${totals.count} مخالفة`, 'المبلغ (د.إ)': totals.totalAed,
-      'الحالة': `غير مدفوع: ${totals.unpaidAed}`, 'الرقم المرجعي': '', 'ملاحظات': '',
+  const finesExportPayload = useMemo(() => {
+    const reportMonth = filterMonth === 'all' ? '' : filterMonth;
+    const summary = buildFinesReportSummary({
+      scope, month: reportMonth, driver: filterDriver, count: totals.count,
+      totalAed: totals.totalAed, generatedAt: new Date().toISOString(),
     });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 24 }, { wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 32 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'المخالفات المرورية');
-    XLSX.writeFile(wb, `fleet-fines-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    return {
+      fines: filtered, totals, scope, driver: filterDriver,
+      periodLabel: selectedPeriodLabel, from: summary.from, to: summary.to, locale,
+      resolveDriver: resolvedDriver, vehicleLabel: vehLabel,
+    };
+  }, [filterDriver, filterMonth, filtered, locale, resolvedDriver, scope, selectedPeriodLabel, totals, vehLabel]);
+
+  const runFinesExport = async (type) => {
+    if (exporting) return;
+    setExporting(type);
+    try {
+      if (type === 'pdf') await exportTrafficFinesPdf(finesExportPayload);
+      else await exportTrafficFinesExcel(finesExportPayload);
+    } catch (exportError) {
+      console.error(`Traffic-fines ${type} export failed:`, exportError);
+    } finally {
+      setExporting('');
+    }
   };
 
   if (loading) {
@@ -494,6 +559,20 @@ function FinesTab({ canEdit }) {
 
   return (
     <div className="ffn-view">
+      <div className="ffn-period-bar glass-panel">
+        <div className="ffn-period-copy">
+          <span className="ffn-period-icon"><CalendarDays size={18} /></span>
+          <div><strong>{t('Reporting period', 'فترة التقرير')}</strong><small>{scopeName(scope)} · {selectedPeriodLabel}</small></div>
+        </div>
+        <div className="ffn-period-controls">
+          <label>
+            <span>{t('Select month', 'اختر الشهر')}</span>
+            <input type="month" value={filterMonth === 'all' ? '' : filterMonth} onChange={(event) => setFilterMonth(event.target.value || 'all')} />
+          </label>
+          <button type="button" className="ffn-btn ffn-btn-ghost" onClick={() => setFilterMonth('all')} disabled={filterMonth === 'all'}>{t('All dates', 'كل التواريخ')}</button>
+        </div>
+      </div>
+
       {/* Summary cards */}
       <div className="stats-bento">
         <div className="stat-card glass-panel">
@@ -507,16 +586,42 @@ function FinesTab({ canEdit }) {
           <p className="stat-label">{t('All fines value', 'قيمة جميع المخالفات')}</p>
         </div>
         <div className="stat-card glass-panel">
-          <div className="stat-header"><h3>{t('Unpaid Fines', 'مخالفات غير مدفوعة')}</h3><AlertCircle size={16} className="text-risk" /></div>
-          <div className="stat-value text-risk">{totals.unpaidCount.toLocaleString(locale)}</div>
-          <p className="stat-label">{t('Awaiting settlement', 'بانتظار السداد')}</p>
+          <div className="stat-header"><h3>{t('Average Fine', 'متوسط المخالفة')}</h3><Activity size={16} /></div>
+          <div className="stat-value">{Math.round(totals.averageAed).toLocaleString(locale)}<span className="ffn-unit">{t('AED', 'د.إ')}</span></div>
+          <p className="stat-label">{t('Average cost per recorded fine', 'متوسط تكلفة المخالفة المسجلة')}</p>
         </div>
         <div className="stat-card glass-panel">
-          <div className="stat-header"><h3>{t('Unpaid Amount', 'المبلغ غير المدفوع')}</h3><ShieldAlert size={16} className="text-caution" /></div>
-          <div className="stat-value text-caution">{totals.unpaidAed.toLocaleString(locale)}<span className="ffn-unit">{t('AED', 'د.إ')}</span></div>
-          <p className="stat-label">{t('Outstanding balance', 'الرصيد المستحق')}</p>
+          <div className="stat-header"><h3>{t('Vehicles Affected', 'المركبات المتأثرة')}</h3><User size={16} /></div>
+          <div className="stat-value">{totals.affectedVehicles.toLocaleString(locale)}</div>
+          <p className="stat-label">{t(`${totals.repeatVehicles} vehicles have repeat fines`, `${totals.repeatVehicles} مركبات لديها مخالفات متكررة`)}</p>
         </div>
       </div>
+
+      {filtered.length > 0 && (
+        <div className="ffn-insight-strip glass-panel">
+          <span><strong>{t('Highest frequency vehicle', 'المركبة الأكثر مخالفة')}</strong>{totals.topVehicle ? `${vehLabel(totals.topVehicle[0])} · ${totals.topVehicle[1]} ${t('fines', 'مخالفة')}` : '—'}</span>
+          <span><strong>{t('Highest cost vehicle', 'المركبة الأعلى تكلفة')}</strong>{totals.costliestVehicle ? `${vehLabel(totals.costliestVehicle[0])} · ${totals.costliestVehicle[1].toLocaleString(locale)} ${t('AED', 'د.إ')}` : '—'}</span>
+          <span><strong>{t('Peak month', 'الشهر الأعلى')}</strong>{totals.peakMonth ? `${totals.peakMonth[0]} · ${totals.peakMonth[1]} ${t('fines', 'مخالفة')}` : '—'}</span>
+          <span><strong>{t('Most frequent area', 'المنطقة الأكثر تكراراً')}</strong>{totals.topArea ? `${totals.topArea[0]} · ${totals.topArea[1]}` : '—'}</span>
+          <span><strong>{t('Last 30 days', 'آخر 30 يوماً')}</strong>{`${totals.recentCount} ${t('fines', 'مخالفة')} · ${totals.recentAed.toLocaleString(locale)} ${t('AED', 'د.إ')}`}</span>
+        </div>
+      )}
+
+      {filtered.length === 0 && filterMonth !== 'all' && (
+        <div className="ffn-no-fines-proof glass-panel">
+          <span className="ffn-proof-icon"><ShieldCheck size={24} /></span>
+          <div>
+            <span>{t('Period verification', 'التحقق من الفترة')}</span>
+            <h3>{t('No fines for the selected period', 'لا توجد مخالفات في الفترة المحددة')}</h3>
+            <p>{emptyStatement}</p>
+            <small>{t('Based on the current FMAC Traffic Fines Register.', 'استناداً إلى سجل المخالفات المرورية الحالي في FMAC.')}</small>
+          </div>
+          <div className="ffn-proof-actions">
+            <button type="button" className="ffn-btn ffn-btn-ghost" onClick={() => runFinesExport('pdf')} disabled={Boolean(exporting)}><FileText size={14} /> {t('PDF proof', 'إثبات PDF')}</button>
+            <button type="button" className="ffn-btn ffn-btn-ghost" onClick={() => runFinesExport('excel')} disabled={Boolean(exporting)}><Download size={14} /> {t('Excel proof', 'إثبات إكسل')}</button>
+          </div>
+        </div>
+      )}
 
       {/* Table panel */}
       <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
@@ -530,24 +635,10 @@ function FinesTab({ canEdit }) {
               <label>{t('Driver', 'السائق')}</label>
               <CustomSelect value={filterDriver} onChange={setFilterDriver} options={driverOptions} ariaLabel={t('Filter by driver', 'تصفية حسب السائق')} />
             </div>
-            <div className="ffn-filter">
-              <label>{t('Status', 'الحالة')}</label>
-              <CustomSelect
-                value={filterStatus}
-                onChange={setFilterStatus}
-                options={[
-                  { value: 'all', label: t('All statuses', 'كل الحالات') },
-                  { value: 'unpaid', label: t('Unpaid', 'غير مدفوعة') },
-                  { value: 'paid', label: t('Paid', 'مدفوعة') },
-                ]}
-                ariaLabel={t('Filter by status', 'تصفية حسب الحالة')}
-              />
-            </div>
-            <div className="ffn-filter">
-              <label>{t('Month', 'الشهر')}</label>
-              <CustomSelect value={filterMonth} onChange={setFilterMonth} options={monthOptions} ariaLabel={t('Filter by month', 'تصفية حسب الشهر')} />
-            </div>
-            <button className="ffn-btn ffn-btn-ghost" onClick={exportExcel} disabled={filtered.length === 0}>
+            <button className="ffn-btn ffn-btn-ghost" onClick={() => runFinesExport('pdf')} disabled={Boolean(exporting)}>
+              <FileText size={14} /> PDF
+            </button>
+            <button className="ffn-btn ffn-btn-ghost" onClick={() => runFinesExport('excel')} disabled={Boolean(exporting)}>
               <Download size={14} /> {t('Excel', 'إكسل')}
             </button>
             {canEdit && (
@@ -565,10 +656,10 @@ function FinesTab({ canEdit }) {
                 <th>{t('Date', 'التاريخ')}</th>
                 <th>{t('Driver', 'السائق')}</th>
                 <th>{t('Vehicle', 'المركبة')}</th>
-                <th>{t('Violation', 'نوع المخالفة')}</th>
+                <th>{t('Details / Violation', 'التفاصيل / المخالفة')}</th>
                 <th>{t('Amount (AED)', 'المبلغ (د.إ)')}</th>
-                <th>{t('Status', 'الحالة')}</th>
                 <th>{t('Reference', 'الرقم المرجعي')}</th>
+                <th>{t('Evidence', 'الدليل')}</th>
                 {canEdit && <th>{t('Actions', 'إجراءات')}</th>}
               </tr>
             </thead>
@@ -582,7 +673,7 @@ function FinesTab({ canEdit }) {
               ) : filtered.map(f => (
                 <tr key={f.id}>
                   <td style={{ color: 'var(--theme-text-muted)', whiteSpace: 'nowrap' }}>{f.date}</td>
-                  <td style={{ fontWeight: 800, color: 'var(--theme-text-main)' }}>{f.driverName}</td>
+                  <td style={{ fontWeight: 800, color: 'var(--theme-text-main)' }}>{resolvedDriver(f) || t('Unassigned', 'غير معيّن')}</td>
                   <td>
                     {f.vehicleReg ? (
                       <>
@@ -591,25 +682,13 @@ function FinesTab({ canEdit }) {
                       </>
                     ) : <span className="text-muted">—</span>}
                   </td>
-                  <td style={{ fontWeight: 600 }}>{fineTypeLabel(f.fineType, t)}</td>
+                  <td className="ffn-details-cell"><span dir={f.details ? 'rtl' : undefined}>{f.details || fineTypeLabel(f.fineType, t)}</span></td>
                   <td style={{ fontWeight: 800, color: 'var(--theme-accent)' }}>{(parseFloat(f.amountAed) || 0).toLocaleString(locale)}</td>
-                  <td>
-                    <span className={`status-badge ${f.status === 'paid' ? 'active' : 'risk'}`}>
-                      {f.status === 'paid' ? t('Paid', 'مدفوعة') : t('Unpaid', 'غير مدفوعة')}
-                    </span>
-                  </td>
                   <td className="text-muted" style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{f.referenceNo || '—'}</td>
+                  <td>{f.evidence?.url ? <a className="ffn-evidence-link" href={f.evidence.url} target="_blank" rel="noreferrer"><Paperclip size={13} /><ExternalLink size={11} /></a> : <span className="text-muted">—</span>}</td>
                   {canEdit && (
                     <td>
                       <div className="ffn-row-actions">
-                        <button
-                          className={`ffn-icon-btn ${f.status === 'paid' ? 'ffn-warn' : 'ffn-safe'}`}
-                          title={f.status === 'paid' ? t('Mark unpaid', 'تحويل إلى غير مدفوعة') : t('Mark paid', 'تحويل إلى مدفوعة')}
-                          disabled={busyId === f.id}
-                          onClick={() => togglePaid(f)}
-                        >
-                          {f.status === 'paid' ? <RotateCcw size={14} /> : <Check size={14} />}
-                        </button>
                         <button className="ffn-icon-btn" title={t('Edit', 'تعديل')} onClick={() => openEdit(f)}>
                           <Pencil size={14} />
                         </button>
@@ -637,7 +716,7 @@ function FinesTab({ canEdit }) {
             <div className="ffn-modal-body">
               <div className="ffn-grid2">
                 <div className="ffn-field">
-                  <label>{t('Driver name *', 'اسم السائق *')}</label>
+                  <label>{t('Driver name (optional)', 'اسم السائق (اختياري)')}</label>
                   <input type="text" value={modal.draft.driverName} onChange={e => setDraft({ driverName: e.target.value })} placeholder={t('e.g. Ahmed Ali', 'مثال: أحمد علي')} />
                 </div>
                 <div className="ffn-field">
@@ -662,24 +741,21 @@ function FinesTab({ canEdit }) {
                   <input type="number" min="0" step="0.01" value={modal.draft.amountAed} onChange={e => setDraft({ amountAed: e.target.value })} placeholder="0.00" />
                 </div>
                 <div className="ffn-field">
-                  <label>{t('Status', 'الحالة')}</label>
-                  <CustomSelect
-                    value={modal.draft.status}
-                    onChange={v => setDraft({ status: v })}
-                    options={[
-                      { value: 'unpaid', label: t('Unpaid', 'غير مدفوعة') },
-                      { value: 'paid', label: t('Paid', 'مدفوعة') },
-                    ]}
-                    ariaLabel={t('Status', 'الحالة')}
-                  />
-                </div>
-                <div className="ffn-field">
                   <label>{t('Reference no. (optional)', 'الرقم المرجعي (اختياري)')}</label>
                   <input type="text" value={modal.draft.referenceNo} onChange={e => setDraft({ referenceNo: e.target.value })} placeholder={t('Gov. fine reference', 'مرجع المخالفة الحكومي')} />
                 </div>
                 <div className="ffn-field ffn-span2">
+                  <label>{t('Government fine details / location', 'تفاصيل / موقع المخالفة الحكومية')}</label>
+                  <textarea dir="auto" rows={3} value={modal.draft.details} onChange={e => setDraft({ details: e.target.value })} />
+                </div>
+                <div className="ffn-field ffn-span2">
                   <label>{t('Notes', 'ملاحظات')}</label>
                   <textarea rows={2} value={modal.draft.notes} onChange={e => setDraft({ notes: e.target.value })} />
+                </div>
+                <div className="ffn-field ffn-span2">
+                  <label>{t('Attachment / evidence', 'المرفق / الدليل')}</label>
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={e => setEvidenceFile(e.target.files?.[0] || null)} />
+                  {modal.mode === 'edit' && fines.find(f => f.id === modal.id)?.evidence?.url && !evidenceFile && <a className="ffn-evidence-link" href={fines.find(f => f.id === modal.id).evidence.url} target="_blank" rel="noreferrer">{t('View current evidence', 'عرض الدليل الحالي')} <ExternalLink size={11} /></a>}
                 </div>
               </div>
               {modalError && <p className="ffn-error">{modalError}</p>}

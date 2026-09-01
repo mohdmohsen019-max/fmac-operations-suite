@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { List, DoorOpen, ScrollText, SlidersHorizontal, RefreshCw, FileBarChart, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, List, DoorOpen, ScrollText, SlidersHorizontal, RefreshCw, FileBarChart, ShieldCheck } from 'lucide-react'
 import { db } from '../firebase'
 import { collection, onSnapshot, doc, query, orderBy } from 'firebase/firestore'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -8,6 +8,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import ModuleLock from './shared/ModuleLock'
 
 import AssetRegistry    from './assets/AssetRegistry'
+import AssetDashboard   from './assets/AssetDashboard'
 import AssetRooms       from './assets/AssetRooms'
 import AssetAuditLog    from './assets/AssetAuditLog'
 import AssetReports     from './assets/AssetReports'
@@ -22,6 +23,7 @@ import { mergeAmsConfig } from './assets/ams'
 import './AssetsModule.css'
 
 const TABS = [
+  { id: 'dashboard', icon: LayoutDashboard, en: 'Dashboard', ar: 'لوحة المعلومات', managerOnly: false },
   { id: 'registry', icon: List,               en: 'Registry',  ar: 'السجل',            managerOnly: false },
   { id: 'reports',  icon: FileBarChart,       en: 'Reports',   ar: 'التقارير',         managerOnly: true  },
   { id: 'ams',      icon: ShieldCheck,        en: 'AMS',       ar: 'نظام الأصول',      managerOnly: true  },
@@ -46,7 +48,7 @@ export default function AssetsModule() {
   const actorName = user?.displayName || userProfile?.displayName || user?.email || 'Unknown'
   const actorUid = user?.uid || ''
 
-  const [activeTab, setActiveTab] = useState('registry')
+  const [activeTab, setActiveTab] = useState('dashboard')
   const [assets, setAssets] = useState([])
   const [rooms, setRooms] = useState([])
   const [amsConfig, setAmsConfig] = useState(null)   // merged AMS config (ISO 55001)
@@ -225,6 +227,12 @@ export default function AssetsModule() {
                   {...tabProps}
                   roomFilter={registryRoomFilter}
                   setRoomFilter={setRegistryRoomFilter}
+                />
+              )}
+              {activeTab === 'dashboard' && (
+                <AssetDashboard
+                  {...tabProps}
+                  onOpenRegistry={() => setActiveTab('registry')}
                 />
               )}
               {activeTab === 'reports' && canManage && <AssetReports {...tabProps} />}

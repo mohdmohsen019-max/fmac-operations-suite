@@ -1241,13 +1241,27 @@
    Fleet scope switch — buses / other vehicles / all
    ══════════════════════════════════════════════════════════ */
 .fleet-rail-row {
+  position: sticky;
+  top: -52px;
+  z-index: 120;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
   flex-wrap: wrap;
-  margin: 8px 24px 20px;
+  margin: 0;
+  padding: 60px 24px 12px;
+  background: color-mix(in srgb, var(--theme-bg) 94%, transparent);
+  border-bottom: 1px solid var(--theme-border);
+  backdrop-filter: blur(14px);
 }
+.fleet-rail-row .luxury-tab-rail {
+  max-width: calc(100% - 320px);
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+.fleet-rail-row .luxury-tab-rail::-webkit-scrollbar { display: none; }
 
 .fleet-scope-switch {
   display: inline-flex;
@@ -1283,7 +1297,8 @@
 }
 
 @media (max-width: 768px) {
-  .fleet-rail-row { margin: 8px 12px 16px; }
+  .fleet-rail-row { position: static; padding: 10px 12px 14px; }
+  .fleet-rail-row .luxury-tab-rail { max-width: 100%; }
   .fleet-scope-switch { width: 100%; }
   .fleet-scope-btn { flex: 1; justify-content: center; }
 }

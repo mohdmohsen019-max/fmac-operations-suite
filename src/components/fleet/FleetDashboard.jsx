@@ -4,23 +4,40 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell
 } from 'recharts';
-import { Truck, Activity, ShieldAlert, Navigation, Clock, Zap, AlertTriangle, Car } from 'lucide-react';
+import { Truck, Activity, ShieldAlert, Navigation, Clock, Zap, AlertTriangle, Car, Fuel, Wrench, Receipt, Users } from 'lucide-react';
 import { useFleetSettings, convertDistance } from './FleetSettingsContext';
+import { calculateTripMetrics, SCORE_DEFAULTS, SCORE_PERIOD_DAYS, scoreBand } from './scoreCalculation';
 import { useFleetScope } from './FleetScopeContext';
 import { cartrackService } from '../../services/cartrackService';
+import { deduplicateCanonicalTrips, mergeCanonicalVehicles } from '../../services/fleetIdentity';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { useMaintenanceSuite } from './maintenance/maintenanceSuite';
+import FleetPerformanceScorecard from './FleetPerformanceScorecard';
 import { useLanguage } from '../../contexts/LanguageContext';
 import useIsMobile from '../../hooks/useIsMobile';
 import { format, subDays, startOfDay, endOfDay, eachDayOfInterval } from 'date-fns';
 import './FleetDashboard.css';
 import './FleetScopeViews.css';
 
-export default function FleetDashboard() {
+export default function FleetDashboard({ canEdit = false }) {
   const { settings } = useFleetSettings();
   const { t, locale } = useLanguage();
-  const { scope, inScope, classOf, displayName, metaOf } = useFleetScope();
+  const { scope, inScope, classOf, displayName, metaOf, metaMap, aliasMap } = useFleetScope();
   const isMobile = useIsMobile();
   const unit = settings.measurementUnit;
   const lang = locale === 'ar-SA' ? 'ar' : 'en';
+  const scoreSettingsKey = [
+    settings.safetyScoreTarget,
+    settings.speedingTimeThresholdPercent,
+    settings.harshAccelerationThreshold,
+    settings.harshBrakingThreshold,
+    settings.harshCorneringThreshold,
+    settings.speedingPenaltyWeight,
+    settings.harshAccelerationPenaltyWeight,
+    settings.harshBrakingPenaltyWeight,
+    settings.harshCorneringPenaltyWeight,
+  ].join('|');
 
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -34,12 +51,14 @@ export default function FleetDashboard() {
   });
   const [isMounted, setIsMounted] = useState(false);
   const [feedExpanded, setFeedExpanded] = useState(false);
+  const [management, setManagement] = useState({ fuelCost: null, fineCount30d: 0, fineValue30d: 0, riders: 0 });
+  const maintenanceSuite = useMaintenanceSuite(scope, inScope, aliasMap);
 
   useEffect(() => {
     fetchDashboardData();
     const timer = setTimeout(() => setIsMounted(true), 600);
     return () => clearTimeout(timer);
-  }, [locale, scope]); // Refresh on locale change (chart names) and on fleet-scope change
+  }, [locale, scope, scoreSettingsKey, aliasMap]); // Refresh when scope, aliases or shared score calibration changes
 
   const safeFormat = (dateStr, formatStr) => {
     if (!dateStr) return '';
@@ -89,7 +108,7 @@ export default function FleetDashboard() {
       // 1. Fetch Vehicles (already filtered to the active fleet scope)
       let vehicles = [];
       try {
-        vehicles = await cartrackService.getVehicles(scope) || [];
+        vehicles = mergeCanonicalVehicles(await cartrackService.getVehicles(scope) || [], aliasMap);
       } catch (e) { console.error("FleetDashboard: Vehicles fetch failed", e); }
 
       // 2. Define Time Range
@@ -110,19 +129,22 @@ export default function FleetDashboard() {
       } catch (e) { console.error("FleetDashboard: Trips fetch failed", e); }
 
       // 4. Map Trips (scope-filtered via the shared classifier)
-      const tripMap = new Map();
-      rawTrips.forEach(t => {
-        const reg = t.registration?.trim().toUpperCase().replace(/\s/g, '');
+      const allTrips = deduplicateCanonicalTrips(rawTrips, aliasMap).filter((t) => {
+        const reg = t.registration;
         const dist = parseFloat(t.trip_distance) || 0;
-        if (!reg || !inScope(reg) || dist <= 0) return;
-        const key = t.trip_id ? String(t.trip_id) : `${reg}-${t.start_timestamp}-${dist}`;
-        if (!tripMap.has(key)) tripMap.set(key, t);
+        return reg && inScope(reg) && dist > 0;
       });
-      const allTrips = Array.from(tripMap.values());
 
-      // 5. Calculate Stats — `vehicles` is already the scoped set
+      // 5. Registration count comes from the complete club roster; operational
+      // transponders continue to come only from live Cartrack rows.
+      const registeredVehicles = [...metaMap.keys()]
+        .map((registration) => metaOf(registration))
+        .filter((meta) => meta.clubOwned !== false)
+        .filter((meta) => scope === 'all' || (scope === 'buses' ? meta.vehicleClass === 'bus' : meta.vehicleClass !== 'bus'))
+      const registeredCount = new Set(registeredVehicles.map((meta) => meta.canonicalRegistration || meta.plateNumber || meta.registration)).size
       const activeUnits = vehicles.filter(v => !v.is_under_maintenance).length;
-      const inMaintenance = vehicles.filter(v => v.is_under_maintenance).length;
+      const inMaintenance = registeredVehicles.filter((meta) => meta.operationalStatus === 'maintenance').length
+        || vehicles.filter(v => v.is_under_maintenance).length;
 
       const totalDistance7D = Math.round(allTrips.reduce((sum, t) => sum + (t.trip_distance || 0), 0) / 1000);
 
@@ -164,22 +186,77 @@ export default function FleetDashboard() {
           };
         });
 
-      // 8. Scorecards (scoped)
+      // 8. Vehicle safety scores — same 30-day rate model and settings used by
+      // Safety & Behavior. Keeping one shared calculation prevents dashboard
+      // bars from contradicting the detailed ranking.
       let scorecards = [];
       try {
-        scorecards = await cartrackService.getDriverScorecards(7, {
-          speedingLimit: settings.speedingLimit,
-          brakingMultiplier: settings.brakingSensitivity,
-        }, scope) || [];
+        const scoreEnd = endOfDay(subDays(new Date(), 1));
+        const scoreStart = startOfDay(subDays(scoreEnd, SCORE_PERIOD_DAYS - 1));
+        const scoreTripsRaw = await cartrackService.getTrips(
+          format(scoreStart, 'yyyy-MM-dd HH:mm:ss'),
+          format(scoreEnd, 'yyyy-MM-dd HH:mm:ss'),
+        ) || [];
+        const byVehicle = new Map();
+        deduplicateCanonicalTrips(scoreTripsRaw, aliasMap).forEach((trip) => {
+          const registration = trip.registration;
+          if (!registration || !inScope(registration)) return;
+          if (!byVehicle.has(registration)) byVehicle.set(registration, []);
+          byVehicle.get(registration).push(trip);
+        });
+        const scoreSettings = { ...SCORE_DEFAULTS, ...settings };
+        scorecards = [...byVehicle.entries()].map(([plate, trips]) => ({
+          plate,
+          ...calculateTripMetrics(trips, scoreSettings),
+        }));
       } catch (e) { console.error("FleetDashboard: Scorecards fetch failed", e); }
       scorecards = scorecards.map(s => ({
         ...s,
         label: displayName(s.plate, lang),
         vClass: classOf(s.plate),
-      }));
+      })).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+
+      // 9. Actionable management signals from the existing Firestore records.
+      // These are calculated, not generated, and respect the active fleet scope.
+      try {
+        const [fuelSnap, finesSnap, ridersSnap] = await Promise.all([
+          getDocs(collection(db, 'fuelStatements')),
+          getDocs(collection(db, 'fleet_fines')),
+          getDocs(collection(db, 'fleet_ridership_counts')),
+        ]);
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        const currentFuel = fuelSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((s) => Number(s.month) === currentMonth && Number(s.year) === currentYear)
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))[0];
+        let fuelCost = null;
+        if (currentFuel) {
+          const allocations = Array.isArray(currentFuel.vehicleAllocations) ? currentFuel.vehicleAllocations : [];
+          fuelCost = allocations.length
+            ? allocations.filter((a) => inScope(a.plate)).reduce((sum, a) => sum + (Number(a.cost) || 0), 0)
+            : scope === 'all' ? Number(currentFuel.totalCost) || 0 : null;
+        }
+        const fineCutoff = format(new Date(now.getTime() - 30 * 86400000), 'yyyy-MM-dd');
+        const recentFines = finesSnap.docs
+          .map((d) => d.data())
+          .filter((f) => String(f.date || '') >= fineCutoff)
+          .filter((f) => scope === 'all' ? true : f.vehicleReg && inScope(f.vehicleReg));
+        const fineCount30d = recentFines.length;
+        const fineValue30d = recentFines.reduce((sum, f) => sum + (Number(f.amountAed) || 0), 0);
+        const monthPrefix = format(now, 'yyyy-MM');
+        const riders = scope === 'others' ? 0 : ridersSnap.docs
+          .map((d) => d.data())
+          .filter((r) => String(r.date || '').startsWith(monthPrefix))
+          .reduce((sum, r) => sum + (Number(r.riders) || 0), 0);
+        setManagement({ fuelCost, fineCount30d, fineValue30d, riders });
+      } catch (err) {
+        console.error('FleetDashboard: management signals failed', err);
+      }
 
       setStats({
-        totalVehicles: vehicles.length || (scope === 'buses' ? 14 : 0),
+        totalVehicles: registeredCount || vehicles.length || (scope === 'buses' ? 14 : 0),
         activeUnits: activeUnits || 0,
         inMaintenance: inMaintenance || 0,
         totalDistance7D,
@@ -204,15 +281,7 @@ export default function FleetDashboard() {
     );
   }
 
-  const capsuleCount = Math.min(stats.totalVehicles, 14);
   const activePct = stats.totalVehicles > 0 ? Math.round((stats.activeUnits / stats.totalVehicles) * 100) : 0;
-  const renderCapsules = (filled, warn = false) => (
-    <div className="stat-capsules">
-      {Array.from({ length: capsuleCount }).map((_, i) => (
-        <span key={i} className={`stat-capsule${i < filled ? ' filled' : ''}${warn && i < filled ? ' warn' : ''}`} />
-      ))}
-    </div>
-  );
 
   return (
     <div className="fleet-dashboard">
@@ -222,52 +291,62 @@ export default function FleetDashboard() {
           <span>{t('Other Vehicles — not part of the bus fleet', 'مركبات أخرى — ليست ضمن أسطول الحافلات')}</span>
         </div>
       )}
-      <div className="stats-bento">
-        <motion.div className="stat-card glass-panel" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <div className="stat-header">
-            <h3>{t('Fleet Scale', 'حجم الأسطول')}</h3>
-            <Truck size={16} />
+      <motion.section
+        className="fleet-command-board"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <div className="fleet-command-copy">
+          <span className="fleet-command-kicker">{t('Live fleet control', 'التحكم المباشر بالأسطول')}</span>
+          <div className="fleet-command-title-row">
+            <h1>{scope === 'buses' ? t('Bus command', 'قيادة الحافلات') : scope === 'others' ? t('Vehicle command', 'قيادة المركبات') : t('Fleet command', 'قيادة الأسطول')}</h1>
           </div>
-          <div className="stat-value">{stats.totalVehicles.toLocaleString(locale)}</div>
-          <p className="stat-label">{t('Total Registrations', 'إجمالي التسجيلات')}</p>
-          {renderCapsules(capsuleCount)}
-        </motion.div>
+          <p>{t('One operational picture for coverage, movement, maintenance exposure and service demand.', 'صورة تشغيلية موحدة للتغطية والحركة والتعرض للصيانة وطلب الخدمة.')}</p>
+          <div className="fleet-command-primary">
+            <strong dir="ltr">{stats.activeUnits.toLocaleString(locale)}<small> / {stats.totalVehicles.toLocaleString(locale)}</small></strong>
+            <span>{t('tracked and responding', 'متتبعة وتستجيب')}</span>
+          </div>
+          <div className="fleet-coverage-rail" aria-label={`${activePct}%`}>
+            <i style={{ transform: `scaleX(${Math.min(activePct, 100) / 100})` }} />
+          </div>
+          <div className="fleet-command-coverage">
+            <span>{activePct.toLocaleString(locale)}% {t('telemetry coverage', 'تغطية التتبع')}</span>
+            <span>{Math.max(stats.totalVehicles - stats.activeUnits, 0).toLocaleString(locale)} {t('not responding', 'لا تستجيب')}</span>
+          </div>
+        </div>
 
-        <motion.div className="stat-card glass-panel" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <div className="stat-header">
-            <h3>{t('Operational', 'تشغيلي')}</h3>
-            <Zap size={16} />
+        <div className="fleet-command-matrix">
+          <div className="fleet-matrix-cell">
+            <span><Truck size={15} />{t('Registered', 'مسجلة')}</span>
+            <strong>{stats.totalVehicles.toLocaleString(locale)}</strong>
+            <small>{t('canonical fleet identities', 'هويات الأسطول الأساسية')}</small>
           </div>
-          <div className="stat-value">
-            {stats.activeUnits.toLocaleString(locale)}
-            <span className="stat-badge">{activePct.toLocaleString(locale)}%</span>
+          <div className="fleet-matrix-cell is-gold">
+            <span><Navigation size={15} />{t('7-day range', 'مدى 7 أيام')}</span>
+            <strong dir="ltr">{(unit === 'mi' ? Math.round(convertDistance(stats.totalDistance7D, 'mi')) : stats.totalDistance7D).toLocaleString(locale)}</strong>
+            <small>{t(unit, unit === 'km' ? 'كم' : 'ميل')}</small>
           </div>
-          <p className="stat-label">{t('Active Transponders', 'أجهزة الإرسال النشطة')}</p>
-          {renderCapsules(Math.round((stats.activeUnits / Math.max(stats.totalVehicles, 1)) * capsuleCount))}
-        </motion.div>
+          <div className={`fleet-matrix-cell ${stats.inMaintenance ? 'is-alert' : ''}`}>
+            <span><Wrench size={15} />{t('Workshop exposure', 'التعرض للورشة')}</span>
+            <strong>{stats.inMaintenance.toLocaleString(locale)}</strong>
+            <small>{stats.inMaintenance ? t('units require attention', 'وحدات تتطلب الانتباه') : t('no units in drydock', 'لا توجد وحدات في الورشة')}</small>
+          </div>
+          <div className="fleet-matrix-cell">
+            <span><Activity size={15} />{t('Daily average', 'المتوسط اليومي')}</span>
+            <strong dir="ltr">{Math.round(stats.totalDistance7D / 7).toLocaleString(locale)}</strong>
+            <small>{t('km across selected scope', 'كم ضمن النطاق المحدد')}</small>
+          </div>
+        </div>
+      </motion.section>
+      {scope === 'buses' && <FleetPerformanceScorecard canEdit={canEdit} />}
 
-        <motion.div className="stat-card glass-panel" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <div className="stat-header">
-            <h3>{t('Maintenance', 'الصيانة')}</h3>
-            <AlertTriangle size={16} />
-          </div>
-          <div className="stat-value">{stats.inMaintenance.toLocaleString(locale)}</div>
-          <p className="stat-label">{t('Units in Drydock', 'وحدات في الصيانة')}</p>
-          {renderCapsules(Math.round((stats.inMaintenance / Math.max(stats.totalVehicles, 1)) * capsuleCount), true)}
-        </motion.div>
-
-        <motion.div className="stat-card stat-card-accent glass-panel" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <div className="stat-header">
-            <h3>{t('Deployment', 'الانتشار')}</h3>
-            <Navigation size={16} />
-          </div>
-          <div className="stat-value">
-            {(unit === 'mi' ? Math.round(convertDistance(stats.totalDistance7D, 'mi')) : stats.totalDistance7D).toLocaleString(locale)}
-            <span className="unit-label">{t(unit, unit === 'km' ? 'كم' : 'ميل')}</span>
-          </div>
-          <p className="stat-label">{t('Total Range (7D)', 'إجمالي المدى (7 أيام)')}</p>
-        </motion.div>
-      </div>
+      <section className={`fleet-action-grid${scope === 'others' ? ' fleet-action-grid--three' : ''}`} aria-label={t('Management priorities', 'أولويات الإدارة')}>
+        <div className="fleet-action-card glass-panel"><Fuel size={17} /><div><span>{t('Fuel cost · current month', 'تكلفة الوقود · الشهر الحالي')}</span><strong>{management.fuelCost == null ? '—' : `${Math.round(management.fuelCost).toLocaleString(locale)} ${t('AED', 'د.إ')}`}</strong></div></div>
+        <div className={`fleet-action-card glass-panel${maintenanceSuite.summary.critical || maintenanceSuite.summary.oilOverdue ? ' has-alert' : ''}`}><Wrench size={17} /><div><span>{t('Maintenance due / overdue', 'الصيانة المستحقة / المتأخرة')}</span><strong>{(maintenanceSuite.summary.critical + maintenanceSuite.summary.oilOverdue).toLocaleString(locale)}</strong></div></div>
+        <div className="fleet-action-card glass-panel"><Receipt size={17} /><div><span>{t('Traffic fines · last 30 days', 'المخالفات المرورية · آخر 30 يوماً')}</span><strong>{management.fineCount30d.toLocaleString(locale)} {t('fines', 'مخالفة')} · {Math.round(management.fineValue30d).toLocaleString(locale)} {t('AED', 'د.إ')}</strong></div></div>
+        {scope !== 'others' && <div className="fleet-action-card glass-panel"><Users size={17} /><div><span>{t('Bus riders · current month', 'ركاب الحافلات · الشهر الحالي')}</span><strong>{management.riders.toLocaleString(locale)}</strong></div></div>}
+      </section>
 
       <div className="fleet-charts-grid">
         <div className="fleet-chart-panel medium glass-panel">
@@ -345,13 +424,13 @@ export default function FleetDashboard() {
         <div className="fleet-chart-panel glass-panel">
           <div className="panel-header">
             <div>
-              <h3 className="chart-title"><ShieldAlert size={18} /> {t('Risk Score Distribution', 'توزيع درجات المخاطر')}</h3>
-              <p className="panel-subtitle">{t('Operational safety index across active units (7-day average)', 'مؤشر السلامة التشغيلية عبر الوحدات النشطة (متوسط 7 أيام)')}</p>
+              <h3 className="chart-title"><ShieldAlert size={18} /> {t('Vehicle Safety Scores', 'درجات سلامة المركبات')}</h3>
+              <p className="panel-subtitle">{t('Same calibrated 30-day score used in Safety & Behavior', 'نفس درجة الثلاثين يوماً المعايرة والمستخدمة في السلامة والسلوك')}</p>
             </div>
             <div className="legend">
-              <span className="legend-item"><div className="dot safe"></div> {t('Safe', 'آمن')}</span>
-              <span className="legend-item"><div className="dot caution"></div> {t('Caution', 'تحذير')}</span>
-              <span className="legend-item"><div className="dot risk"></div> {t('High Risk', 'خطر مرتفع')}</span>
+              <span className="legend-item"><div className="dot safe"></div> {t('Target or above', 'عند الهدف أو أعلى')}</span>
+              <span className="legend-item"><div className="dot caution"></div> {t('Watch', 'مراقبة')}</span>
+              <span className="legend-item"><div className="dot risk"></div> {t('High risk', 'خطر مرتفع')}</span>
             </div>
           </div>
           <div className="chart-container" style={{ minHeight: isMobile ? '200px' : '240px' }}>
@@ -364,9 +443,9 @@ export default function FleetDashboard() {
                   cursor={{fill: 'var(--theme-surface-hover)'}}
                   contentStyle={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: '14px', boxShadow: 'var(--shadow-md)', textAlign: locale === 'ar-SA' ? 'right' : 'left' }}
                 />
-                <Bar dataKey="riskScore" radius={[99, 99, 99, 99]} maxBarSize={18}>
+                <Bar dataKey="score" radius={[99, 99, 99, 99]} maxBarSize={18}>
                   {stats.scorecards.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.riskScore < 60 ? 'var(--status-risk)' : entry.riskScore < 80 ? 'var(--status-warn)' : 'var(--status-safe)'} />
+                    <Cell key={`cell-${index}`} fill={scoreBand(entry.score, settings.safetyScoreTarget) === 'risk' ? 'var(--status-risk)' : scoreBand(entry.score, settings.safetyScoreTarget) === 'watch' ? 'var(--status-warn)' : 'var(--status-safe)'} />
                   ))}
                 </Bar>
               </BarChart>
